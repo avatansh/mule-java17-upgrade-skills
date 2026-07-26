@@ -1,0 +1,114 @@
+# =============================================================================
+# config.yaml — ENVIRONMENT-CONSTANT settings ONLY.
+# Values here are identical across dev / test / prod. Anything that varies per
+# environment (owners, org IDs, hosts, channels, governance toggles) lives in
+# config-<env>.yaml, which is loaded FIRST and therefore overrides this file.
+# =============================================================================
+
+app:
+  name: "platform-lifecycle-orchestrator"
+  version: "1.0.0"
+
+api:
+  majorVersion: "v1"
+
+http:
+  host: "0.0.0.0"                        # bind address is the same everywhere (port is per-env)
+
+mcp:
+  serverName: "platform-lifecycle-orchestrator"
+  serverVersion: "1.0.0"
+  endpointPath: "/mcp"                   # MCP path on the shared listener (REST is /api/v1/*); isolate at ingress/Omni Gateway
+
+github:
+  apiBase: "https://api.github.com"      # constant (override in an env file only for GitHub Enterprise)
+  defaultBranch: "develop"                  # convention fallback; registry/request/discovery can override
+
+naming:                                  # convention used when an app is NOT in the registry
+  repoEqualsAppName: "true"              # repo = appName
+  appPathAtRoot: "true"                  # app module sits at repo root (".")
+
+anypoint:
+  apiBase: "https://anypoint.mulesoft.com"
+  tokenPath: "/accounts/api/v2/oauth2/token"   # Connected App client_credentials token endpoint
+  tokenRefreshSeconds: "3300"                  # cache bearer ~55 min (platform TTL is 60 min)
+  verify:
+    # AMC/CH2.0 deployment statuses treated as a healthy/successful deploy (comma-separated, upper-case).
+    healthyStatuses: "RUNNING,APPLIED,STARTED,PARTIALLY_STARTED"
+
+assess:
+  # Batch A — live Anypoint Platform cross-checks during POST /jobs/assess. Both are
+  # BEST-EFFORT and NON-FATAL: any auth/network/schema issue is swallowed and the
+  # assessment falls back to source-only (Git). OFF by default so base/prod behaviour is
+  # unchanged until an environment with reachable Anypoint creds explicitly opts in.
+  armCrossCheck:  "false"   # read Runtime Manager (ARM) and warn when the deployed runtime differs from the source pom
+  apiPolicyCheck: "false"   # read API Manager and set changePlan.hasApiPolicies from the app's applied policies
+
+scan:
+  # Fleet scan (mule-upgrade-scan / scan_fleet): flag deployed apps that still need the Java 17 upgrade.
+  staleMuleBelow: "4.5.0"   # a deployed Mule version strictly below this is "old" (so 4.4.x and older are flagged)
+  targetJava: "17"          # a deployed Java major below this is "old" (so 8 and 11 are flagged)
+  environments: ""          # comma-separated env NAMES to restrict the scan to (empty = all environments)
+
+matrix:
+  path: "matrix/compatibility-matrix.yaml"   # classpath copy — packaged in the app; used as fallback
+  source: "exchange-latest"                  # exchange | exchange-latest | classpath
+  refreshSeconds: "86400"                    # matrix cache TTL = 1 day (bucketed floor(epoch/refreshSeconds))
+  driftCheck: "true"                         # advisory: warn (never auto-apply) when bundled gating pins trail the latest published Maven versions
+  exchange:                                  # Exchange asset IDENTITY (orgId is env-specific → env file)
+    assetId: "java17-compatibility-matrix"
+    version: "1.0.4"                         # published on Exchange (matches bundled classpath copy incl. sockets 1.2.8); bump on new revision or use source=exchange-latest
+    classifier: "custom"                     # Exchange custom-asset classifier ("" if none)
+    packaging: "yaml"                        # main file extension of the published asset
+  notifyMissing: "true"                      # Slack-alert connectors the app declares but the matrix doesn't cover
+  missing:
+    excludeArtifacts: "munit-runner,munit-tools"   # never treated as "missing" (not connectors to pin)
+
+jira:
+  # Constant defaults; env files override. autoCreate defaults OFF for safety so no
+  # environment creates tickets unless it explicitly opts in (and sets projectKey).
+  autoCreate: "false"                        # when true AND no jiraTicketId supplied → create a migration ticket
+  issueType:  "Task"                         # Jira issue type used for auto-created migration tickets
+
+registry:
+  path: "registry/app-registry.yaml"         # classpath fallback copy — appName → repo coordinates
+  source: "exchange-latest"                  # exchange | exchange-latest | classpath (mirrors matrix.source)
+  refreshSeconds: "86400"                    # registry cache TTL = 1 day (env files override; dev/local = 30s)
+  exchange:                                  # Exchange asset IDENTITY (orgId is env-specific → env file)
+    assetId: "app-registry"
+    version: "1.0.1"                         # published on Exchange (matches bundled classpath copy); used only when source=exchange (pinned), ignored for -latest
+    classifier: "custom"                     # Exchange custom-asset classifier ("" if none)
+    packaging: "yaml"                        # main file extension of the published asset
+
+upgrade:
+  # How version edits are targeted in the pom inheritance chain:
+  #   appOverride (default) — write EVERY edit into the app's own module pom, pinning declared
+  #                           connectors/plugins and overriding inherited runtime/java/munit
+  #                           properties there. Sibling modules that share a parent/BOM are
+  #                           never affected, so no shared-file Warning is emitted.
+  #   inPlace               — legacy: edit the parent/BOM pom that declares the value and
+  #                           surface a shared-file Warning on the result.
+  pomEditStrategy: "appOverride"
+
+osv2:                                        # Object Store v2 partition TTLs (seconds)
+  jobTtlSeconds:         "2592000"           # jobStore         — job records, 30d rolling
+  lockTtlSeconds:        "86400"             # locksStore       — single-flight locks, 1d safety net
+  idempotencyTtlSeconds: "172800"            # idempotencyStore — webhook delivery de-dup keys, 2d
+  indexTtlSeconds:       "2592000"           # indexStore       — branch→jobId correlation index, 30d
+
+job:
+  maxConcurrentPerApp: "1"                   # single-flight
+
+reconcile:                                   # self-healing sweep — production defaults
+  frequencyMillis: "300000"                  # run every 5 minutes  (dev overrides to 30s)
+  staleSeconds:    "900"                     # job stale after 15 minutes idle (dev overrides to 2 min)
+
+ci:
+  # `gh pr checks` polling → CI/CD stage mapping. When reconcile polls a stale PR_OPEN /
+  # MUNIT_FAILED / DEP_GUARD_FAILED job, it matches each CI check's NAME (case-insensitive
+  # substring) against these patterns to decide which cd-result stage the check represents.
+  # A matched check's conclusion (success/failure) is fed through ingestCiResult(stage,result),
+  # driving the same MUNIT_FAILED / DEP_GUARD_FAILED park/resume state machine as the webhook.
+  checkNames:
+    test:            "munit,unit test,test"          # MUnit / unit-test job names
+    dependencyGuard: "dependency-guard,dep-guard,java17-guard,dependency guard"

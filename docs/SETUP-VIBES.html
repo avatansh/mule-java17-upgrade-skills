@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup — MuleSoft Vibes (Anypoint Code Builder)</title>
+<style>
+  :root { --fg:#1b1b1f; --muted:#5a5a66; --bg:#ffffff; --code-bg:#f4f4f7; --border:#e2e2ea;
+          --accent:#0b6bcb; --accent-bg:#eaf2fc; --warn-bg:#fff6e5; --warn-border:#f0c36d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e6e6ea; --muted:#a2a2b0; --bg:#16161a; --code-bg:#22222a; --border:#33333d;
+            --accent:#5aa7f0; --accent-bg:#16283d; --warn-bg:#3a2f16; --warn-border:#7a5f1e; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:2.5rem 1.25rem 5rem; background:var(--bg); color:var(--fg);
+         font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  main { max-width:860px; margin:0 auto; }
+  h1 { font-size:2rem; line-height:1.2; margin:0 0 .25rem; }
+  h2 { font-size:1.4rem; margin:2.5rem 0 .75rem; padding-top:.5rem; border-top:1px solid var(--border); }
+  h3 { font-size:1.1rem; margin:1.75rem 0 .5rem; }
+  p, li { color:var(--fg); }
+  .lede { color:var(--muted); font-size:1.05rem; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  code { background:var(--code-bg); padding:.12em .4em; border-radius:4px;
+         font:0.86em/1.5 "SF Mono",SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace; }
+  pre { background:var(--code-bg); border:1px solid var(--border); border-radius:8px;
+        padding:1rem 1.1rem; overflow:auto; }
+  pre code { background:none; padding:0; }
+  table { border-collapse:collapse; width:100%; margin:1rem 0; font-size:.95rem; }
+  th, td { border:1px solid var(--border); padding:.5rem .7rem; text-align:left; vertical-align:top; }
+  th { background:var(--code-bg); }
+  blockquote { margin:1rem 0; padding:.6rem 1rem; background:var(--accent-bg);
+               border-left:4px solid var(--accent); border-radius:0 6px 6px 0; color:var(--fg); }
+  blockquote.warn { background:var(--warn-bg); border-left-color:var(--warn-border); }
+  .nav { font-size:.9rem; color:var(--muted); margin:.5rem 0 2rem; }
+  .nav a { margin-right:1rem; }
+  .pill { display:inline-block; font-size:.75rem; font-weight:600; padding:.1rem .5rem;
+          border-radius:999px; background:var(--accent-bg); color:var(--accent); }
+  footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--border);
+           color:var(--muted); font-size:.85rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Setup — MuleSoft Vibes <span class="pill">Anypoint Code Builder</span></h1>
+<p class="lede">Run the Java-17 upgrade suite inside <strong>MuleSoft Vibes</strong>, the AI dev
+agent embedded in <strong>Anypoint Code Builder</strong> (VS Code–based; also runs in Cursor /
+Windsurf / Trae). Vibes natively speaks the <strong>Agent Skills / Claude Code
+<code>SKILL.md</code></strong> format <em>and</em> can connect to an external MCP server, so this
+suite plugs in two ways with no code changes.</p>
+
+<ul>
+  <li><strong>Option A — Skills</strong> (recommended): drop the <code>SKILL.md</code> skills into
+  Vibes' skills directory; Vibes activates them by trigger phrase via its <code>use_skill</code>
+  tool. No server, no ports.</li>
+  <li><strong>Option B — Remote MCP server</strong>: run <code>server/server.js</code> and register
+  it in Vibes as a remote MCP server; the 10 tools appear with their schemas. Best for the stateful
+  tools + HMAC webhooks, or if your Vibes runtime sandboxes skill script execution.</li>
+</ul>
+
+<p class="nav">Sibling guides:
+  <a href="./SETUP-IDE.md">SETUP-IDE.md</a> (generic Claude Code) ·
+  <a href="./SETUP-AGENTFORCE.md">SETUP-AGENTFORCE.md</a> (hosted server for Agentforce) ·
+  <a href="./SETUP-VIBES.md">SETUP-VIBES.md</a> (Markdown version of this page)
+</p>
+
+<h2>1. Prerequisites</h2>
+<table>
+  <thead><tr><th>Need</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Anypoint Code Builder</strong> with <strong>MuleSoft Vibes</strong> enabled</td><td>the host agent</td></tr>
+    <tr><td><strong>Node.js ≥ 24</strong> on the machine ACB runs on</td><td>runs the skill scripts / the server</td></tr>
+    <tr><td><strong>git</strong> + <strong>gh</strong> (authenticated)</td><td><code>local</code> mode: branch/commit/push/PR</td></tr>
+    <tr><td>A <strong>GitHub token</strong> (<code>GITHUB_TOKEN</code>)</td><td><code>api</code> mode: Git Data API commits + PRs</td></tr>
+    <tr><td><em>(optional)</em> Anypoint / Slack / Jira creds</td><td>deploy verify + notifications (env-gated)</td></tr>
+  </tbody>
+</table>
+
+<p>Clone the suite somewhere ACB can reach and install its one dependency:</p>
+<pre><code>git clone &lt;this-repo&gt; mule-java17-upgrade-skills
+cd mule-java17-upgrade-skills
+npm ci
+node --test          # sanity: the whole suite should pass</code></pre>
+
+<p>Configure secrets the same way as the IDE flow — copy <code>.env.example</code> to
+<code>.env</code> and set at least <code>MULE_CONFIG_KEY</code> (to read the encrypted YAML) and
+<code>MULE_UPGRADE_ENV</code>. <code>.env</code> auto-loads via <code>lib_shared/env.js</code>.
+<strong>Never commit <code>.env</code> or the real key.</strong></p>
+
+<blockquote>
+<p><strong>Where do the commands run, and do I need the Salesforce CLI?</strong> Every <code>node …</code> command below runs in a <strong>plain terminal on the machine ACB/Vibes runs on</strong>, from the cloned suite root — not inside any DX/Anypoint runtime. You do <strong>not</strong> need the Salesforce / <code>sf</code> / <code>sfdx</code> CLI; this suite only uses <code>node</code> (required) and <code>git</code> + <code>gh</code> (local-mode PRs). SF CLI, and any <em>"Token exchange timed out"</em> against the Anypoint <strong>DX</strong> server, are a separate concern.</p>
+</blockquote>
+
+<hr>
+
+<h2>1a. Test it locally, end-to-end (before wiring Vibes)</h2>
+<p>Prove the pipeline works from a terminal first — it isolates suite problems from Vibes-integration problems, and needs <strong>no live credentials</strong> (every network call degrades gracefully):</p>
+<pre><code>cd mule-java17-upgrade-skills
+npm ci &amp;&amp; node --test                                   # 191 tests, no secrets/network needed
+
+# assess a throwaway Mule 4.6–4.8 / Java 8|11 clone (read-only, fully offline):
+node skills/mule-upgrade-assess/scripts/assess.js --repo /path/to/target-app --no-fetch
+
+# safe dry runs (no creds required):
+node skills/mule-upgrade-assess/scripts/lib/matrix_drift.js --no-fetch     # advisory drift audit
+node skills/mule-upgrade-scan/scripts/scan_notify.js --dry-run             # fleet scan digest
+
+# a real upgrade → PR (local mode needs git+gh; api mode needs GITHUB_TOKEN):
+node skills/mule-upgrade/scripts/upgrade.js start --app orders-api --mode local --repo /path/to/clone</code></pre>
+<p>Set <code>MULE_UPGRADE_HOME=./.local-jobstore</code> in <code>.env</code> to keep test jobs out of your real store, then <code>cat ./.local-jobstore/jobs/*.json</code> to watch the state machine. Missing GitHub/Anypoint/Slack/Jira creds cause the matching step to skip or error clearly — never a crash. See <a href="./SETUP-IDE.html">SETUP-IDE.html §7</a> for the full step-by-step walkthrough. Once this works, wire Vibes via Option A or B below.</p>
+
+<hr>
+
+<h2>Option A — Install as Vibes Skills (recommended)</h2>
+<p>Vibes reads the same <code>SKILL.md</code> format this suite ships (name + trigger-phrase
+<code>description</code> frontmatter, plus <code>scripts/</code> and <code>references/</code>).
+Install into one of two scopes:</p>
+<ul>
+  <li><strong>Workspace scope</strong> — <code>.a4drules/skills/</code> at the root of the ACB
+  workspace. Committable, so the whole team gets the skills with the repo. <strong>Use this for
+  project-pinned upgrades.</strong></li>
+  <li><strong>Global scope</strong> — Vibes' global skills storage (or the Claude Code target
+  <code>.claude/skills</code>), so the skills trigger in every workspace.</li>
+</ul>
+
+<h3>A.1 — Copy the 7 skills into the workspace</h3>
+<p>From the root of the ACB workspace where you want the skills available:</p>
+<pre><code>mkdir -p .a4drules/skills
+
+# point at wherever you cloned the suite
+SUITE=/path/to/mule-java17-upgrade-skills
+
+# copy each skill folder verbatim (SKILL.md + scripts/ + references/)
+cp -R "$SUITE"/skills/mule-upgrade             .a4drules/skills/
+cp -R "$SUITE"/skills/mule-upgrade-assess      .a4drules/skills/
+cp -R "$SUITE"/skills/mule-upgrade-apply       .a4drules/skills/
+cp -R "$SUITE"/skills/mule-upgrade-pr          .a4drules/skills/
+cp -R "$SUITE"/skills/mule-upgrade-parent-pom  .a4drules/skills/
+cp -R "$SUITE"/skills/mule-upgrade-job         .a4drules/skills/
+cp -R "$SUITE"/skills/mule-upgrade-scan        .a4drules/skills/
+# mule-upgrade-mcp documents the hosted server — copy it only if you also run Option B</code></pre>
+
+<p>The layout Vibes expects:</p>
+<pre><code>&lt;workspace&gt;/
+└── .a4drules/
+    └── skills/
+        ├── mule-upgrade/            # orchestrator — "upgrade &lt;app&gt; to Java 17"
+        │   ├── SKILL.md
+        │   └── scripts/…
+        ├── mule-upgrade-assess/
+        ├── mule-upgrade-apply/
+        ├── mule-upgrade-pr/
+        ├── mule-upgrade-parent-pom/
+        ├── mule-upgrade-job/
+        └── mule-upgrade-scan/       # fleet audit + proactive Slack push</code></pre>
+
+<blockquote class="warn">
+  <strong>Important — shared scripts:</strong> the skill scripts import from the suite's
+  <code>lib_shared/</code>, <code>config/</code>, and <code>server/</code> directories, which live
+  at the <strong>suite root</strong>, not inside each skill. The cleanest install is to keep the
+  cloned suite intact and <strong>symlink</strong> the skill folders into
+  <code>.a4drules/skills/</code> (so <code>../../lib_shared</code> still resolves), rather than
+  copying folders out of the tree:
+  <pre><code>ln -s "$SUITE"/skills/mule-upgrade            .a4drules/skills/mule-upgrade
+ln -s "$SUITE"/skills/mule-upgrade-assess     .a4drules/skills/mule-upgrade-assess
+# …and so on for the other 5</code></pre>
+  On Windows use <code>mklink /D</code> (Command Prompt as admin) or
+  <code>New-Item -ItemType SymbolicLink</code>. If you must copy instead of symlink, also copy the
+  suite's <code>lib_shared/</code>, <code>config/</code>, and <code>server/</code> next to the
+  skills and adjust the relative <code>import</code> paths accordingly.
+</blockquote>
+
+<h3>A.2 — Reload and confirm</h3>
+<ol>
+  <li>Reload the ACB window (or restart Vibes) so it re-scans the skills directory.</li>
+  <li>Open the Vibes Skills panel — the 7 skills should appear under <strong>Workspace</strong> scope.</li>
+  <li>Vibes activates a matching skill through its <code>use_skill</code> tool when your prompt
+  matches a skill's trigger phrases.</li>
+</ol>
+
+<h3>A.3 — Drive it in natural language</h3>
+<table>
+  <thead><tr><th>You say to Vibes</th><th>Skill it uses</th></tr></thead>
+  <tbody>
+    <tr><td>"Assess this repo for the Java 17 upgrade"</td><td><code>mule-upgrade-assess</code></td></tr>
+    <tr><td>"Upgrade orders-api to Java 17 and open a PR"</td><td><code>mule-upgrade</code> (orchestrator)</td></tr>
+    <tr><td>"What's the status of job job-…?"</td><td><code>mule-upgrade-job</code></td></tr>
+    <tr><td>"Poll the merge/deploy tail"</td><td><code>mule-upgrade</code> (<code>poll</code>)</td></tr>
+    <tr><td>"Upgrade the shared parent/BOM pom in …"</td><td><code>mule-upgrade-parent-pom</code></td></tr>
+    <tr><td>"Roll back the PR for job job-…"</td><td><code>mule-upgrade-job</code></td></tr>
+    <tr><td>"Scan the fleet for apps still on old Mule/Java" (and alert me on Slack)</td><td><code>mule-upgrade-scan</code></td></tr>
+  </tbody>
+</table>
+<p>Each <code>SKILL.md</code> documents the exact <code>node …</code> command; Vibes runs it and
+reports the ChangePlan / PR / job outcome.</p>
+
+<blockquote class="warn">
+  <strong>Runtime note:</strong> these skills execute <code>node</code> scripts under
+  <code>scripts/</code>. That works when the Vibes runtime permits skill script execution (the
+  normal Claude Code skills behavior). If your Vibes instance restricts skills to
+  instructions-only, the <code>SKILL.md</code> prose still guides the agent, but run the scripts
+  through <strong>Option B</strong> (the MCP server) instead.
+</blockquote>
+
+<h2>Option B — Register the hosted MCP server</h2>
+<p>Use this for the 10 tools as first-class Vibes tools (with per-tool auto-approve/timeout
+controls) and for event-driven CI/CD via the HMAC webhook — or whenever skill script execution is
+sandboxed.</p>
+
+<h3>B.1 — Start the server</h3>
+<pre><code>cd /path/to/mule-java17-upgrade-skills
+MCP_BEARER_TOKEN=&lt;long-random-string&gt; node server/server.js
+# listening on http://0.0.0.0:8080  →  MCP JSON-RPC at POST /mcp</code></pre>
+<p>Set <code>MCP_BEARER_TOKEN</code> for any non-local exposure (unset = open). Put TLS in front
+for a remote host.</p>
+
+<h3>B.2 — Add it in Vibes (Remote MCP Server)</h3>
+<p><strong>Via the UI:</strong> Vibes → <strong>MCP Servers → Remote Servers → Add a Remote MCP
+Server</strong></p>
+<ul>
+  <li><strong>Server Name:</strong> <code>mule-java17-upgrade</code></li>
+  <li><strong>Service URL:</strong> <code>http://localhost:8080/mcp</code> (or your
+  <code>https://&lt;host&gt;/mcp</code>)</li>
+  <li><strong>Header:</strong> <code>Authorization: Bearer &lt;MCP_BEARER_TOKEN&gt;</code></li>
+</ul>
+<p><strong>Or edit <code>a4d_mcp_settings.json</code></strong> directly:</p>
+<pre><code>{
+  "mcpServers": {
+    "mule-java17-upgrade": {
+      "type": "streamableHttp",
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "Authorization": "Bearer &lt;MCP_BEARER_TOKEN&gt;"
+      }
+    }
+  }
+}</code></pre>
+
+<h3>B.3 — Confirm</h3>
+<p>Reload Vibes; the server's 10 tools appear in the <strong>Installed</strong> tab —
+<code>assess_app</code>, <code>start_upgrade</code>, <code>get_job_status</code>,
+<code>reapply_job</code>, <code>delete_job</code>, <code>upgrade_parent_pom</code>,
+<code>reconcile</code>, <code>rollback</code>, <code>scan_fleet</code>, <code>scan_notify</code> — each with enable/auto-approve/timeout controls.
+Invoke them by asking Vibes to assess/upgrade an app; it calls the tool and returns the JSON
+result. Wire the CI/CD webhook exactly as in <a href="./SETUP-AGENTFORCE.md">SETUP-AGENTFORCE.md</a> §6.</p>
+
+<h2>3. Which option should I use?</h2>
+<table>
+  <thead><tr><th>If you want…</th><th>Use</th></tr></thead>
+  <tbody>
+    <tr><td>Hands-on upgrades pinned to a project, no server</td><td><strong>Option A</strong> (workspace skills)</td></tr>
+    <tr><td>The skills available in every ACB workspace</td><td><strong>Option A</strong> (global scope)</td></tr>
+    <tr><td>First-class tools with per-tool controls + HMAC webhook / event-driven CD</td><td><strong>Option B</strong> (MCP server)</td></tr>
+    <tr><td>Skill script execution is sandboxed in your Vibes instance</td><td><strong>Option B</strong></td></tr>
+  </tbody>
+</table>
+<p>Both share the identical skill scripts and the <code>~/.mule-upgrade/</code> JSON job store, so
+you can mix them (e.g. skills for assess/upgrade, server for the webhook-driven deploy tail).</p>
+
+<h2>4. Troubleshooting</h2>
+<ul>
+  <li><strong>Skills don't appear</strong> → confirm the folders are under
+  <code>.a4drules/skills/&lt;skill&gt;/SKILL.md</code> and reload the ACB window; check the
+  frontmatter <code>name:</code> parses.</li>
+  <li><strong><code>Cannot find module '../../lib_shared/…'</code></strong> → you copied skill
+  folders out of the suite tree; symlink them instead, or copy <code>lib_shared/</code>,
+  <code>config/</code>, <code>server/</code> alongside and fix the imports.</li>
+  <li><strong>"cannot decrypt secure property"</strong> → <code>MULE_CONFIG_KEY</code>
+  missing/wrong in the suite's <code>.env</code>.</li>
+  <li><strong>Remote MCP server won't connect / 401</strong> → check the Service URL ends in
+  <code>/mcp</code> and the <code>Authorization: Bearer</code> header matches
+  <code>MCP_BEARER_TOKEN</code>; some Vibes builds prompt for OAuth on
+  <code>www-authenticate</code> — a static bearer header avoids that path.</li>
+  <li><strong>API-mode 401/403 from GitHub</strong> → <code>GITHUB_TOKEN</code> missing or lacks
+  <code>repo</code> scope; <code>gh auth login</code> for local mode.</li>
+</ul>
+
+<footer>
+  <strong>References</strong><br>
+  MuleSoft Vibes: <a href="https://docs.mulesoft.com/anypoint-code-builder/mulesoft-vibes">docs.mulesoft.com/anypoint-code-builder/mulesoft-vibes</a><br>
+  Vibes Skills: <a href="https://docs.mulesoft.com/anypoint-code-builder/vibes-skills">docs.mulesoft.com/anypoint-code-builder/vibes-skills</a><br>
+  Vibes MCP servers: <a href="https://docs.mulesoft.com/anypoint-code-builder/vibes-mcp-server">docs.mulesoft.com/anypoint-code-builder/vibes-mcp-server</a><br>
+  Agent Skills spec: <a href="https://agentskills.io/specification">agentskills.io/specification</a>
+</footer>
+
+</main>
+</body>
+</html>

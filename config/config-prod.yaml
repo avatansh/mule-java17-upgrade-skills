@@ -1,0 +1,36 @@
+# =============================================================================
+# config-prod.yaml — PROD overrides.
+# Loaded BEFORE config.yaml. Fill in every production-specific value below before
+# deploying to CloudHub. Secrets belong in config-secure-prod.yaml (encrypted).
+# NOTE: these keys were moved out of config.yaml (env-varying) — prod MUST set them.
+# =============================================================================
+
+api:
+  id: "REPLACE_WITH_API_MANAGER_ID"
+
+http:
+  port: "8081"
+
+github:
+  defaultOwner: "REPLACE_WITH_PROD_GITHUB_OWNER"
+
+anypoint:
+  defaultOrgId: "REPLACE_WITH_PROD_ANYPOINT_ORG_ID"
+  verify:
+    enabled: "true"
+
+slack:
+  channel: "#java17-upgrades"
+
+jira:
+  baseUrl: "https://REPLACE_WITH_PROD.atlassian.net"
+  host: "REPLACE_WITH_PROD.atlassian.net"
+  autoCreate: "false"                        # set "true" (and projectKey) to auto-create prod migration tickets
+  projectKey: "REPLACE_WITH_PROD_JIRA_PROJECT_KEY"
+
+matrix:
+  exchange:
+    orgId: "REPLACE_WITH_PROD_EXCHANGE_ORG_ID"
+
+registry:
+  enforceAllowList: "true"                   # prod governance: only registered apps may be upgraded

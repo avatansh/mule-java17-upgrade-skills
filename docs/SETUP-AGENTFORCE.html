@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup — Hosted MCP server for Agentforce (remote)</title>
+<style>
+  :root {
+    --ink: #1b2733; --muted: #5b6b7b; --line: #e3e8ee; --bg: #ffffff;
+    --panel: #f6f8fa; --accent: #0b6bcb; --accent-soft: #eaf2fb;
+    --code-bg: #0f172a; --code-ink: #e6edf3; --warn-bg: #fff8e6; --warn-line: #f0c34e;
+    --mono: "SFMono-Regular", ui-monospace, "Cascadia Code", Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans);
+    line-height: 1.65; font-size: 16px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 48px 28px 96px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 .4em; letter-spacing: -.02em; }
+  h2 {
+    font-size: 1.35rem; margin: 2.4em 0 .7em; padding-bottom: .35em;
+    border-bottom: 2px solid var(--line); letter-spacing: -.01em;
+  }
+  h3 { font-size: 1.08rem; margin: 1.8em 0 .6em; }
+  p { margin: .8em 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: var(--mono); font-size: .88em; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 5px; padding: .12em .4em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; margin: 1em 0; font-size: .86rem; line-height: 1.55;
+  }
+  pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+  table {
+    border-collapse: collapse; width: 100%; margin: 1.1em 0; font-size: .93rem;
+    border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+  }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--panel); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  td code, th code { background: var(--accent-soft); border-color: #cfe1f6; }
+  blockquote {
+    margin: 1.1em 0; padding: 12px 18px; background: var(--warn-bg);
+    border-left: 4px solid var(--warn-line); border-radius: 0 8px 8px 0; color: #664d03;
+  }
+  blockquote p { margin: .35em 0; }
+  blockquote code { background: #fff3cd; border-color: #f5dd8a; }
+  blockquote ul { margin: .35em 0; }
+  ul, ol { margin: .8em 0; padding-left: 1.5em; }
+  li { margin: .3em 0; }
+  hr { border: none; border-top: 1px solid var(--line); margin: 2.4em 0; }
+  .subtitle { color: var(--muted); font-size: 1.05rem; margin-top: 0; }
+  .doc-nav {
+    display: inline-flex; gap: 8px; align-items: center; font-size: .85rem;
+    background: var(--accent-soft); border: 1px solid #cfe1f6; color: var(--accent);
+    padding: 6px 12px; border-radius: 999px; margin-bottom: 24px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="doc-nav">Doc · <a href="./SETUP-IDE.html">← Switch to IDE setup</a></div>
+
+<h1>Setup — Hosted MCP server for Agentforce (remote)</h1>
+<p class="subtitle">Run the upgrade suite as a <strong>hosted server</strong> that exposes the 10 tools over MCP JSON-RPC + a REST facade, so a remote agent — <strong>Agentforce</strong> or any MCP client — can drive upgrades over the network. This guide stands up the server, secures it, wires the CI/CD webhook callback, and connects Agentforce.</p>
+
+<blockquote>
+<p>For hands-on, one-app-at-a-time upgrades inside an IDE (no server), see <a href="./SETUP-IDE.html">SETUP-IDE.html</a>. The server reuses the exact same skill scripts underneath.</p>
+</blockquote>
+
+<hr>
+
+<h2>1. What you're standing up</h2>
+<p>One Node <code>http.Server</code> (<code>server/server.js</code>) with four surfaces on a single port:</p>
+<table>
+<thead><tr><th>Surface</th><th>Route</th><th>Auth</th></tr></thead>
+<tbody>
+<tr><td>MCP JSON-RPC</td><td><code>POST /mcp</code></td><td>Bearer</td></tr>
+<tr><td>REST facade</td><td><code>GET /api/v1/tools</code>, <code>POST /api/v1/tools/{name}</code></td><td>Bearer</td></tr>
+<tr><td>CI/CD webhooks</td><td><code>POST /webhook</code>, <code>POST /webhook/cd-result</code></td><td><strong>HMAC</strong></td></tr>
+<tr><td>Health</td><td><code>GET /health</code></td><td>open</td></tr>
+</tbody>
+</table>
+<p>The 10 tools: <code>assess_app</code>, <code>start_upgrade</code>, <code>get_job_status</code>, <code>reapply_job</code>, <code>delete_job</code>, <code>upgrade_parent_pom</code>, <code>reconcile</code>, <code>rollback</code>, <code>scan_fleet</code>, <code>scan_notify</code>. Every call is validated against the tool's JSON Schema (the <strong>schema-contract guard</strong>) before the handler runs.</p>
+
+<hr>
+
+<h2>2. Prerequisites</h2>
+<ul>
+<li><strong>Node.js ≥ 24</strong> on the host.</li>
+<li>A network path from Agentforce (and your CI) to the host — a public URL or tunnel (a reverse proxy terminating TLS in front is strongly recommended; the server speaks plain HTTP).</li>
+<li>The same secrets as the IDE flow: <code>MULE_CONFIG_KEY</code> (to read encrypted YAML) or plaintext <code>GITHUB_TOKEN</code> etc.</li>
+</ul>
+<pre><code>git clone &lt;this-repo&gt; mule-java17-upgrade-skills
+cd mule-java17-upgrade-skills
+npm ci
+node --test          # sanity check</code></pre>
+
+<blockquote>
+<p><strong>Where do these commands run, and do I need the Salesforce CLI?</strong> In a <strong>plain terminal on the host</strong>, from the cloned suite root — not inside any DX/Anypoint runtime. You do <strong>not</strong> need the Salesforce / <code>sf</code> / <code>sfdx</code> CLI; this suite (and its server) only use <code>node</code> (required) and <code>git</code> + <code>gh</code> (local-mode PRs). SF CLI, and any <em>"Token exchange timed out"</em> against the Anypoint <strong>DX</strong> server, are unrelated to this suite.</p>
+</blockquote>
+
+<hr>
+
+<h2>2a. Smoke-test the server locally, end-to-end (no live credentials needed)</h2>
+<p>Before exposing anything, prove the server runs on your own machine. Every downstream call (GitHub, Anypoint, Slack, Jira, connector-matrix fetch) is env-gated and degrades gracefully, so a bare local server is fully testable:</p>
+<pre><code>npm ci &amp;&amp; node --test                 # 191 tests — no secrets, no network
+
+# minimal .env for a locked-down LOCAL test (see §3); keep test jobs isolated:
+#   MCP_BEARER_TOKEN=local-test-token
+#   MULE_UPGRADE_ENV=dev
+#   MULE_UPGRADE_HOME=./.local-jobstore
+
+node server/server.js                  # → listening on http://0.0.0.0:8080</code></pre>
+<p>In a second terminal, drive the 10 tools over the loopback interface — no TLS, no tunnel:</p>
+<pre><code>TOKEN=local-test-token
+curl -s localhost:8080/health
+curl -sX POST localhost:8080/mcp -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'                    # expect 10 tools
+
+# call a read-only tool end-to-end against a throwaway clone (assess writes nothing).
+# assess_app requires appName; pass repo for local-clone mode:
+curl -sX POST localhost:8080/api/v1/tools/assess_app -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"appName":"orders-api","repo":"/path/to/target-app"}'</code></pre>
+<p>Missing GitHub/Anypoint/Slack creds simply make the corresponding tool skip or return a clear error — never a crash. Once this works locally, put TLS in front (§4) and connect Agentforce (§5).</p>
+
+<hr>
+
+<h2>3. Configure <code>.env</code> (auto-loaded)</h2>
+<pre><code>cp .env.example .env</code></pre>
+<p>Set at minimum:</p>
+<pre><code># read the encrypted secrets shipped in config/config-secure-&lt;env&gt;.yaml
+MULE_CONFIG_KEY=&lt;16/24/32-char AES key&gt;
+MULE_UPGRADE_ENV=dev
+
+# REQUIRE a bearer token on MCP + REST (leave empty ONLY for a locked-down local test)
+MCP_BEARER_TOKEN=&lt;long-random-string&gt;
+
+# port (default 8080)
+MCP_SERVER_PORT=8080
+
+# HMAC secret for the CI/CD webhook (also decryptable from github.webhookSecret in the YAML)
+GITHUB_WEBHOOK_SECRET=&lt;shared-hmac-secret&gt;</code></pre>
+<p><code>server/server.js</code> auto-loads <code>.env</code> via <code>lib_shared/env.js</code>. In a container/hosting platform you can instead inject these as real environment variables (they override the YAML), and skip shipping <code>MULE_CONFIG_KEY</code> entirely.</p>
+<blockquote>
+<p><strong>Security:</strong></p>
+<ul>
+<li>When <code>MCP_BEARER_TOKEN</code> is <strong>unset the bearer guard is OFF (open)</strong> — never expose such an instance to a network. Always set a strong token for any hosted deployment.</li>
+<li>Webhooks are authenticated by <strong>HMAC</strong>, not the bearer. Keep <code>GITHUB_WEBHOOK_SECRET</code> secret.</li>
+<li>Never commit <code>.env</code> or the real <code>MULE_CONFIG_KEY</code>.</li>
+</ul>
+</blockquote>
+
+<hr>
+
+<h2>4. Run the server</h2>
+<pre><code>node server/server.js
+# [mule-java17-upgrade-skills] listening on http://0.0.0.0:8080
+#   MCP JSON-RPC : POST /mcp
+#   REST tools   : GET /api/v1/tools · POST /api/v1/tools/{name}
+#   Webhooks     : POST /webhook · POST /webhook/cd-result (HMAC)
+#   Health       : GET /health
+#   Bearer auth  : ON</code></pre>
+<p>Smoke-test locally (with the bearer token):</p>
+<pre><code>TOKEN="$MCP_BEARER_TOKEN"
+curl -s localhost:8080/health
+curl -sX POST localhost:8080/mcp -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize"}'
+curl -sX POST localhost:8080/mcp -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'</code></pre>
+<p>Run it as a long-lived service behind TLS (systemd unit, container, or your platform of choice). <code>GET /health</code> is unauthenticated for load-balancer probes.</p>
+
+<hr>
+
+<h2>5. Connect Agentforce</h2>
+<p>Agentforce consumes this as an <strong>external MCP endpoint</strong>:</p>
+<ol>
+<li>Expose the server at an HTTPS URL (reverse proxy / tunnel).</li>
+<li>In Agentforce, register a new <strong>MCP server / external tool provider</strong> pointing at <code>https://&lt;host&gt;/mcp</code>.</li>
+<li>Set the auth header <strong><code>Authorization: Bearer &lt;MCP_BEARER_TOKEN&gt;</code></strong>.</li>
+<li>Agentforce calls <code>initialize</code> then <code>tools/list</code>; the 10 tools appear with their input schemas. Invoking a tool sends <code>tools/call</code>; results come back as MCP content (JSON), with schema violations surfaced as JSON-RPC <code>-32602</code> and domain failures as <code>isError:true</code> tool results.</li>
+</ol>
+<p>If your Agentforce integration prefers plain REST over JSON-RPC, point it at <code>POST /api/v1/tools/{name}</code> with the same bearer header — identical validation and result payload.</p>
+
+<hr>
+
+<h2>6. Wire the CI/CD callback (event-driven deploy tail)</h2>
+<p>With a hosted server you can drive the job state machine from CI <strong>push</strong> instead of polling. The reusable workflow <code>.github/workflows/ci-result.yml</code> posts an HMAC-signed result to <code>POST /webhook/cd-result</code>. From an upgraded target repo's own pipeline:</p>
+<pre><code>jobs:
+  notify:
+    if: always()
+    uses: &lt;owner&gt;/mule-java17-upgrade-skills/.github/workflows/ci-result.yml@main
+    with:
+      job_id: ${{ needs.meta.outputs.job_id }}   # the jobId from the upgrade PR
+      stage: test                                 # test | dependency-guard | deploy
+      result: ${{ needs.munit.result }}           # success | failure
+    secrets:
+      server_url: ${{ secrets.UPGRADE_SERVER_URL }}       # https://&lt;host&gt;/webhook/cd-result
+      webhook_secret: ${{ secrets.UPGRADE_WEBHOOK_SECRET }} # == GITHUB_WEBHOOK_SECRET</code></pre>
+<p>The signature is sent as <code>x-cd-signature-256: sha256=&lt;hmac&gt;</code> and verified against the raw body; a <code>x-delivery-id</code> de-dups retries. Stage semantics:</p>
+<ul>
+<li><code>stage=test</code> + <code>failure</code> → job parks at <strong>MUNIT_FAILED</strong></li>
+<li><code>stage=dependency-guard</code> + <code>failure</code> → <strong>DEP_GUARD_FAILED</strong> (+ violations report)</li>
+<li><code>stage=deploy</code> + <code>success</code> → <strong>DEPLOYED</strong> (optionally confirmed against Anypoint); <code>failure</code> → <strong>FAILED_DEPLOY</strong></li>
+</ul>
+<blockquote>
+<p>If you can't push callbacks, you don't need the webhook at all — run <code>reconcile</code> / the <code>poll</code> subcommand on a timer to poll <code>gh</code> + Anypoint. The state machine is identical either way.</p>
+</blockquote>
+
+<hr>
+
+<h2>7. Kick off upgrades from CI (optional)</h2>
+<p><code>.github/workflows/upgrade.yml</code> is a <code>workflow_dispatch</code> shim that runs the orchestrator CLI in CI — the same <code>start</code> pipeline, no IDE. Configure repo/org secrets it reads (<code>UPGRADE_GITHUB_TOKEN</code>, <code>MULE_CONFIG_KEY</code>, <code>ANYPOINT_CLIENT_ID/SECRET</code>, <code>SLACK_WEBHOOK_URL</code>) and dispatch with the app name + mode. All user inputs flow through quoted <code>env:</code> (never interpolated into the shell) to avoid injection.</p>
+<p><code>.github/workflows/test.yml</code> runs the Node test suite on every push/PR.</p>
+
+<hr>
+
+<h2>8. Troubleshooting</h2>
+<ul>
+<li><strong>401 on <code>/mcp</code> or <code>/api/v1/*</code></strong> → missing/incorrect <code>Authorization: Bearer</code> header, or <code>MCP_BEARER_TOKEN</code> mismatch.</li>
+<li><strong>401 on <code>/webhook/cd-result</code></strong> → HMAC mismatch: the CI <code>webhook_secret</code> must equal the server's <code>GITHUB_WEBHOOK_SECRET</code>, and the signature must be computed over the exact body bytes.</li>
+<li><strong><code>-32602</code> from a tool call</strong> → arguments failed the schema-contract guard; check the <code>data.problems</code> list in the error.</li>
+<li><strong>Tool returns <code>isError:true</code></strong> → a domain failure (e.g. <code>NOT_FOUND</code> for an unknown jobId); the text content carries <code>{error, code}</code>.</li>
+<li><strong>Server open with no auth</strong> → you left <code>MCP_BEARER_TOKEN</code> empty; set it before exposing.</li>
+</ul>
+
+</div>
+</body>
+</html>

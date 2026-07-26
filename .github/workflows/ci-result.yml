@@ -1,0 +1,94 @@
+# ci-result — reusable callback that an UPGRADED target repo runs after its CI/CD stages
+# to notify the upgrade server, driving the job state machine (test → dependency-guard →
+# deploy). This is the counterpart to the server's POST /webhook/cd-result handler.
+#
+# It replaces the Mule app's inbound cd-result push: the target repo signs the JSON body
+# with the shared HMAC secret and POSTs it. When you don't run a hosted server, use the
+# `poll` subcommand / reconcile instead — this workflow is only needed for event-driven CD.
+#
+# Call it from a target repo's own workflow:
+#
+#   jobs:
+#     notify:
+#       if: always()
+#       uses: <owner>/mule-java17-upgrade-skills/.github/workflows/ci-result.yml@main
+#       with:
+#         job_id: ${{ needs.upgrade-meta.outputs.job_id }}
+#         stage: test                       # test | dependency-guard | deploy
+#         result: ${{ needs.munit.result }} # success | failure  (a job status string)
+#       secrets:
+#         server_url: ${{ secrets.UPGRADE_SERVER_URL }}      # https://host/webhook/cd-result
+#         webhook_secret: ${{ secrets.UPGRADE_WEBHOOK_SECRET }}
+#
+# SECURITY: inputs are quoted into env: and never interpolated into the shell. The body is
+# built with jq (safe JSON), HMAC-signed with openssl, and the signature sent as
+# x-cd-signature-256 — exactly what auth.verifyWebhook expects.
+name: ci-result
+
+on:
+  workflow_call:
+    inputs:
+      job_id:
+        description: "The upgrade jobId to advance"
+        required: true
+        type: string
+      stage:
+        description: "CI stage: test | dependency-guard | deploy"
+        required: true
+        type: string
+      result:
+        description: "success | failure"
+        required: true
+        type: string
+      deploy_url:
+        description: "Deployed app URL (stage=deploy only)"
+        required: false
+        type: string
+      error:
+        description: "Short failure reason (optional)"
+        required: false
+        type: string
+    secrets:
+      server_url:
+        description: "Full URL of the server's /webhook/cd-result endpoint"
+        required: true
+      webhook_secret:
+        description: "Shared HMAC secret (matches GITHUB_WEBHOOK_SECRET on the server)"
+        required: true
+
+jobs:
+  post-result:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post signed CI result
+        env:
+          SERVER_URL: ${{ secrets.server_url }}
+          WEBHOOK_SECRET: ${{ secrets.webhook_secret }}
+          IN_JOB_ID: ${{ inputs.job_id }}
+          IN_STAGE: ${{ inputs.stage }}
+          IN_RESULT: ${{ inputs.result }}
+          IN_DEPLOY_URL: ${{ inputs.deploy_url }}
+          IN_ERROR: ${{ inputs.error }}
+        run: |
+          set -euo pipefail
+          # Build the JSON body safely (jq quotes/escapes every value).
+          body="$(jq -cn \
+            --arg jobId "$IN_JOB_ID" \
+            --arg result "$IN_RESULT" \
+            --arg stage "$IN_STAGE" \
+            --arg deployUrl "${IN_DEPLOY_URL:-}" \
+            --arg error "${IN_ERROR:-}" \
+            '{jobId:$jobId, result:$result, stage:$stage}
+              + (if $deployUrl != "" then {deployUrl:$deployUrl} else {} end)
+              + (if $error     != "" then {error:$error}         else {} end)')"
+          # HMAC-SHA256 over the EXACT bytes we send → x-cd-signature-256: sha256=<hex>
+          sig="sha256=$(printf '%s' "$body" \
+            | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" -r | cut -d' ' -f1)"
+          code="$(curl -sS -o /tmp/resp.json -w '%{http_code}' -X POST "$SERVER_URL" \
+            -H 'content-type: application/json' \
+            -H "x-cd-signature-256: $sig" \
+            -H "x-delivery-id: ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --data "$body")"
+          echo "server responded $code:"; cat /tmp/resp.json; echo
+          # 2xx = accepted (incl. idempotent replay). Anything else fails the job.
+          [ "$code" -ge 200 ] && [ "$code" -lt 300 ]

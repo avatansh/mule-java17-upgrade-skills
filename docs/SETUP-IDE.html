@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup — Skills in your IDE (Claude Code / local)</title>
+<style>
+  :root {
+    --ink: #1b2733; --muted: #5b6b7b; --line: #e3e8ee; --bg: #ffffff;
+    --panel: #f6f8fa; --accent: #0b6bcb; --accent-soft: #eaf2fb;
+    --code-bg: #0f172a; --code-ink: #e6edf3; --warn-bg: #fff8e6; --warn-line: #f0c34e;
+    --mono: "SFMono-Regular", ui-monospace, "Cascadia Code", Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans);
+    line-height: 1.65; font-size: 16px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 48px 28px 96px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 .4em; letter-spacing: -.02em; }
+  h2 {
+    font-size: 1.35rem; margin: 2.4em 0 .7em; padding-bottom: .35em;
+    border-bottom: 2px solid var(--line); letter-spacing: -.01em;
+  }
+  h3 { font-size: 1.08rem; margin: 1.8em 0 .6em; }
+  p { margin: .8em 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: var(--mono); font-size: .88em; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 5px; padding: .12em .4em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; margin: 1em 0; font-size: .86rem; line-height: 1.55;
+  }
+  pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+  table {
+    border-collapse: collapse; width: 100%; margin: 1.1em 0; font-size: .93rem;
+    border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+  }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--panel); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  td code, th code { background: var(--accent-soft); border-color: #cfe1f6; }
+  blockquote {
+    margin: 1.1em 0; padding: 12px 18px; background: var(--warn-bg);
+    border-left: 4px solid var(--warn-line); border-radius: 0 8px 8px 0; color: #664d03;
+  }
+  blockquote p { margin: .35em 0; }
+  blockquote code { background: #fff3cd; border-color: #f5dd8a; }
+  ul, ol { margin: .8em 0; padding-left: 1.5em; }
+  li { margin: .3em 0; }
+  hr { border: none; border-top: 1px solid var(--line); margin: 2.4em 0; }
+  .subtitle { color: var(--muted); font-size: 1.05rem; margin-top: 0; }
+  .doc-nav {
+    display: inline-flex; gap: 8px; align-items: center; font-size: .85rem;
+    background: var(--accent-soft); border: 1px solid #cfe1f6; color: var(--accent);
+    padding: 6px 12px; border-radius: 999px; margin-bottom: 24px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="doc-nav">Doc · <a href="./SETUP-AGENTFORCE.html">Switch to Agentforce setup →</a></div>
+
+<h1>Setup — Skills in your IDE (Claude Code / local)</h1>
+<p class="subtitle">Run the Java-17 upgrade suite as <strong>Claude Code skills</strong> against a local clone or the GitHub API, from any IDE that runs Claude Code. No server, no hosting — you talk to Claude, it invokes the skills. This is the workflow for hands-on, one-app-at-a-time upgrades.</p>
+
+<blockquote>
+<p>For remote/headless access (Agentforce, another agent over the network), see <a href="./SETUP-AGENTFORCE.html">SETUP-AGENTFORCE.html</a> instead.</p>
+</blockquote>
+
+<hr>
+
+<h2>0. Where do I run these commands? (and do I need the Salesforce CLI?)</h2>
+<ul>
+<li><strong>Run everything in a plain terminal on your own machine, from the root of the cloned <code>mule-java17-upgrade-skills</code> repo</strong> — the same place you run <code>npm test</code>. macOS/Linux: Terminal; Windows: Git Bash, PowerShell, or CMD (the examples use bash-style paths — on PowerShell/CMD swap <code>~</code> for <code>%USERPROFILE%</code>/<code>$HOME</code> and line-continuation <code>\</code> for <code>`</code>/<code>^</code>).</li>
+<li>These are <strong>ordinary <code>node …</code> scripts</strong>. Do <strong>not</strong> run them inside Anypoint Studio / Code Builder's embedded runtime, the Anypoint <strong>DX MCP server</strong>, or any other MuleSoft tool. When you drive them by <em>asking Claude</em>, Claude runs the exact same commands in that same shell for you.</li>
+<li><strong>You do NOT need the Salesforce / <code>sf</code> / <code>sfdx</code> CLI.</strong> This suite never calls it. Its only external tools are <strong><code>node</code></strong> (required) and <strong><code>git</code> + <code>gh</code></strong> (only for <em>local-mode</em> PRs); everything else (GitHub API, Anypoint, Slack, Jira) is plain HTTPS that is env-gated and non-fatal. If you hit <em>"Token exchange timed out"</em> connecting to the Anypoint <strong>DX</strong> server, that is a <strong>separate</strong> tool and unrelated to running this suite.</li>
+</ul>
+
+<hr>
+
+<h2>1. Prerequisites</h2>
+<table>
+<thead><tr><th>Need</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><strong>Node.js ≥ 24</strong> (<code>node --version</code>)</td><td>runs the skill scripts (ES modules, <code>node --test</code>)</td></tr>
+<tr><td><strong>git</strong> + <strong>gh</strong> (GitHub CLI, authenticated)</td><td><code>local</code> mode: branch/commit/push/PR</td></tr>
+<tr><td>A <strong>GitHub token</strong> (<code>GITHUB_TOKEN</code>)</td><td><code>api</code> mode: Git Data API commits + PRs</td></tr>
+<tr><td><em>(optional)</em> Anypoint Connected App creds</td><td>deploy verification during the poll tail</td></tr>
+<tr><td><em>(optional)</em> Slack webhook / Jira creds</td><td>notifications (env-gated, non-fatal)</td></tr>
+</tbody>
+</table>
+
+<p>Clone the suite and install its one dependency:</p>
+<pre><code>git clone &lt;this-repo&gt; mule-java17-upgrade-skills
+cd mule-java17-upgrade-skills
+npm ci
+node --test          # sanity: the whole suite should pass</code></pre>
+
+<hr>
+
+<h2>2. Point your IDE at the skills</h2>
+<p>The skills live under <code>skills/*/SKILL.md</code>, each with YAML frontmatter so Claude auto-invokes them by trigger phrase. Make Claude Code aware of this folder:</p>
+<ul>
+<li><strong>Project-scoped:</strong> open <code>mule-java17-upgrade-skills</code> (or a workspace containing it) in your IDE. Claude Code discovers <code>skills/*/SKILL.md</code> automatically.</li>
+<li><strong>User-scoped (available everywhere):</strong> symlink or copy the <code>skills/</code> entries into your Claude Code skills directory (e.g. <code>~/.claude/skills/</code>), so they trigger from any project — handy when you upgrade a clone that lives outside this repo.</li>
+</ul>
+<p>You do <strong>not</strong> register scripts anywhere; each <code>SKILL.md</code> documents the exact <code>node …</code> command Claude runs.</p>
+
+<hr>
+
+<h2>3. Configure secrets (the <code>.env</code> auto-loads)</h2>
+<p>The suite ports the Mule app's layered config: <code>config/config-&lt;env&gt;.yaml</code> (non-secret) + <code>config/config-secure-&lt;env&gt;.yaml</code> (AES-CBC encrypted secrets). Because the secrets ship <strong>already encrypted</strong>, the only thing you must supply is the <strong>decryption key</strong>.</p>
+<pre><code>cp .env.example .env
+# edit .env:
+#   MULE_CONFIG_KEY=&lt;the 16/24/32-char AES key&gt;     ← required to read encrypted secrets
+#   MULE_UPGRADE_ENV=dev                             ← selects config-dev.yaml (default)</code></pre>
+<p><code>lib_shared/env.js</code> auto-loads <code>.env</code> at the top of every script and CLI, so nothing needs to be exported into your shell. Precedence: a plaintext env var (e.g. <code>GITHUB_TOKEN=…</code> in <code>.env</code>) <strong>overrides</strong> the decrypted YAML value — convenient when you'd rather not ship the key.</p>
+<blockquote>
+<p><strong>Security:</strong> <code>.env</code> is git-ignored — never commit it. Never commit the real <code>MULE_CONFIG_KEY</code>. <code>.env.example</code> keeps <code>MULE_CONFIG_KEY=</code> empty on purpose.</p>
+</blockquote>
+
+<hr>
+
+<h2>4. Everyday use — just ask Claude</h2>
+<p>With the skills loaded, drive everything in natural language; Claude picks the right skill:</p>
+<table>
+<thead><tr><th>You say</th><th>Skill</th><th>What runs</th></tr></thead>
+<tbody>
+<tr><td>"Assess <code>~/src/orders-api</code> for the Java 17 upgrade"</td><td><code>mule-upgrade-assess</code></td><td><code>assess.js</code> → ChangePlan JSON + summary</td></tr>
+<tr><td>"Upgrade orders-api to Java 17 and open a PR"</td><td><code>mule-upgrade</code></td><td>full pipeline → PR at <code>PR_OPEN</code></td></tr>
+<tr><td>"What's the status of job job-…?"</td><td><code>mule-upgrade-job</code></td><td>job record + next-poll hint</td></tr>
+<tr><td>"Poll the merge/deploy tail"</td><td><code>mule-upgrade</code> (<code>poll</code>)</td><td>reconcile once (or <code>--watch</code>)</td></tr>
+<tr><td>"Upgrade the shared parent pom in …"</td><td><code>mule-upgrade-parent-pom</code></td><td>parent/BOM bump → PR</td></tr>
+<tr><td>"Roll back the PR for job job-…"</td><td><code>mule-upgrade-job</code></td><td>revert branch + revert PR</td></tr>
+</tbody>
+</table>
+
+<h3>Or run the CLIs directly</h3>
+<pre><code># assess a local clone (no writes)
+node skills/mule-upgrade-assess/scripts/assess.js --repo ~/src/orders-api
+
+# full upgrade in API mode → opens a PR
+node skills/mule-upgrade/scripts/upgrade.js start \
+  --app orders-api --mode api --owner acme --repo-name orders-api --env dev
+
+# full upgrade in local mode against a clone → git + gh pr create
+node skills/mule-upgrade/scripts/upgrade.js start \
+  --app orders-api --mode local --repo ~/src/orders-api
+
+# poll the deploy tail (gh + Anypoint verify); one shot, or --watch on a timer
+node skills/mule-upgrade/scripts/upgrade.js poll --stale-seconds 0</code></pre>
+<p>Exit codes mirror the Mule error taxonomy: <code>0</code> ok (incl. <code>ALREADY_UPGRADED</code> / <code>PR_OPEN</code>), <code>4</code> CONFLICT (an upgrade for that app is already in progress), <code>5</code> FAILED_*, <code>2</code> usage.</p>
+
+<hr>
+
+<h2>5. Where state lives</h2>
+<p>Jobs persist as JSON under <strong><code>~/.mule-upgrade/</code></strong> (override with <code>MULE_UPGRADE_HOME</code>), mirroring the Mule Object Store partitions:</p>
+<pre><code>~/.mule-upgrade/
+├── jobs/job-&lt;uuid&gt;.json          # the job record + state machine status
+├── locks/lock::&lt;app&gt;.json        # single-flight lock per app
+├── index/branch::&lt;branch&gt;.json   # branch → jobId
+└── idempotency/*.json            # webhook/callback de-dup</code></pre>
+<p>Inspect a run with <code>cat ~/.mule-upgrade/jobs/*.json</code>. If a run is interrupted, ask Claude to "reconcile stale jobs" (or <code>upgrade.js poll</code>) — stale early-stage jobs move to <code>FAILED_INTERRUPTED</code> and their locks are released.</p>
+
+<hr>
+
+<h2>6. Deploy tail — polling, not webhooks</h2>
+<p>A skill can't host a listener, so merge/CI/deploy detection is done by <strong>polling</strong> (<code>gh pr view</code>, <code>gh pr checks</code>, Anypoint verify) via the <code>poll</code> subcommand / reconcile. Run it on demand, or on a timer via the <code>/loop</code> skill or OS cron. (If you <em>do</em> want event-driven CD callbacks, run the hosted server — see <a href="./SETUP-AGENTFORCE.html">SETUP-AGENTFORCE.html</a>.)</p>
+
+<hr>
+
+<h2>7. Run it locally, end-to-end (no live credentials needed)</h2>
+<p>You can exercise the whole pipeline on your own machine with <strong>nothing but Node + a throwaway Mule repo</strong> — every network call (GitHub API, Anypoint, Slack, Jira, connector-matrix fetch) is optional and degrades gracefully when its credential is absent. Do it in this order:</p>
+
+<p><strong>Step 1 — install &amp; prove the suite is healthy.</strong></p>
+<pre><code>cd mule-java17-upgrade-skills
+npm ci
+node --test          # the full suite (191 tests) must pass — this needs no secrets and no network</code></pre>
+
+<p><strong>Step 2 — minimal <code>.env</code> (offline profile).</strong> For pure local testing you don't even need the AES key — plaintext env vars override the encrypted YAML, and you can simply omit the ones you aren't testing:</p>
+<pre><code>MULE_UPGRADE_ENV=dev
+MULE_UPGRADE_HOME=./.local-jobstore     # keep test jobs out of your real ~/.mule-upgrade
+# GITHUB_TOKEN=ghp_…                     # only needed for API-mode PRs (Step 5)
+# SLACK_WEBHOOK_URL=…  ANYPOINT_CLIENT_ID/SECRET=…   # leave unset — those steps just skip</code></pre>
+
+<p><strong>Step 3 — get a target app to assess.</strong> Clone any real Mule 4.6–4.8 / Java 8-or-11 app, or make a tiny fixture: a folder with a <code>pom.xml</code> (declaring a <code>mule-maven-plugin</code> version + a runtime property), a <code>mule-artifact.json</code>, and optionally <code>.github/workflows/build.yml</code> with a <code>java-version:</code>. Point assess at it — this writes nothing:</p>
+<pre><code>node skills/mule-upgrade-assess/scripts/assess.js --repo /path/to/target-app --no-fetch
+#   --no-fetch  = skip the live connector-matrix fetch → deterministic, fully offline
+#   drop --no-fetch to also see the live advisory drift check against MuleSoft Maven metadata</code></pre>
+<p>You'll get the <code>ChangePlan</code> JSON on stdout and a human summary on stderr. This is the safest thing to run first — it only reads.</p>
+
+<p><strong>Step 4 — dry the fleet scan + drift check (offline-friendly).</strong></p>
+<pre><code># advisory gating-version drift audit (needs network; --no-fetch degrades to "unchecked")
+node skills/mule-upgrade-assess/scripts/lib/matrix_drift.js --no-fetch
+
+# proactive fleet scan → Slack push. With no Anypoint/Slack creds it short-circuits no-op;
+# --dry-run computes the digest without sending or persisting, so it's safe to run bare:
+node skills/mule-upgrade-scan/scripts/scan_notify.js --dry-run</code></pre>
+
+<p><strong>Step 5 — a real end-to-end upgrade → PR.</strong> Choose the mode you can support:</p>
+<ul>
+<li><strong>local mode</strong> (needs <code>git</code> + an authenticated <code>gh</code>): operates on a clone you own.
+<pre><code>node skills/mule-upgrade/scripts/upgrade.js start \
+  --app orders-api --mode local --repo /path/to/your-clone</code></pre></li>
+<li><strong>api mode</strong> (needs a <code>GITHUB_TOKEN</code> with <code>repo</code> scope on a test repo):
+<pre><code>node skills/mule-upgrade/scripts/upgrade.js start \
+  --app orders-api --mode api --owner &lt;you&gt; --repo-name &lt;test-repo&gt; --env dev</code></pre></li>
+</ul>
+<p>Either way the job lands at <code>PR_OPEN</code>. Inspect the job record:</p>
+<pre><code>cat ./.local-jobstore/jobs/*.json      # matches MULE_UPGRADE_HOME from Step 2</code></pre>
+
+<p><strong>Step 6 — poll the tail / test reconcile.</strong> With no Anypoint creds the deploy-verify simply reports "unverified" instead of failing:</p>
+<pre><code>node skills/mule-upgrade/scripts/upgrade.js poll --stale-seconds 0</code></pre>
+<p>To test interruption recovery: start an upgrade, kill it mid-run, then <code>poll</code> (or ask Claude to "reconcile stale jobs") — the early-stage job flips to <code>FAILED_INTERRUPTED</code> and its lock releases.</p>
+
+<blockquote>
+<p><strong>What each missing credential does (all non-fatal):</strong> no <code>GITHUB_TOKEN</code>/<code>gh</code> → API/local PR steps error clearly (use the other mode, or stop after assess); no Anypoint creds → deploy verify is skipped/"unverified"; no Slack/Jira → notifications are silently skipped; no network → connector fetch + drift check fall back to the bundled matrix / "unchecked". Nothing here needs the Salesforce CLI.</p>
+</blockquote>
+
+<hr>
+
+<h2>8. Troubleshooting</h2>
+<ul>
+<li><strong>"cannot decrypt secure property"</strong> → <code>MULE_CONFIG_KEY</code> is missing/wrong in <code>.env</code>.</li>
+<li><strong>API-mode 401/403</strong> → <code>GITHUB_TOKEN</code> missing or lacks <code>repo</code> scope.</li>
+<li><strong><code>gh</code> errors in local mode</strong> → run <code>gh auth login</code> first.</li>
+<li><strong>Wrong environment loaded</strong> → set <code>MULE_UPGRADE_ENV</code> (dev | local | prod).</li>
+<li><strong>Assess can't find the app pom</strong> → pass <code>--app-path &lt;sub/dir&gt;</code> for a monorepo sub-module.</li>
+</ul>
+
+</div>
+</body>
+</html>

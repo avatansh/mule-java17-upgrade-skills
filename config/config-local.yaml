@@ -1,0 +1,49 @@
+# =============================================================================
+# config-dev.yaml — DEV / LOCAL overrides.
+# Loaded BEFORE config.yaml, so every key here WINS over the constant defaults.
+# Put ONLY environment-varying values here. Secrets live in config-secure-dev.yaml.
+# =============================================================================
+
+api:
+  id: "REPLACE_WITH_API_MANAGER_ID"          # numeric API Manager id (autodiscovery is disabled locally)
+
+http:
+  port: "8081"
+
+github:
+  defaultOwner: "avatansh"                   # org/user that owns target repos — https://github.com/avatansh
+
+anypoint:
+  defaultOrgId: "2e14f8c6-4d60-481b-bfb6-798695efc8f4"   # Anypoint org for this env (used if ARM lookup not run)
+  verify:
+    # Local has no real CH2.0 deployment, so skip platform post-deploy confirmation and
+    # trust the CI (cd-result) signal. Set "true" once deploying to a real environment.
+    enabled: "false"
+
+slack:
+  channel: "#java17-upgrades"
+
+jira:
+  # Non-secret Jira Cloud site coordinates. email + apiToken are encrypted in config-secure-dev.yaml.
+  baseUrl: "https://avatansh-sharma.atlassian.net"   # Atlassian Cloud site (project key: J1U)
+  host: "avatansh-sharma.atlassian.net"
+  autoCreate: "true"                                 # auto-create a migration ticket when none is supplied
+  projectKey: "J1U"                                  # Jira project the auto-created ticket lands in
+
+matrix:
+  refreshSeconds: "30"                                # dev/demo: pick up a republished matrix within 30s
+  exchange:
+    orgId: "2e14f8c6-4d60-481b-bfb6-798695efc8f4"   # Exchange org that hosts the compatibility-matrix asset
+
+registry:
+  enforceAllowList: "false"                  # true = ONLY registered apps may be upgraded (governance)
+  source: "exchange-latest"                  # dev/demo: source coordinates from the Exchange-published registry
+  refreshSeconds: "30"                       # dev/demo: pick up a republished registry within 30s
+  exchange:
+    orgId: "2e14f8c6-4d60-481b-bfb6-798695efc8f4"   # Exchange org that hosts the app-registry asset
+
+# Local-only: tighter self-healing so crash recovery is observable in minutes
+# instead of the production 5-min sweep / 15-min stale window. Do NOT copy to prod.
+reconcile:
+  frequencyMillis: "30000"                   # sweep every 30s (base: 5 min)
+  staleSeconds:    "120"                     # job stale after 2 min idle (base: 15 min)

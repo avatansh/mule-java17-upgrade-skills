@@ -1,0 +1,11 @@
+# OPTIONAL. Needed only when an app's repo/path can't be derived by convention
+# (monorepo, repo name != app name, different org) OR when enforceAllowList=true.
+# An app that follows the convention needs NO entry here. Leave 'apps:' empty for a tidy org.
+apps:
+  customer-web-eapi:            # <- needs an entry: it's a monorepo (appPath) and repo != appName
+    owner: "avatansh"
+    repo: "Mule-Apps"            # differs from appName → convention wouldn't find it
+    appPath: "customer-web-eapi"     # dir holding the app pom.xml + mule-artifact.json
+    defaultBranch: "develop"           # optional — else fetched from the GitHub repo API
+    orgId: "2e14f8c6-4d60-481b-bfb6-798695efc8f4"  # optional — else from ARM / defaultOrgId
+  # A convention-following app (repo=appName, at root) needs NOTHING here.

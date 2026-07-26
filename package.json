@@ -1,0 +1,13 @@
+{
+  "name": "mule-java17-upgrade-skills",
+  "version": "1.0.0",
+  "description": "Claude skills that automate MuleSoft Java-17 platform upgrades (assess, apply, PR, job-tracking) — a skill-native reimplementation of the platform-lifecycle-orchestrator Mule app.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\""
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}

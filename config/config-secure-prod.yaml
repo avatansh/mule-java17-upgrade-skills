@@ -1,0 +1,11 @@
+github:
+  token: "![8uXPE+jHy42Q43tPRY7O7r6oJIV5fP+f/DTJVeofhziW2R2lcz8ZpARaGKrlCLX+]"
+  webhookSecret: "![Ej9H/Koy5zklsBF6g5R4Jy9+f0oxwgHta150h/A17Qvhd7mNxsqmUSzL0ON06ev4fB6VE15b/kw8sH42Yav0Hk4DDbGwLh/EfsizzL915ec=]"
+anypoint:
+  clientId: "![rJUSIpxl8jzb4l6kwuM7fBd3LE8FgVrefpp8FD3FY+/s/FoLzAPrkV0Bykr9f2J7]"
+  clientSecret: "![YCFKkmjim2oO7wk9vwA8xclq28WwkqIEcyOMcE+6vioAGjlQYOgEmXPYk5lCMV3l]"
+slack:
+  webhookUrl: "![CuV7j87VpsJ41F4so4nJgS0VfliEw/0zGm+jxBoaabxYaMxQbrBQ8YUthn/w6Mje+0w8MSAQzoI6IacsUuWSdPf9XJF0DrPkxXsxN71GabQvXyxG6bHns1rFKb6yJK1i]"
+jira:
+  email: "![TL6SRMGqJXLneDwlYyV/WizYU7w+fc1bVnmcOBYpXWc=]"
+  apiToken: "![Rr21ySlgVGyULc+/doVhPIXsarQA0vZ3mzkxC4eBJQdVemEBFxo2VFMoocNeZhgbBHyaaRaZ8zahicJqxk1GjihLQYB2MaaoaZaYdbUQrcE3mTsme9/CfVX9QfPG73jbShrExGM9WT7eHFpbmXGMEiaDQJ9ZMYRm8qJMSLZ5DMBxUJZIp8h+274637vZ89dU0VFSrg17+Sm+dZpoO+h97BkyFl8Qnm79NbcbT0VPZNuXvxC3XG4Adk9q88F37ASfi+uswiLTL0W6Ecs5Jv0TEw==]"

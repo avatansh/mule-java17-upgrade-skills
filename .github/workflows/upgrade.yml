@@ -1,0 +1,87 @@
+# Manually dispatch a Java-17 upgrade run against a target Mule repo, driven by the
+# orchestrator CLI (skills/mule-upgrade/scripts/upgrade.js). This is the "run it from CI"
+# shim: the same skill you'd invoke locally, wrapped in a workflow_dispatch so a human (or
+# another workflow) can kick off an upgrade without an IDE.
+#
+# SECURITY: every user-supplied input is passed through env: (quoted) and read by the CLI
+# from process.env / argv — never interpolated straight into a run: shell line. Secrets
+# (GITHUB_TOKEN, Anypoint creds, MULE_CONFIG_KEY) come from repo/org secrets, not inputs.
+name: upgrade
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "App name (matches app-registry.yaml)"
+        required: true
+      mode:
+        description: "Repo access mode"
+        required: true
+        default: api
+        type: choice
+        options: [api, local]
+      env:
+        description: "Runtime env (selects config-<env>.yaml)"
+        required: true
+        default: dev
+      owner:
+        description: "GitHub owner (api mode; optional if in registry)"
+        required: false
+      repo_name:
+        description: "GitHub repo name (api mode; optional if in registry)"
+        required: false
+      app_path:
+        description: "Sub-path to the app within the repo (optional)"
+        required: false
+      branch:
+        description: "Base branch (optional; defaults to the repo default branch)"
+        required: false
+      jira:
+        description: "Jira ticket id to annotate (optional)"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run upgrade (assess then apply then commit then PR)
+        env:
+          # secrets — configured in repo/org settings, consumed at runtime by lib_shared/env.js
+          GITHUB_TOKEN: ${{ secrets.UPGRADE_GITHUB_TOKEN }}
+          MULE_CONFIG_KEY: ${{ secrets.MULE_CONFIG_KEY }}
+          ANYPOINT_CLIENT_ID: ${{ secrets.ANYPOINT_CLIENT_ID }}
+          ANYPOINT_CLIENT_SECRET: ${{ secrets.ANYPOINT_CLIENT_SECRET }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
+          # user inputs — quoted env, NOT interpolated into the shell command
+          IN_APP: ${{ inputs.app }}
+          IN_MODE: ${{ inputs.mode }}
+          IN_ENV: ${{ inputs.env }}
+          IN_OWNER: ${{ inputs.owner }}
+          IN_REPO_NAME: ${{ inputs.repo_name }}
+          IN_APP_PATH: ${{ inputs.app_path }}
+          IN_BRANCH: ${{ inputs.branch }}
+          IN_JIRA: ${{ inputs.jira }}
+        run: |
+          set -euo pipefail
+          args=(start --app "$IN_APP" --mode "$IN_MODE" --env "$IN_ENV")
+          [ -n "${IN_OWNER:-}" ]     && args+=(--owner "$IN_OWNER")
+          [ -n "${IN_REPO_NAME:-}" ] && args+=(--repo-name "$IN_REPO_NAME")
+          [ -n "${IN_APP_PATH:-}" ]  && args+=(--app-path "$IN_APP_PATH")
+          [ -n "${IN_BRANCH:-}" ]    && args+=(--branch "$IN_BRANCH")
+          [ -n "${IN_JIRA:-}" ]      && args+=(--jira "$IN_JIRA")
+          node skills/mule-upgrade/scripts/upgrade.js "${args[@]}"

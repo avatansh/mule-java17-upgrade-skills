@@ -1,0 +1,28 @@
+# CI for the skills suite itself: install deps + run the Node test suite on every push/PR.
+# Pure unit tests — no network, no GitHub token, no Anypoint creds required (the live paths
+# are all env-gated and skipped when unset).
+name: test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  node-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: node --test "tests/**/*.test.js"
