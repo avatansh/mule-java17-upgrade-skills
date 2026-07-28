@@ -9,12 +9,30 @@
 //   PATCH /repos/{o}/{r}/git/refs/heads/{branch} → move ref to commit
 //   POST /repos/{o}/{r}/pulls                    → open PR
 //
-// Uses global fetch (Node ≥18). Auth via GITHUB_TOKEN. `fetchImpl` is injectable for tests.
+// Uses global fetch (Node ≥18). Auth resolves from ENV first (GITHUB_TOKEN — plaintext, so a
+// developer can override without the key), then the layered config (`github.token`, decrypted
+// from the secure YAML via MULE_CONFIG_KEY). `fetchImpl` is injectable for tests.
+
+import { get } from "../../../../lib_shared/config.js";
 
 const API = "https://api.github.com";
 
+// Read a config value, swallowing any decrypt/lookup error (missing key etc.) → fallback.
+function cfg(dotted, fallback) {
+  try {
+    const v = get(dotted, undefined);
+    return v === undefined || v === null || v === "" ? fallback : v;
+  } catch {
+    return fallback;
+  }
+}
+
 export class GitHubApi {
-  constructor({ token = process.env.GITHUB_TOKEN, fetchImpl = globalThis.fetch, baseUrl = API } = {}) {
+  constructor({
+    token = process.env.GITHUB_TOKEN ?? cfg("github.token", ""),
+    fetchImpl = globalThis.fetch,
+    baseUrl = API,
+  } = {}) {
     if (!token) throw new Error("GITHUB_TOKEN is required for api mode");
     this.token = token;
     this.fetch = fetchImpl;
@@ -100,10 +118,37 @@ export class GitHubApi {
   getRepo(owner, repo) {
     return this.request("GET", `/repos/${owner}/${repo}`);
   }
+  // Pulls API — read a single PR's live state (merge/close + head sha), used by the token-based
+  // reconcile poller so api-mode (no `gh` CLI) can advance PR_OPEN → DEPLOYING/CLOSED on the same
+  // github.token that opened the PR. Returns { state:"open"|"closed", merged:bool, merged_at, head:{sha} }.
+  getPull(owner, repo, prNumber) {
+    return this.request("GET", `/repos/${owner}/${repo}/pulls/${prNumber}`);
+  }
+  // Checks API — list check-runs for a ref (a PR head sha). Returns { total_count, check_runs:[{name,
+  // status:"queued"|"in_progress"|"completed", conclusion:"success"|"failure"|...}] }. Used together
+  // with getCombinedStatus so we catch BOTH modern check-runs AND legacy commit statuses.
+  listCheckRuns(owner, repo, ref) {
+    return this.request("GET", `/repos/${owner}/${repo}/commits/${encodeURIComponent(ref)}/check-runs`);
+  }
+  // Combined Status API — legacy commit statuses for a ref: { state, statuses:[{context, state}] }.
+  // Some CI providers post statuses rather than check-runs; merging both makes the poller robust to
+  // however the target repo reports results.
+  getCombinedStatus(owner, repo, ref) {
+    return this.request("GET", `/repos/${owner}/${repo}/commits/${encodeURIComponent(ref)}/status`);
+  }
   // Contents API — used by parent-pom to read a pom at {path}@{ref}. Returns the raw record
   // ({content, encoding, ...}); callers base64-decode. `ref` selects branch/tag/sha.
   getContents(owner, repo, path, ref) {
     const q = ref ? `?ref=${encodeURIComponent(ref)}` : "";
     return this.request("GET", `/repos/${owner}/${repo}/contents/${path}${q}`);
+  }
+  // Git Trees API — recursive listing of a ref's tree, used by the github repo source to build
+  // the same { tree:[{path,type}], truncated } shape the local walker produces. `ref` is a
+  // branch/tag/commit sha. With {recursive:true} GitHub walks the whole tree in one call and sets
+  // `truncated:true` if the response exceeded its internal limit (~100k entries / 7MB). Returns
+  // the raw API record: { sha, tree:[{path,mode,type,sha,size?}], truncated }.
+  getTree(owner, repo, ref, { recursive = true } = {}) {
+    const q = recursive ? "?recursive=1" : "";
+    return this.request("GET", `/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}${q}`);
   }
 }

@@ -12,9 +12,7 @@ function carriesFlag(argLineXml, flags) {
 
 /** Strip offending <argLine> elements (and a now-empty <argLines> wrapper) from ONE plugin block. */
 function cleanMunitBlock(block, flags) {
-  const noBadLines = block.replace(/<argLine>[\s\S]*?<\/argLine>/g, (m) =>
-    carriesFlag(m, flags) ? "" : m
-  );
+  const noBadLines = block.replace(/<argLine>[\s\S]*?<\/argLine>/g, (m) => (carriesFlag(m, flags) ? "" : m));
   return noBadLines.replace(/<argLines>\s*<\/argLines>/g, "");
 }
 
@@ -26,9 +24,7 @@ function cleanMunitBlock(block, flags) {
 export function rewriteMunitArgLines(pomText, flags) {
   if (!flags || flags.length === 0) return pomText;
   return pomText.replace(/<plugin>[\s\S]*?<\/plugin>/g, (block) => {
-    const isMunit = MUNIT_PLUGIN_ARTIFACTS.some((a) =>
-      block.includes(`<artifactId>${a}</artifactId>`)
-    );
+    const isMunit = MUNIT_PLUGIN_ARTIFACTS.some((a) => block.includes(`<artifactId>${a}</artifactId>`));
     return isMunit ? cleanMunitBlock(block, flags) : block;
   });
 }

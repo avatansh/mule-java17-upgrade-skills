@@ -117,8 +117,20 @@ export async function resolveCoordinates(args) {
   return { appName, owner, repo, appPath, orgId, defaultBranch, fromRegistry: !!entry };
 }
 
-/** Live default-branch discovery with per-repo memoization + config fallback (never throws). */
-export async function discoverDefaultBranch(owner, repo, { getRepo, configDefault = "main", allow = true } = {}) {
+/**
+ * Live default-branch discovery with per-repo memoization + config fallback (never throws).
+ * @param {string} owner
+ * @param {string} repo
+ * @param {object} [opts]
+ * @param {Function} [opts.getRepo] - async function to fetch repo info
+ * @param {string} [opts.configDefault]
+ * @param {boolean} [opts.allow]
+ */
+export async function discoverDefaultBranch(
+  owner,
+  repo,
+  { getRepo, configDefault = "main", allow = true } = {}
+) {
   const cacheKey = `${owner}/${repo}`;
   if (_branchCache.has(cacheKey)) return _branchCache.get(cacheKey);
   let branch = configDefault;

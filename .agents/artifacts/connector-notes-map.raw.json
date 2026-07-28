@@ -1,0 +1,1248 @@
+{
+  "total": 143,
+  "resolved": 97,
+  "unresolved": 46,
+  "results": [
+    {
+      "slug": "a2a-connector-release-notes-mule-4",
+      "name": "A2A Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/a2a-connector-release-notes-mule-4",
+      "artifactId": "mule4-a2a-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.1.1",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "marketo-connector-release-notes-mule-4",
+      "name": "Adobe Marketo Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/marketo-connector-release-notes-mule-4",
+      "artifactId": "mule-marketo-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "3.0.10",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "agentforce-connector-release-notes-mule-4",
+      "name": "Agentforce Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/agentforce-connector-release-notes-mule-4",
+      "artifactId": "mule4-agentforce-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.3.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "aggregators-module-release-notes",
+      "name": "Aggregators Module Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/aggregators-module-release-notes",
+      "artifactId": "mule-aggregators-module",
+      "groupId": "org.mule.modules",
+      "latest": "1.1.4",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "amazon-bedrock-connector-release-notes-mule-4",
+      "name": "Amazon Bedrock Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/amazon-bedrock-connector-release-notes-mule-4",
+      "artifactId": "mule4-amazon-bedrock-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.2",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "amazon-dynamodb-connector-release-notes-mule-4",
+      "name": "Amazon DynamoDB Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/amazon-dynamodb-connector-release-notes-mule-4",
+      "artifactId": "mule-amazon-dynamodb-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.6.4",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "amazon-ec2-connector-release-notes-mule-4",
+      "name": "Amazon EC2 Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/amazon-ec2-connector-release-notes-mule-4",
+      "artifactId": "mule-amazon-ec2-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "3.0.1",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "amazon-kinesis-connector-release-notes-mule-4",
+      "name": "Amazon Kinesis Data Streams Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/amazon-kinesis-connector-release-notes-mule-4",
+      "artifactId": "amazon-kinesis-data-streams-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "2.0.3",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "amazon-lambda-connector-release-notes-mule-4",
+      "name": "Amazon Lambda Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/amazon-lambda-connector-release-notes-mule-4",
+      "artifactId": "mule4-amazon-lambda-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.2.1",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "amazon-rds-connector-release-notes-mule-4",
+      "name": "Amazon RDS Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/amazon-rds-connector-release-notes-mule-4",
+      "artifactId": "mule-amazon-rds-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.4.3",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "amazon-redshift-connector-release-notes-mule-4",
+      "name": "Amazon Redshift Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/amazon-redshift-connector-release-notes-mule-4",
+      "artifactId": "mule4-amazon-redshift-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.2.2",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "amazon-s3-connector-release-notes-mule-4",
+      "name": "Amazon S3 Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/amazon-s3-connector-release-notes-mule-4",
+      "artifactId": "mule-amazon-s3-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "8.0.5",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "amazon-secrets-manager-properties-provider-release-notes-mule-4",
+      "name": "Amazon Secrets Manager Properties Provider Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/amazon-secrets-manager-properties-provider-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 14
+    },
+    {
+      "slug": "amazon-sns-connector-release-notes-mule-4",
+      "name": "Amazon SNS Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/amazon-sns-connector-release-notes-mule-4",
+      "artifactId": "mule-amazon-sns-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "4.8.2",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "amazon-sqs-connector-release-notes-mule-4",
+      "name": "Amazon SQS Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/amazon-sqs-connector-release-notes-mule-4",
+      "artifactId": "mule-amazon-sqs-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "5.12.8",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "anypoint-mq-connector-release-notes-mule-4",
+      "name": "Anypoint MQ Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/anypoint-mq-connector-release-notes-mule-4",
+      "artifactId": "anypoint-mq-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "4.0.21",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "cassandra-connector-release-notes-mule-4",
+      "name": "Apache Cassandra Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/cassandra-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 19
+    },
+    {
+      "slug": "kafka-connector-release-notes-mule-4",
+      "name": "Apache Kafka Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/kafka-connector-release-notes-mule-4",
+      "artifactId": "mule-kafka-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "4.14.0",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "as2-connector-release-notes-mule-4",
+      "name": "AS2 Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/as2-connector-release-notes-mule-4",
+      "artifactId": "mule-as2-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "7.0.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "asana-connector-release-notes-mule-4",
+      "name": "Asana Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/asana-connector-release-notes-mule-4",
+      "artifactId": "mule4-asana-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.8",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "azure-cosmos-db-connector-release-notes-mule-4",
+      "name": "Azure Cosmos DB Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/azure-cosmos-db-connector-release-notes-mule-4",
+      "artifactId": "mule4-azure-cosmos-db-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.6",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "azure-data-lake-connector-release-notes-mule-4",
+      "name": "Azure Data Lake Storage Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/azure-data-lake-connector-release-notes-mule-4",
+      "artifactId": "mule-azure-data-lake-storage-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.9",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "azure-event-hubs-connector-release-notes",
+      "name": "Azure Event Hubs Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/azure-event-hubs-connector-release-notes",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "azure-key-vault-connector-release-notes-mule-4",
+      "name": "Azure Key Vault Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/azure-key-vault-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "azure-key-vault-properties-provider-release-notes-mule-4",
+      "name": "Azure Key Vault Properties Provider Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/azure-key-vault-properties-provider-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 14
+    },
+    {
+      "slug": "azure-service-bus-connector-release-notes-mule-4",
+      "name": "Azure Service Bus Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/azure-service-bus-connector-release-notes-mule-4",
+      "artifactId": "mule-azure-service-bus-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "3.7.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "azure-service-bus-mgmt-connector-release-notes-mule-4",
+      "name": "Azure Service Bus Management Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/azure-service-bus-mgmt-connector-release-notes-mule-4",
+      "artifactId": "azure-service-bus-management-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.3",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "blackboard-connector-release-notes-mule-4",
+      "name": "Blackboard Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/blackboard-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "box-connector-release-notes-mule-4",
+      "name": "Box Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/box-connector-release-notes-mule-4",
+      "artifactId": "mule-box-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "5.3.2",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "canvas-connector-release-notes-mule-4",
+      "name": "Canvas Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/canvas-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "caqh-connector-release-notes-mule-4",
+      "name": "CAQH Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/caqh-connector-release-notes-mule-4",
+      "artifactId": "mule-caqh-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.1",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "cloudhub-connector-release-notes-mule-4",
+      "name": "CloudHub Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/cloudhub-connector-release-notes-mule-4",
+      "artifactId": "mule-cloudhub-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.2.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "coda-connector-release-notes-mule-4",
+      "name": "Coda Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/coda-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "confluent-schema-registry-connector-release-notes-mule-4",
+      "name": "Confluent Schema Registry Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/confluent-schema-registry-connector-release-notes-mule-4",
+      "artifactId": "mule4-confluent-schema-registry-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.1.5",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "cryptography-module-release-notes",
+      "name": "Cryptography Module Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/cryptography-module-release-notes",
+      "artifactId": "mule-cryptography-module",
+      "groupId": "com.mulesoft.modules",
+      "latest": "2.2.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "d2l-brightspace-connector-release-notes-mule-4",
+      "name": "D2L Brightspace Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/d2l-brightspace-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "dhl-tracking-connector-release-notes-mule-4",
+      "name": "DHL Tracking Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/dhl-tracking-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "docusign-connector-release-notes-mule-4",
+      "name": "DocuSign Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/docusign-connector-release-notes-mule-4",
+      "artifactId": "mule4-docusign-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.1.3",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "dropbox-connector-release-notes-mule-4",
+      "name": "Dropbox Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/dropbox-connector-release-notes-mule-4",
+      "artifactId": "mule4-dropbox-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.10",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "edifact-edi-connector-release-notes",
+      "name": "EDIFACT EDI Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/edifact-edi-connector-release-notes",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "einstein-ai-connector-release-notes-mule-4",
+      "name": "Einstein AI Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/einstein-ai-connector-release-notes-mule-4",
+      "artifactId": "mule4-einstein-ai-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.2.1",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "gmail-connector-release-notes-mule-4",
+      "name": "Gmail Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/gmail-connector-release-notes-mule-4",
+      "artifactId": "mule4-gmail-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.1.2",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "google-bigquery-connector-release-notes-mule-4",
+      "name": "Google BigQuery Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/google-bigquery-connector-release-notes-mule-4",
+      "artifactId": "mule4-google-bigquery-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.2.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "google-calendar-connector-release-notes-mule-4",
+      "name": "Google Calendar Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/google-calendar-connector-release-notes-mule-4",
+      "artifactId": "mule4-google-calendar-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.2.3",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "google-drive-connector-release-notes-mule-4",
+      "name": "Google Drive Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/google-drive-connector-release-notes-mule-4",
+      "artifactId": "mule4-google-drive-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.1.4",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "google-gemini-connector-release-notes-mule-4",
+      "name": "Google Gemini Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/google-gemini-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "google-pubsub-connector-release-notes-mule-4",
+      "name": "Google Pub/Sub Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/google-pubsub-connector-release-notes-mule-4",
+      "artifactId": "mule4-google-pubsub-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.2.1",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "google-sheets-connector-release-notes-mule-4",
+      "name": "Google Sheets Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/google-sheets-connector-release-notes-mule-4",
+      "artifactId": "mule4-google-sheets-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.1.15",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "grpc-connector-release-notes-mule-4",
+      "name": "gRPC Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/grpc-connector-release-notes-mule-4",
+      "artifactId": "mule-grpc-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "hdfs-connector-release-notes-mule-4",
+      "name": "Hadoop (HDFS) Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/hdfs-connector-release-notes-mule-4",
+      "artifactId": "mule-hdfs-connector",
+      "groupId": "org.mule.connectors",
+      "latest": "6.0.29",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "hl7-connector-release-notes-mule-4",
+      "name": "HL7 EDI Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/hl7-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 19
+    },
+    {
+      "slug": "hl7-mllp-connector-release-notes-mule-4",
+      "name": "HL7 MLLP Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/hl7-mllp-connector-release-notes-mule-4",
+      "artifactId": "mule-hl7-mllp-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "2.2.3",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "../mule-runtime/service-http-release-notes",
+      "name": "HTTP Service Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/../mule-runtime/service-http-release-notes",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 14
+    },
+    {
+      "slug": "ibm-ctg-connector-release-notes-mule-4",
+      "name": "IBM CTG Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/ibm-ctg-connector-release-notes-mule-4",
+      "artifactId": "mule-ibm-ctg-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "3.0.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "informatica-b360-connector-release-notes-mule-4",
+      "name": "Informatica Business 360 Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/informatica-b360-connector-release-notes-mule-4",
+      "artifactId": "mule4-informatica-b360-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.1",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "intercom-connector-release-notes-mule-4",
+      "name": "Intercom Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/intercom-connector-release-notes-mule-4",
+      "artifactId": "mule4-intercom-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.5",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "jira-connector-release-notes-mule-4",
+      "name": "Jira Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/jira-connector-release-notes-mule-4",
+      "artifactId": "mule4-jira-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.2.16",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "json-module-release-notes",
+      "name": "JSON Module Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/json-module-release-notes",
+      "artifactId": "mule-json-module",
+      "groupId": "org.mule.modules",
+      "latest": "2.5.7",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "ldap-connector-release-notes-mule-4",
+      "name": "LDAP Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/ldap-connector-release-notes-mule-4",
+      "artifactId": "mule-ldap-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "3.7.1",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "mailchimp-marketing-connector-release-notes-mule-4",
+      "name": "Mailchimp Marketing Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/mailchimp-marketing-connector-release-notes-mule-4",
+      "artifactId": "mule4-mailchimp-marketing-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.7",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "mcp-connector-release-notes-mule-4",
+      "name": "MCP Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/mcp-connector-release-notes-mule-4",
+      "artifactId": "mule-mcp-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.6.1",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "microsoft-dotnet-connector-release-notes-mule-4",
+      "name": "Microsoft .NET Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/microsoft-dotnet-connector-release-notes-mule-4",
+      "artifactId": "mule-microsoft-dotnet-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "3.1.12",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "microsoft-dynamics-365-business-central-connector-release-notes-mule-4",
+      "name": "Microsoft Dynamics 365 Business Central Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/microsoft-dynamics-365-business-central-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "microsoft-dynamics-365-connector-release-notes-mule-4",
+      "name": "Microsoft Dynamics 365 Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/microsoft-dynamics-365-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "microsoft-365-ops-connector-release-notes-mule-4",
+      "name": "Microsoft Dynamics 365 for Finance and Operations Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/microsoft-365-ops-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 19
+    },
+    {
+      "slug": "ms-dynamics-ax-connector-release-notes-mule-4",
+      "name": "Microsoft Dynamics AX 2012 Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/ms-dynamics-ax-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 19
+    },
+    {
+      "slug": "ms-dynamics-crm-connector-release-notes-mule-4",
+      "name": "Microsoft Dynamics CRM Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/ms-dynamics-crm-connector-release-notes-mule-4",
+      "artifactId": "mule-microsoft-dynamics-crm-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "3.2.15",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "microsoft-dynamics-gp-connector-release-notes-mule-4",
+      "name": "Microsoft Dynamics GP Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/microsoft-dynamics-gp-connector-release-notes-mule-4",
+      "artifactId": "mule-microsoft-dynamics-gp-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "2.1.7",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "ms-dynamics-nav-connector-release-notes-mule-4",
+      "name": "Microsoft Dynamics NAV Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/ms-dynamics-nav-connector-release-notes-mule-4",
+      "artifactId": "mule-microsoft-dynamics-nav-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "3.0.0",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "microsoft-excel-online-connector-release-notes-mule-4",
+      "name": "Microsoft Excel Online Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/microsoft-excel-online-connector-release-notes-mule-4",
+      "artifactId": "mule4-microsoft-excel-online-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.1.1",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "msmq-connector-release-notes-mule-4",
+      "name": "Microsoft MSMQ Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/msmq-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 19
+    },
+    {
+      "slug": "microsoft-onedrive-connector-release-notes-mule-4",
+      "name": "Microsoft OneDrive Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/microsoft-onedrive-connector-release-notes-mule-4",
+      "artifactId": "mule4-microsoft-onedrive-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.2.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "microsoft-outlook-365-connector-release-notes-mule-4",
+      "name": "Microsoft Outlook 365 Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/microsoft-outlook-365-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "microsoft-power-bi-connector-release-notes-mule-4",
+      "name": "Microsoft Power BI Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/microsoft-power-bi-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "ms-service-bus-connector-release-notes-mule-4",
+      "name": "Microsoft Service Bus Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/ms-service-bus-connector-release-notes-mule-4",
+      "artifactId": "mule-microsoft-service-bus-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "2.2.8",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "sharepoint-connector-release-notes-mule-4",
+      "name": "Microsoft SharePoint Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/sharepoint-connector-release-notes-mule-4",
+      "artifactId": "mule-sharepoint-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "3.9.0",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "microsoft-teams-connector-release-notes-mule-4",
+      "name": "Microsoft Teams Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/microsoft-teams-connector-release-notes-mule-4",
+      "artifactId": "mule4-microsoft-teams-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.1.5",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "microsoft-powershell-connector-release-notes-mule-4",
+      "name": "Microsoft Windows PowerShell Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/microsoft-powershell-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 19
+    },
+    {
+      "slug": "mongodb-connector-release-notes-mule-4",
+      "name": "MongoDB Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/mongodb-connector-release-notes-mule-4",
+      "artifactId": "mule-mongodb-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "6.4.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "moodle-connector-release-notes-mule-4",
+      "name": "Moodle Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/moodle-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "mqtt3-connector-release-notes",
+      "name": "MQTT Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/mqtt3-connector-release-notes",
+      "artifactId": "mule4-mqtt3-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.6",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "mulesoft-ai-chain-connector-release-notes-mule-4",
+      "name": "MuleSoft AI Chain Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/mulesoft-ai-chain-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "mulesoft-inference-connector-release-notes-mule-4",
+      "name": "MuleSoft Inference Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/mulesoft-inference-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "mulesoft-vectors-connector-release-notes-mule-4",
+      "name": "MuleSoft Vectors Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/mulesoft-vectors-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "neo4j-connector-release-notes-mule-4",
+      "name": "Neo4J Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/neo4j-connector-release-notes-mule-4",
+      "artifactId": "mule-neo4j-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "4.0.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "netsuite-connector-release-notes-mule-4",
+      "name": "NetSuite Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/netsuite-connector-release-notes-mule-4",
+      "artifactId": "mule-netsuite-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "12.0.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "netsuite-openair-connector-release-notes-mule-4",
+      "name": "NetSuite OpenAir Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/netsuite-openair-connector-release-notes-mule-4",
+      "artifactId": "mule-netsuite-openair-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "2.0.12",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "netsuite-restlet-connector-release-notes-mule-4",
+      "name": "NetSuite Restlet Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/netsuite-restlet-connector-release-notes-mule-4",
+      "artifactId": "mule4-netsuite-restlet-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.9",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "notion-connector-release-notes-mule-4",
+      "name": "Notion Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/notion-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "oauth-module-release-notes",
+      "name": "OAuth Module Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/oauth-module-release-notes",
+      "artifactId": "mule-oauth-module",
+      "groupId": "org.mule.modules",
+      "latest": "1.1.27",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "oauth2-provider-release-notes",
+      "name": "OAuth2 Provider Module Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/oauth2-provider-release-notes",
+      "artifactId": "mule-oauth2-provider-module",
+      "groupId": "com.mulesoft.modules",
+      "latest": "1.2.3",
+      "candidatesTried": 7
+    },
+    {
+      "slug": "object-store-connector-release-notes-mule-4",
+      "name": "Object Store Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/object-store-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "openai-connector-release-notes-mule-4",
+      "name": "OpenAI Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/openai-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "openweathermap-connector-release-notes-mule-4",
+      "name": "OpenWeatherMap Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/openweathermap-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "oracle-ebs-connector-release-notes-mule-4",
+      "name": "Oracle EBS 12.1 Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/oracle-ebs-connector-release-notes-mule-4",
+      "artifactId": "mule-oracle-ebs-connector",
+      "groupId": "org.mule.connectors",
+      "latest": "5.3.3",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "oracle-ebs-122-connector-release-notes-mule-4",
+      "name": "Oracle EBS 12.2 Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/oracle-ebs-122-connector-release-notes-mule-4",
+      "artifactId": "mule-oracle-ebs-122-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "2.3.3",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "peoplesoft-connector-release-notes-mule-4",
+      "name": "Oracle PeopleSoft Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/peoplesoft-connector-release-notes-mule-4",
+      "artifactId": "mule-peoplesoft-connector",
+      "groupId": "org.mule.connectors",
+      "latest": "3.1.11",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "siebel-connector-release-notes-mule-4",
+      "name": "Oracle Siebel Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/siebel-connector-release-notes-mule-4",
+      "artifactId": "mule-siebel-connector",
+      "groupId": "org.mule.connectors",
+      "latest": "4.0.0",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "pagerduty-connector-release-notes-mule-4",
+      "name": "PagerDuty Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/pagerduty-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "quickbooks-online-connector-release-notes-mule-4",
+      "name": "QuickBooks Online Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/quickbooks-online-connector-release-notes-mule-4",
+      "artifactId": "mule4-quickbooks-online-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "2.0.20",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "redis-connector-release-notes-mule-4",
+      "name": "Redis Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/redis-connector-release-notes-mule-4",
+      "artifactId": "mule-redis-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "5.7.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "roostify-connector-release-notes-mule-4",
+      "name": "Roostify Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/roostify-connector-release-notes-mule-4",
+      "artifactId": "mule-roostify-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "rosettanet-connector-release-notes-mule-4",
+      "name": "RosettaNet Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/rosettanet-connector-release-notes-mule-4",
+      "artifactId": "mule-rosettanet-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "3.0.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "commerce-cloud-b2c-data-connector-release-notes-mule-4",
+      "name": "Salesforce Commerce Cloud B2C Data Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/commerce-cloud-b2c-data-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 19
+    },
+    {
+      "slug": "shop-api-connector-release-notes-mule-4",
+      "name": "Salesforce Commerce Cloud Shop API Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/shop-api-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 19
+    },
+    {
+      "slug": "salesforce-composite-connector-release-notes-mule-4",
+      "name": "Salesforce Composite Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/salesforce-composite-connector-release-notes-mule-4",
+      "artifactId": "mule-salesforce-composite-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "3.1.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "salesforce-connector-release-notes-mule-4",
+      "name": "Salesforce Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/salesforce-connector-release-notes-mule-4",
+      "artifactId": "mule-salesforce-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "12.0.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "salesforce-data-cloud-connector-release-notes-mule-4",
+      "name": "Salesforce Data Cloud Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/salesforce-data-cloud-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "salesforce-analytics-connector-release-notes-mule-4",
+      "name": "Salesforce Einstein Analytics Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/salesforce-analytics-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 19
+    },
+    {
+      "slug": "salesforce-mktg-connector-release-notes-mule-4",
+      "name": "Salesforce Marketing Cloud Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/salesforce-mktg-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 19
+    },
+    {
+      "slug": "salesforce-marketing-cloud-rest-connector-release-notes-mule-4",
+      "name": "Salesforce Marketing Cloud REST Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/salesforce-marketing-cloud-rest-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "salesforce-pubsub-connector-release-notes-mule-4",
+      "name": "Salesforce Pub/Sub Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/salesforce-pubsub-connector-release-notes-mule-4",
+      "artifactId": "mule4-salesforce-pubsub-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.3.0",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "sap-concur-connector-release-notes-mule-4",
+      "name": "SAP Concur Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/sap-concur-connector-release-notes-mule-4",
+      "artifactId": "mule-sap-concur-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "4.2.3",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "sap-connector-release-notes-mule-4",
+      "name": "SAP Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/sap-connector-release-notes-mule-4",
+      "artifactId": "mule-sap-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "5.9.13",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "sap-s4-hana-connector-release-notes-mule-4",
+      "name": "SAP S/4HANA OData Cloud Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/sap-s4-hana-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 19
+    },
+    {
+      "slug": "sap-s4-hana-soap-cloud-connector-release-notes-mule-4",
+      "name": "SAP S/4HANA SOAP Cloud Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/sap-s4-hana-soap-cloud-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 19
+    },
+    {
+      "slug": "sap-successfactors-connector-release-notes-mule-4",
+      "name": "SAP SuccessFactors Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/sap-successfactors-connector-release-notes-mule-4",
+      "artifactId": "mule-sap-successfactors-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "5.0.2",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "servicenow-connector-release-notes-mule-4",
+      "name": "ServiceNow Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/servicenow-connector-release-notes-mule-4",
+      "artifactId": "mule-servicenow-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "6.18.4",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "shippo-connector-release-notes-mule-4",
+      "name": "Shippo Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/shippo-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "shipstation-connector-release-notes-mule-4",
+      "name": "ShipStation Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/shipstation-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "shopify-connector-release-notes-mule-4",
+      "name": "Shopify Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/shopify-connector-release-notes-mule-4",
+      "artifactId": "mule4-shopify-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.1.12",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "slack-connector-release-notes-mule-4",
+      "name": "Slack Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/slack-connector-release-notes-mule-4",
+      "artifactId": "mule-slack-connector",
+      "groupId": "org.mule.connectors",
+      "latest": "4.3.2",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "smartsheet-connector-release-notes-mule-4",
+      "name": "Smartsheet Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/smartsheet-connector-release-notes-mule-4",
+      "artifactId": "mule4-smartsheet-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.2.7",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "snowflake-connector-release-notes-mule-4",
+      "name": "Snowflake Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/snowflake-connector-release-notes-mule-4",
+      "artifactId": "mule4-snowflake-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.4.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "spring-module-release-notes",
+      "name": "Spring Module Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/spring-module-release-notes",
+      "artifactId": "mule-spring-module",
+      "groupId": "org.mule.modules",
+      "latest": "2.1.2",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "stripe-connector-release-notes-mule-4",
+      "name": "Stripe Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/stripe-connector-release-notes-mule-4",
+      "artifactId": "mule4-stripe-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.16",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "tableau-specialist-connector-release-notes-mule-4",
+      "name": "Tableau Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/tableau-specialist-connector-release-notes-mule-4",
+      "artifactId": "mule4-tableau-specialist-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.1.4",
+      "candidatesTried": 19
+    },
+    {
+      "slug": "teamwork-connector-release-notes-mule-4",
+      "name": "Teamwork Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/teamwork-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "tracing-module-release-notes",
+      "name": "Tracing Module Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/tracing-module-release-notes",
+      "artifactId": "mule-tracing-module",
+      "groupId": "org.mule.modules",
+      "latest": "1.2.1",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "tradacoms-edi-connector-release-notes-mule-4",
+      "name": "TRADACOMS EDI Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/tradacoms-edi-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "trello-connector-release-notes-mule-4",
+      "name": "Trello Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/trello-connector-release-notes-mule-4",
+      "artifactId": "mule4-trello-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.2.4",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "twilio-connector-release-notes-mule-4",
+      "name": "Twilio Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/twilio-connector-release-notes-mule-4",
+      "artifactId": "mule-twilio-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "4.2.9",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "veeva-vault-release-notes-mule-4",
+      "name": "Veeva Vault Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/veeva-vault-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 7
+    },
+    {
+      "slug": "websockets-connector-release-notes-mule-4",
+      "name": "WebSockets Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/websockets-connector-release-notes-mule-4",
+      "artifactId": "mule-websockets-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.3",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "workable-connector-release-notes-mule-4",
+      "name": "Workable Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/workable-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "workday-connector-release-notes-mule-4",
+      "name": "Workday Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/workday-connector-release-notes-mule-4",
+      "artifactId": "mule-workday-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "16.7.0",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "wss-module-release-notes-mule-4",
+      "name": "WSS Module Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/wss-module-release-notes-mule-4",
+      "artifactId": "mule-wss-module",
+      "groupId": "com.mulesoft.modules",
+      "latest": "2.1.1",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "x12-edi-connector-release-notes-mule-4",
+      "name": "X12 EDI Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/x12-edi-connector-release-notes-mule-4",
+      "artifactId": null,
+      "groupId": null,
+      "candidatesTried": 12
+    },
+    {
+      "slug": "xero-accounting-connector-release-notes-mule-4",
+      "name": "Xero Accounting Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/xero-accounting-connector-release-notes-mule-4",
+      "artifactId": "mule4-xero-accounting-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.1.9",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "zendesk-connector-release-notes-mule-4",
+      "name": "Zendesk Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/zendesk-connector-release-notes-mule-4",
+      "artifactId": "mule4-zendesk-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.1.11",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "zoom-connector-release-notes-mule-4",
+      "name": "Zoom Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/zoom-connector-release-notes-mule-4",
+      "artifactId": "mule4-zoom-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.6",
+      "candidatesTried": 12
+    },
+    {
+      "slug": "zuora-aqua-release-notes-mule-4",
+      "name": "Zuora AQuA Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/zuora-aqua-release-notes-mule-4",
+      "artifactId": "mule-zuora-aqua-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "1.0.16",
+      "candidatesTried": 7
+    },
+    {
+      "slug": "zuora-connector-release-notes-mule-4",
+      "name": "Zuora Connector Release Notes",
+      "url": "https://docs.mulesoft.com/release-notes/connector/zuora-connector-release-notes-mule-4",
+      "artifactId": "mule-zuora-connector",
+      "groupId": "com.mulesoft.connectors",
+      "latest": "6.0.16",
+      "candidatesTried": 12
+    }
+  ]
+}

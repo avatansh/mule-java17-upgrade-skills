@@ -15,6 +15,11 @@ github:
 
 anypoint:
   defaultOrgId: "2e14f8c6-4d60-481b-bfb6-798695efc8f4"   # Anypoint org for this env (used if ARM lookup not run)
+  # Exact Runtime Manager environment NAME used for the deployed-state (ARM) lookup when the caller
+  # does not pass --env-name. Leave blank to (1) use the --env selector as the name, then (2) fall
+  # back to searching EVERY environment for the app by exact name. Set it (e.g. "DEV"/"Sandbox") to
+  # skip straight to the right env and avoid the cross-env scan. The lookup is case-insensitive.
+  environmentName: ""
   verify:
     # Local has no real CH2.0 deployment, so skip platform post-deploy confirmation and
     # trust the CI (cd-result) signal. Set "true" once deploying to a real environment.

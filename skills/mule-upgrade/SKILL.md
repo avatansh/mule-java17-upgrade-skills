@@ -1,16 +1,27 @@
 ---
 name: mule-upgrade
 description: >-
-  End-to-end orchestrator that upgrades a MuleSoft app to Java 17 (runtime 4.9.18):
-  assess → apply file rewrites → commit → open a pull request → track the job, then
-  poll the merge/CI/deploy tail to completion. Use this when the user says things like
-  "upgrade <app> to Java 17", "run the Java 17 migration for <app>", "migrate this Mule
-  app to the 4.9 runtime and open a PR", or "start the platform lifecycle upgrade". This
-  is the top-level skill; it composes mule-upgrade-assess, mule-upgrade-apply,
-  mule-upgrade-pr, and mule-upgrade-job.
+  Low-level, NON-INTERACTIVE CLI pipeline that executes a single MuleSoft Java-17 upgrade end to end
+  (assess → apply file rewrites → commit → open a pull request → track the job, then poll the
+  merge/CI/deploy tail): ONE shell command, no questions, no confirmation prompt. It is normally
+  invoked BY the `mule-upgrade-agent` conductor rather than chosen directly. Use this ONLY when the
+  caller (a script, a CI job, or a user who explicitly asks for the raw one-shot command) already has
+  EVERY input and wants no prompts — e.g. "run the upgrade.js pipeline for <app> non-interactively".
+  For any human asking to "upgrade a mule app to Java 17" (or similar), use `mule-upgrade-agent`
+  instead — it adds the assess / preview / confirm loop this skill deliberately omits. Composes
+  mule-upgrade-assess, mule-upgrade-apply, mule-upgrade-pr, and mule-upgrade-job.
 ---
 
 # mule-upgrade (orchestrator)
+
+> **⛔ Actually run this — do not simulate it.** The pipeline is engine code. **Run
+> `node skills/mule-upgrade/scripts/upgrade.js start …` via the shell and report its JSON result.**
+> Never fabricate a `PLAN_PREVIEW`, hand-write file edits, guess versions, or `curl` GitHub. Always
+> `--dry-run` first, show the real preview, get an explicit yes, then re-run without `--dry-run`. On
+> any error (401, `STALE_PLAN`, `CONFLICT`, bad `--coords` JSON), report it verbatim and stop.
+>
+> **Windows quoting:** prefer discrete flags `--owner <o> --repo-name <r> --branch <b>` over
+> `--coords '{…}'` — `cmd.exe` strips the quotes and you get `Unexpected token … is not valid JSON`.
 
 Reproduces the Platform Lifecycle Orchestrator's `start_upgrade` pipeline as a single
 synchronous skill run. The Mule app split the work across an HTTP 202 response plus an
@@ -21,9 +32,10 @@ at `PR_OPEN`; the deploy tail is handled by polling (`poll` subcommand / reconci
 ## Pipeline (port of `pf-start-upgrade`)
 
 ```
-pre-flight assess ──► ALREADY_UPGRADED (no fileEdits) / APP_NOT_FOUND short-circuit
-     │ edits exist
-     ▼
+pre-flight assess ──► topology routing (app-pom | parent-pom | none)
+     │                     │                    │              └─► ALREADY_UPGRADED (no lock, no job)
+     │                     │                    └─► dispatch mule-upgrade-parent-pom job (see below)
+     ▼ app-pom (fileEdits exist)
 acquire lock ──► CONFLICT (UPGRADE_IN_PROGRESS) if another job holds the app
      │
      ▼ job PROCESSING
@@ -33,6 +45,24 @@ apply transforms (SKILL 2) ──► commit + open PR (SKILL 3) ──► COMMIT
      ▼
 notify (Slack + Jira, non-fatal) ──► record branchName/commitSha/prNumber/prUrl + branch index
 ```
+
+### Topology routing (Tier 2c)
+
+The pre-flight assessment yields a `ChangePlan` with both `fileEdits` (what the app's OWN pom can
+change) and `connectorGaps` (connectors the app **inherits** from a parent/BOM below the Java-17
+matrix — the app pom cannot fix those). The orchestrator routes on that:
+
+| Route | Condition | Action |
+|-------|-----------|--------|
+| **app-pom** | `fileEdits.length > 0` | the normal pipeline above (apply → commit → PR). Takes precedence — inherited gaps ride along as warnings. |
+| **parent-pom** | no `fileEdits`, but `connectorGaps.length > 0` | **dispatch the `mule-upgrade-parent-pom` job** (`runParentPomJob`) so the shared parent/BOM is bumped. The two skills call each other. |
+| **none** | no `fileEdits` and no `connectorGaps` | `ALREADY_UPGRADED` (no lock, no job). |
+
+This fixes the previous blind spot where an app that was only blocked on an **inherited** connector
+was wrongly reported `ALREADY_UPGRADED` (its own pom is clean, but the repo isn't Java-17-ready until
+the BOM moves). The parent-pom result is returned with `routedVia:"parent-pom"`, `topology`,
+`routeReason`, and merged `warnings`. Pass `routeParentPom:false` to force the plain app pipeline
+(which then no-ops to `ALREADY_UPGRADED`); `--dry-run` shows `route.strategy` without dispatching.
 
 On **any** stage error the job goes terminal and the lock is released, matching the Mule
 async error-handler taxonomy:
@@ -48,10 +78,10 @@ async error-handler taxonomy:
 
 ```bash
 # API mode (GitHub REST, no local clone needed for commit/PR)
+# Prefer discrete flags over --coords '{…}' (Windows cmd.exe corrupts the JSON quoting):
 node skills/mule-upgrade/scripts/upgrade.js start \
   --app orders-api --env dev --mode api \
-  --coords '{"owner":"acme","repo":"orders-api","defaultBranch":"main"}' \
-  --repo /path/to/local/clone \        # still used by assess/apply to read the tree
+  --owner acme --repo-name orders-api --branch main \
   --head-sha <sha> --jira ORD-42
 
 # local mode (git checkout -b / push / gh pr create)
@@ -61,12 +91,13 @@ node skills/mule-upgrade/scripts/upgrade.js start \
   --coords '{"owner":"acme","repo":"orders-api","defaultBranch":"main"}'
 ```
 
-Flags: `--app` (required), `--env` (default `dev`), `--mode api|local` (default `api`),
+Flags: `--app` (required), `--env <dev|local|prod>` (**required** — or set `MULE_UPGRADE_ENV`; no
+default, mirrors Mule's `-Denv`), `--mode api|local` (default `api`),
 `--coords <json>` (`{owner,repo,defaultBranch}`), `--repo` (local clone for assess/apply;
 required unless mode=api has a pre-computed assessment), `--repo-root` (commit root for
 local mode; defaults to `--repo`), `--head-sha` (stale-plan anchor), `--jira <ticket>`,
-`--jira-base-url <url>`, `--app-path`, `--release-notes-url`, `--no-fetch` (skip dynamic
-matrix fetch, use bundled YAML).
+`--jira-base-url <url>`, `--app-path`, `--no-fetch` (skip the live matrix fetch + connector
+enrichment, use bundled YAML).
 
 **Exit codes:** `0` ok (incl. `ALREADY_UPGRADED` / `PR_OPEN`), `4` CONFLICT, `5` FAILED_*,
 `2` usage, `1` other.

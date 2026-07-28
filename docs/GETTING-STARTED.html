@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started from zero</title>
+<style>
+  :root { --fg:#1b1b1f; --muted:#5a5a66; --bg:#ffffff; --code-bg:#f4f4f7; --border:#e2e2ea;
+          --accent:#0b6bcb; --accent-bg:#eaf2fc; --warn-bg:#fff6e5; --warn-border:#f0c36d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e6e6ea; --muted:#a2a2b0; --bg:#16161a; --code-bg:#22222a; --border:#33333d;
+            --accent:#5aa7f0; --accent-bg:#16283d; --warn-bg:#3a2f16; --warn-border:#7a5f1e; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:2.5rem 1.25rem 5rem; background:var(--bg); color:var(--fg);
+         font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  main { max-width:860px; margin:0 auto; }
+  h1 { font-size:2rem; line-height:1.2; margin:0 0 .25rem; }
+  h2 { font-size:1.4rem; margin:2.5rem 0 .75rem; padding-top:.5rem; border-top:1px solid var(--border); }
+  h3 { font-size:1.1rem; margin:1.75rem 0 .5rem; }
+  p, li { color:var(--fg); }
+  .lede { color:var(--muted); font-size:1.05rem; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  code { background:var(--code-bg); padding:.12em .4em; border-radius:4px;
+         font:0.86em/1.5 "SF Mono",SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace; }
+  pre { background:var(--code-bg); border:1px solid var(--border); border-radius:8px;
+        padding:1rem 1.1rem; overflow:auto; }
+  pre code { background:none; padding:0; }
+  table { border-collapse:collapse; width:100%; margin:1rem 0; font-size:.95rem; }
+  th, td { border:1px solid var(--border); padding:.5rem .7rem; text-align:left; vertical-align:top; }
+  th { background:var(--code-bg); }
+  blockquote { margin:1rem 0; padding:.6rem 1rem; background:var(--accent-bg);
+               border-left:4px solid var(--accent); border-radius:0 6px 6px 0; color:var(--fg); }
+  blockquote.warn { background:var(--warn-bg); border-left-color:var(--warn-border); }
+  ol.steps { padding-left:1.2rem; }
+  ol.steps > li { margin:.3rem 0; }
+  .nav { font-size:.9rem; color:var(--muted); margin:.5rem 0 2rem; }
+  .nav a { margin-right:1rem; }
+  footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--border);
+           color:var(--muted); font-size:.85rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Getting started from zero</h1>
+<p class="lede">Every step a brand-new user does before running these skills end-to-end — what the
+<code>.env</code> file is, how to create and place it, exactly what to put in it, and how the key and
+environment get resolved on every run.</p>
+
+<p class="nav">Sibling guides:
+  <a href="./WIRE-LIVE-INTEGRATIONS.html">WIRE-LIVE-INTEGRATIONS.html</a> ·
+  <a href="./SETUP-VIBES.html">SETUP-VIBES.html</a> ·
+  <a href="./SETUP-IDE.html">SETUP-IDE.html</a> ·
+  <a href="./SETUP-AGENTFORCE.html">SETUP-AGENTFORCE.html</a>
+</p>
+
+<blockquote>
+<p><strong>The 30-second summary.</strong> The skills read their secrets (GitHub token, Anypoint
+creds, Slack webhook, Jira creds) from files that are <strong>already committed</strong> to the repo
+in <em>encrypted</em> form. To use them you do two things, <strong>once</strong>: (1) create a small
+text file named <code>.env</code> at the repo root containing <strong>one decryption key</strong> and
+<strong>one environment name</strong>, and (2) install Node. That's the whole setup — everything below
+just spells that out and shows how to verify it. Nothing here requires the Salesforce
+<code>sf</code> CLI.</p>
+</blockquote>
+
+<h2>What is the <code>.env</code> file? (plain-English)</h2>
+<ul>
+  <li><code>.env</code> is an ordinary <strong>text file</strong> named exactly <code>.env</code> (a
+  dot, then <code>env</code> — no other extension).</li>
+  <li>It lives at the <strong>root of the suite</strong>, i.e. right next to <code>package.json</code>:
+  <code>C:\Workspaces\7.25\mule-java17-upgrade-skills\.env</code></li>
+  <li>It holds <strong><code>NAME=value</code> lines</strong>, one per line. The scripts read it
+  automatically on every run (<code>lib_shared/env.js</code>), so you never type these values on the
+  command line.</li>
+  <li>It is <strong>git-ignored</strong> (listed in <code>.gitignore</code>), so it is never committed
+  and your key never leaves your machine. <strong>Never paste the real key into any other file</strong>
+  (especially not <code>.env.example</code>).</li>
+</ul>
+<p>Think of <code>.env</code> as <em>your private copy of the settings</em> that the shared, committed
+config files reference but deliberately leave blank.</p>
+
+<h2>Why is a key even needed? (how config + secrets fit together)</h2>
+<p>The repo ships <strong>layered config</strong> under <code>config/</code>, mirroring the original
+Mule app:</p>
+<table>
+  <thead><tr><th>File (committed)</th><th>Contains</th><th>Example keys</th></tr></thead>
+  <tbody>
+    <tr><td><code>config.yaml</code></td><td>constants, same everywhere</td><td><code>github.apiBase</code>, matrix TTLs</td></tr>
+    <tr><td><code>config-&lt;env&gt;.yaml</code></td><td>per-environment <strong>non-secret</strong> values</td><td><code>github.defaultOwner: avatansh</code>, <code>slack.channel: #java17-upgrades</code>, <code>jira.baseUrl</code></td></tr>
+    <tr><td><code>config-secure-&lt;env&gt;.yaml</code></td><td>per-environment <strong>secrets, AES-encrypted</strong></td><td><code>github.token</code>, <code>anypoint.clientId/Secret</code>, <code>slack.webhookUrl</code>, <code>jira.email/apiToken</code></td></tr>
+  </tbody>
+</table>
+<p><code>&lt;env&gt;</code> is one of <strong><code>dev</code> / <code>local</code> /
+<code>prod</code></strong>. The secrets in <code>config-secure-&lt;env&gt;.yaml</code> look like
+<code>"![dpXfQHnk…]"</code> — the <code>![...]</code> wrapper means "AES-encrypted". They are useless
+without the key.</p>
+<p>So the <strong>only secret you must supply</strong> is the <strong>AES decryption key</strong>
+(<code>MULE_CONFIG_KEY</code>). Give the scripts that one key and they decrypt every
+<code>![...]</code> value at runtime, wiring GitHub + Anypoint + Slack + Jira all at once. (In this
+repo, <strong>one key decrypts all three environments</strong>.)</p>
+
+<h2>Step 1 — Install Node.js ≥ 24</h2>
+<p>The scripts run on Node. Check what you have:</p>
+<pre><code>node -v</code></pre>
+<p>If it prints <code>v24.x</code> (or higher) you're set. If it errors or is older, install Node 24+
+from <a href="https://nodejs.org">nodejs.org</a> (LTS), reopen your terminal, and check again. (This
+repo was verified on <code>v24.18.0</code>.)</p>
+<blockquote>
+<p><strong>Which terminal?</strong> Any plain terminal works — Windows <strong>PowerShell</strong>,
+<strong>Command Prompt (cmd)</strong>, or <strong>Git Bash</strong>. Where syntax differs by shell,
+both forms are given below.</p>
+</blockquote>
+
+<h2>Step 2 — Get the suite onto your machine</h2>
+<p>You already have it at <code>C:\Workspaces\7.25\mule-java17-upgrade-skills</code>. If a teammate
+needs a fresh copy:</p>
+<pre><code>git clone &lt;this-repo-url&gt; mule-java17-upgrade-skills</code></pre>
+<p>Open a terminal <strong>in that folder</strong> (the "suite root"). All commands below run from
+there.</p>
+<ul>
+  <li>PowerShell/cmd: <code>cd C:\Workspaces\7.25\mule-java17-upgrade-skills</code></li>
+  <li>Git Bash: <code>cd /c/Workspaces/7.25/mule-java17-upgrade-skills</code></li>
+</ul>
+
+<h2>Step 3 — Install dependencies + prove the code is healthy</h2>
+<pre><code>npm ci
+node --test</code></pre>
+<p><code>node --test</code> should end with <strong><code>pass 290</code> / <code>fail 0</code></strong>.
+This needs <strong>no key, no network, no secrets</strong> — it just proves the checkout is intact. If
+it fails, stop and fix that before wiring anything.</p>
+
+<h2>Step 4 — Create your <code>.env</code> file (the one setup step)</h2>
+<p>Copy the template <code>.env.example</code> to a new file called <code>.env</code>
+<strong>at the suite root</strong>:</p>
+<ul>
+  <li><strong>PowerShell:</strong> <code>Copy-Item .env.example .env</code></li>
+  <li><strong>cmd:</strong> <code>copy .env.example .env</code></li>
+  <li><strong>Git Bash / macOS / Linux:</strong> <code>cp .env.example .env</code></li>
+</ul>
+<p>You now have <code>C:\Workspaces\7.25\mule-java17-upgrade-skills\.env</code>.</p>
+<blockquote class="warn">
+<p><strong>Creating it by hand instead?</strong> Open Notepad, paste the two lines from Step 5, then
+<strong>File → Save As</strong>, set <em>Save as type</em> to <strong>All Files</strong>, and name it
+exactly <code>.env</code> (Notepad would otherwise save <code>.env.txt</code>, which will
+<strong>not</strong> work). Save it in the suite root.</p>
+</blockquote>
+
+<h2>Step 5 — Put two values in <code>.env</code></h2>
+<p>Open <code>.env</code> in any editor (VS Code, Notepad). You only need <strong>two</strong> lines to
+be non-empty:</p>
+<pre><code>MULE_CONFIG_KEY=&lt;paste the AES key here&gt;
+MULE_UPGRADE_ENV=dev</code></pre>
+<ul>
+  <li><strong><code>MULE_CONFIG_KEY</code></strong> — the AES key that was used to encrypt
+  <code>config-secure-*.yaml</code>. It is a 16-, 24-, or 32-character string. <strong>Ask whoever set
+  up the repo for this key</strong> (it is intentionally NOT stored anywhere in git). Paste it after the
+  <code>=</code> with no quotes and no spaces.</li>
+  <li><strong><code>MULE_UPGRADE_ENV</code></strong> — which environment to use: <code>dev</code>,
+  <code>local</code>, or <code>prod</code>. Use <strong><code>dev</code></strong> unless told otherwise —
+  the <code>dev</code> config already points at the real GitHub owner, Slack channel, Jira site, and
+  Anypoint org.</li>
+</ul>
+<p>Leave everything else in the file as-is (the other lines are optional and explained in Step 10). Save
+the file.</p>
+<blockquote>
+<p><strong>Don't have the AES key?</strong> You can instead paste <strong>plaintext</strong>
+credentials and skip the key entirely — see Step 10, "Option B". Most users should just get the key;
+it's the least to paste.</p>
+</blockquote>
+
+<h2>Step 6 — Understand how the key and env get resolved (so nothing is magic)</h2>
+<p>You set two values once; here is exactly what happens on <strong>every</strong> run,
+automatically:</p>
+<ol>
+  <li><strong>Finding <code>.env</code>.</strong> <code>lib_shared/env.js</code> looks for
+  <code>.env</code> by walking <strong>up from its own location</strong> toward the drive root —
+  <em>not</em> from your current directory. So it finds the suite-root <code>.env</code> no matter which
+  folder you launch from (or where Vibes launches it). It loads once, and <strong>anything already set
+  in your real environment wins</strong> over the file (so CI can inject values).</li>
+  <li><strong>Resolving the environment (<code>MULE_UPGRADE_ENV</code>).</strong> The environment is
+  <strong>mandatory</strong> — there is no silent default (this mirrors the Mule app's required
+  <code>-Denv</code>). It is taken from <strong>either</strong> the <code>--env &lt;dev|local|prod&gt;</code>
+  flag on the command <strong>or</strong> <code>MULE_UPGRADE_ENV</code> in your <code>.env</code>. If
+  neither is present, the command <strong>stops immediately</strong> with <code>environment is required:
+  pass --env &lt;dev|local|prod&gt; or set MULE_UPGRADE_ENV</code>. Once resolved, it picks the matching
+  <code>config-&lt;env&gt;.yaml</code> + <code>config-secure-&lt;env&gt;.yaml</code> pair.</li>
+  <li><strong>Resolving the key (<code>MULE_CONFIG_KEY</code>).</strong> To decrypt a
+  <code>![...]</code> value, the loader picks the key in this order (first non-empty wins):
+    <ol>
+      <li>an explicit key passed in code (tests only),</li>
+      <li><code>MULE_CONFIG_KEY_&lt;ENV&gt;</code> — e.g. <code>MULE_CONFIG_KEY_PROD</code> — <em>only
+      if</em> an environment was encrypted with its own distinct key,</li>
+      <li><code>MULE_CONFIG_KEY</code> — the single shared key (<strong>your case</strong>).</li>
+    </ol>
+    Because all three environments here share one key, <code>MULE_CONFIG_KEY</code> alone covers
+    dev/local/prod.</li>
+  <li><strong>Reading a credential.</strong> Each integration resolves a secret as: <strong>plaintext
+  env var → decrypted YAML value → built-in default.</strong> So the one key wires all four integrations,
+  and any single secret can still be overridden with a plaintext env var if you prefer.</li>
+</ol>
+<p><strong>Net effect:</strong> set the key + env once in <code>.env</code>; every skill, CLI, and the
+server thereafter loads the right files and decrypts on its own. You are never prompted again.</p>
+
+<h2>Step 7 — Verify your <code>.env</code> actually works (60-second smoke test)</h2>
+<p>Confirm the two values are seen and the environment resolves. From the suite root:</p>
+<pre><code>node -e "import('./lib_shared/config.js').then(c=>{const env=c.requireEnv(process.env.MULE_UPGRADE_ENV,{flag:'MULE_UPGRADE_ENV'});console.log('env =',env,'| key length =',(process.env.MULE_CONFIG_KEY||'').length,'| github.token resolves =', c.has('github.token'));})"</code></pre>
+<p>Expected: something like <code>env = dev | key length = 32 | github.token resolves = true</code>.</p>
+<ul>
+  <li><code>github.token resolves = true</code> means the key <strong>decrypted</strong> a secret —
+  you're wired. 🎉</li>
+  <li>If you see <code>environment is required</code> → <code>MULE_UPGRADE_ENV</code> isn't set (recheck
+  Step 5, and that the file is named <code>.env</code> not <code>.env.txt</code>).</li>
+  <li>If key length is <code>0</code> → the key line is empty; paste the key.</li>
+  <li>If it throws <code>cannot decrypt</code> / <code>must be 16/24/32 characters</code> → the key is
+  the wrong length or wrong value; get the correct key.</li>
+</ul>
+<blockquote>
+<p>This command prints only a <strong>length</strong> and a <strong>boolean</strong> — it never prints
+the secret itself.</p>
+</blockquote>
+
+<h2>Step 8 — Run a skill end-to-end (first real use)</h2>
+<p>Now use the skills. Two representative commands (run from the suite root):</p>
+<pre><code># Read-only assessment of a local clone of a Mule app (safe; writes only plan.json):
+node skills/mule-upgrade-assess/scripts/assess.js --repo C:\path\to\a-mule-app --env dev --out plan.json
+
+# The full pipeline — assess → PR, firing GitHub + Jira + Slack (api mode uses the decrypted token):
+node skills/mule-upgrade/scripts/upgrade.js start --app orders-api --env dev --mode api --owner avatansh --repo-name &lt;a-test-repo&gt;</code></pre>
+<p>Because <code>MULE_UPGRADE_ENV=dev</code> is in <code>.env</code>, the <code>--env dev</code> above is
+redundant but harmless — it's shown so you see the mandatory flag.</p>
+<blockquote class="warn">
+<p><strong>Two different <code>--env</code> meanings.</strong> On <code>upgrade start</code>,
+<code>assess</code>, and <code>parent-pom</code>, <code>--env &lt;dev|local|prod&gt;</code> <strong>is</strong>
+the config selector. On <code>scan</code> / <code>scan_notify</code>, <code>--env</code> instead names
+the <strong>Anypoint environment(s)</strong> to scan (a list) — those take the config env from
+<code>MULE_UPGRADE_ENV</code> only.</p>
+</blockquote>
+<p>For the full per-skill command catalog and live-integration test sweep, see
+<a href="./WIRE-LIVE-INTEGRATIONS.html">WIRE-LIVE-INTEGRATIONS.html</a> §2.6.</p>
+
+<h2>Step 9 — (Optional) Use the skills inside MuleSoft Vibes</h2>
+<p>Once the terminal tests pass, wire the skills into Vibes (Anypoint Code Builder). The critical rule:
+<strong>symlink</strong> the skill folders into <code>.a4drules/skills/</code> — do <strong>not</strong>
+copy them — so each skill's <code>../../lib_shared</code> still resolves back into the suite and finds
+your one <code>.env</code>. Full instructions (both the Skills install and the MCP-server option) are in
+<a href="./SETUP-VIBES.html">SETUP-VIBES.html</a> and
+<a href="./WIRE-LIVE-INTEGRATIONS.html">WIRE-LIVE-INTEGRATIONS.html</a> §3.</p>
+
+<h2>Step 10 — Optional <code>.env</code> settings (only if you need them)</h2>
+<p>Everything below is optional; the two lines from Step 5 are enough for normal use.</p>
+<table>
+  <thead><tr><th>Variable</th><th>What it does</th><th>When to set it</th></tr></thead>
+  <tbody>
+    <tr><td><code>MULE_CONFIG_KEY_DEV</code> / <code>_LOCAL</code> / <code>_PROD</code></td><td>per-environment AES key</td><td>only if an env was re-encrypted with a <em>different</em> key</td></tr>
+    <tr><td><code>MULE_UPGRADE_HOME</code></td><td>where job records are stored (default <code>~/.mule-upgrade</code>)</td><td>set to e.g. <code>./.local-jobstore</code> for throwaway test runs</td></tr>
+    <tr><td><code>MCP_BEARER_TOKEN</code></td><td>bearer token clients must present to the MCP/HTTP server</td><td>only if you run the server (Vibes Option B) and want auth</td></tr>
+    <tr><td><code>MCP_SERVER_PORT</code></td><td>server port (default <code>8080</code>)</td><td>only if 8080 is taken</td></tr>
+  </tbody>
+</table>
+<p><strong>Option B — no key, use plaintext creds instead.</strong> If you don't have the AES key, leave
+<code>MULE_CONFIG_KEY</code> empty and uncomment/fill these instead (each overrides the encrypted
+YAML):</p>
+<pre><code>MULE_UPGRADE_ENV=dev
+GITHUB_TOKEN=ghp_xxx                 # needs 'repo' scope
+ANYPOINT_CLIENT_ID=xxx
+ANYPOINT_CLIENT_SECRET=xxx
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx
+JIRA_EMAIL=you@example.com
+JIRA_API_TOKEN=xxx</code></pre>
+<p>You can mix approaches (e.g. the key for Anypoint/Slack, a fresh <code>GITHUB_TOKEN</code> for
+GitHub).</p>
+
+<h2>The complete checklist (what every new user does)</h2>
+<p><strong>One-time, per machine:</strong></p>
+<ol class="steps">
+  <li>Install Node.js ≥ 24 (<code>node -v</code>).</li>
+  <li>Get the suite (clone) and <code>cd</code> into it.</li>
+  <li><code>npm ci</code> then <code>node --test</code> → <code>pass 290</code>.</li>
+  <li>Copy <code>.env.example</code> → <code>.env</code> at the suite root.</li>
+  <li>In <code>.env</code>, set <code>MULE_CONFIG_KEY=&lt;the AES key&gt;</code> and
+  <code>MULE_UPGRADE_ENV=dev</code>.</li>
+  <li>Smoke-test with the Step 7 one-liner → <code>github.token resolves = true</code>.</li>
+  <li><em>(optional)</em> Symlink the skills into Vibes (<code>.a4drules/skills/</code>).</li>
+</ol>
+<p><strong>Every time you use a skill afterwards:</strong></p>
+<ol class="steps" start="8">
+  <li>Open a terminal in the suite root (the <code>.env</code> is picked up automatically).</li>
+  <li>Run the skill / CLI, always with a resolvable environment — <code>--env dev</code> on the command
+  <strong>or</strong> <code>MULE_UPGRADE_ENV</code> in <code>.env</code> (you already set it, so you can
+  omit the flag).</li>
+</ol>
+<p>That's it. The key and environment are supplied once and reused on every run — you are never prompted,
+in a terminal or in Vibes.</p>
+
+<h2>Troubleshooting</h2>
+<table>
+  <thead><tr><th>Symptom</th><th>Cause &amp; fix</th></tr></thead>
+  <tbody>
+    <tr><td><code>environment is required: pass --env …</code></td><td>No env resolved. Add <code>MULE_UPGRADE_ENV=dev</code> to <code>.env</code>, or pass <code>--env dev</code>. Check the file is <code>.env</code>, not <code>.env.txt</code>.</td></tr>
+    <tr><td><code>cannot decrypt secure property</code> / <code>MULE_CONFIG_KEY must be 16/24/32 characters</code></td><td>Wrong/empty key. Paste the correct AES key into <code>.env</code>, or use plaintext creds (Option B).</td></tr>
+    <tr><td><code>unknown environment "staging"</code></td><td>Only <code>dev</code>/<code>local</code>/<code>prod</code> have config files. Use one of those.</td></tr>
+    <tr><td>The scripts don't seem to read <code>.env</code></td><td>It must be at the <strong>suite root</strong> (next to <code>package.json</code>) and named exactly <code>.env</code>. Confirm with the Step 7 smoke test.</td></tr>
+    <tr><td>GitHub <code>401/403</code></td><td>Token rotated or lacks <code>repo</code> scope. Set a fresh plaintext <code>GITHUB_TOKEN</code> in <code>.env</code>, or <code>gh auth login</code> for local mode.</td></tr>
+    <tr><td>Skills don't appear in Vibes</td><td>You copied instead of symlinked. Symlink so <code>../../lib_shared</code> (and your <code>.env</code>) resolve.</td></tr>
+  </tbody>
+</table>
+
+<footer>
+  <strong>References</strong><br>
+  <a href="./WIRE-LIVE-INTEGRATIONS.html">WIRE-LIVE-INTEGRATIONS.html</a> ·
+  <a href="./SETUP-VIBES.html">SETUP-VIBES.html</a> ·
+  <a href="./SETUP-IDE.html">SETUP-IDE.html</a> ·
+  <a href="./SETUP-AGENTFORCE.html">SETUP-AGENTFORCE.html</a>
+</footer>
+
+</main>
+</body>
+</html>

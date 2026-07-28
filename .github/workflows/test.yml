@@ -1,6 +1,9 @@
-# CI for the skills suite itself: install deps + run the Node test suite on every push/PR.
-# Pure unit tests — no network, no GitHub token, no Anypoint creds required (the live paths
-# are all env-gated and skipped when unset).
+# CI for the skills suite itself: lint, format-check, type-check, and the Node test suite with a
+# coverage gate — on every push/PR. Pure unit tests: no network, no GitHub token, no Anypoint creds
+# (the live paths are all env-gated and skipped when unset).
+#
+# Node is pinned to a concrete version (NODE_VERSION) for reproducible CI; it matches .nvmrc (24).
+# The engines field in package.json declares the supported floor (>=18) — CI runs the pinned latest.
 name: test
 
 on:
@@ -9,20 +12,42 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  # Single source of truth for the CI Node version. Keep in sync with .nvmrc.
+  NODE_VERSION: "24.18.0"
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: ESLint
+        run: npm run lint
+      - name: Prettier (check only)
+        run: npm run format:check
+      - name: Type-check (checkJs)
+        run: npm run typecheck
+
   node-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
-
       - name: Install dependencies
         run: npm ci
-
-      - name: Run tests
-        run: node --test "tests/**/*.test.js"
+      # Coverage gate: node --test --experimental-test-coverage with thresholds. If overall
+      # line/function/branch coverage drops below the floor the step exits non-zero and CI fails,
+      # so coverage cannot silently regress.
+      - name: Run tests with coverage gate
+        run: npm run test:coverage

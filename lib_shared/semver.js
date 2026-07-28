@@ -13,13 +13,13 @@ export function toNums(v) {
 export function lt(a, b) {
   const x = toNums(a);
   const y = toNums(b);
-  const x0 = x[0] ?? 0, x1 = x[1] ?? 0, x2 = x[2] ?? 0;
-  const y0 = y[0] ?? 0, y1 = y[1] ?? 0, y2 = y[2] ?? 0;
-  return (
-    x0 < y0 ||
-    (x0 === y0 && x1 < y1) ||
-    (x0 === y0 && x1 === y1 && x2 < y2)
-  );
+  const x0 = x[0] ?? 0,
+    x1 = x[1] ?? 0,
+    x2 = x[2] ?? 0;
+  const y0 = y[0] ?? 0,
+    y1 = y[1] ?? 0,
+    y2 = y[2] ?? 0;
+  return x0 < y0 || (x0 === y0 && x1 < y1) || (x0 === y0 && x1 === y1 && x2 < y2);
 }
 
 /**

@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "scan_notify",
+  "title": "scan_notify",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "environments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Restrict the scan to these environment names. Omit to scan all environments."
+    },
+    "alwaysNotify": {
+      "type": "boolean",
+      "description": "Push the full current list every run (periodic digest), ignoring the change diff."
+    },
+    "dryRun": {
+      "type": "boolean",
+      "description": "Compute and return the message without sending to Slack or persisting the baseline."
+    }
+  }
+}

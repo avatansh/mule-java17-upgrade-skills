@@ -14,9 +14,8 @@ export function rewritePomProperties(pomText, edits) {
   for (const e of edits) editMap[e.property] = String(e.to);
 
   // 1) Replace target property tags already present, preserving every other byte.
-  const replaced = pomText.replace(
-    /<([A-Za-z0-9_.-]+)>([^<]*)<\/\1>/g,
-    (whole, tag) => (editMap[tag] != null ? `<${tag}>${editMap[tag]}</${tag}>` : whole)
+  const replaced = pomText.replace(/<([A-Za-z0-9_.-]+)>([^<]*)<\/\1>/g, (whole, tag) =>
+    editMap[tag] != null ? `<${tag}>${editMap[tag]}</${tag}>` : whole
   );
 
   // 2) Add-if-absent: only flagged edits whose tag was NOT present in the ORIGINAL text.

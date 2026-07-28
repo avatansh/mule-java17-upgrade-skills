@@ -13,22 +13,20 @@
 //   POST /repos/{o}/{r}/pulls                       → open revert PR
 
 import { GitHubApi } from "./lib/gh_api.js";
-import {
-  revertBranchName,
-  revertPrTitle,
-  revertCommitMessage,
-  revertPrBody,
-} from "./lib/pr_meta.js";
+import { revertBranchName, revertPrTitle, revertCommitMessage, revertPrBody } from "./lib/pr_meta.js";
 
 /**
  * rollbackApi(opts): open a revert PR restoring the pre-upgrade tree.
  * @param {object} opts
- * @param {{owner,repo,defaultBranch}} opts.coords
+ * @param {{owner:any,repo:any,defaultBranch:any}} opts.coords
  * @param {string} opts.upgradeCommitSha  the commit the upgrade PR introduced
  * @param {string} opts.branchName        the upgrade branch (revert branch = revert/<branchName>)
  * @param {string} opts.appName
  * @param {string} opts.jobId
- * @returns {{revertBranch, revertCommitSha, prNumber, prUrl, baseSha}}
+ * @param {string} [opts.jiraTicketId]
+ * @param {string} [opts.jiraBaseUrl]
+ * @param {any} [opts.api]
+ * @returns {Promise<{revertBranch:any, revertCommitSha:any, prNumber:any, prUrl:any, baseSha:any}>}
  */
 export async function rollbackApi(opts) {
   const {
@@ -60,13 +58,9 @@ export async function rollbackApi(opts) {
   await api.createRef(owner, repo, revertBranch, headSha);
 
   // (3) commit the restored tree on top of HEAD, then move the ref
-  const revertCommitSha = await api.createCommit(
-    owner,
-    repo,
-    revertCommitMessage(jobId),
-    baseTreeSha,
-    [headSha]
-  );
+  const revertCommitSha = await api.createCommit(owner, repo, revertCommitMessage(jobId), baseTreeSha, [
+    headSha,
+  ]);
   await api.updateRef(owner, repo, revertBranch, revertCommitSha, false);
 
   // (4) open the revert PR

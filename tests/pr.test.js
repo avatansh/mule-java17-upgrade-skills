@@ -19,8 +19,101 @@ import {
   revertPrBody,
 } from "../skills/mule-upgrade-pr/scripts/lib/pr_meta.js";
 import { GitHubApi } from "../skills/mule-upgrade-pr/scripts/lib/gh_api.js";
-import { commitAndPrApi } from "../skills/mule-upgrade-pr/scripts/commit_pr.js";
+import { commitAndPrApi, openPrLocal } from "../skills/mule-upgrade-pr/scripts/commit_pr.js";
 import { rollbackApi } from "../skills/mule-upgrade-pr/scripts/rollback.js";
+
+// ── openPrLocal — gh CLI primary + REST API fallback (Windows `spawnSync gh ENOENT` safety net) ──
+const GH_ENOENT = Object.assign(new Error("spawnSync gh ENOENT"), { code: "ENOENT" });
+
+test("openPrLocal: gh CLI success → returns the PR URL + parsed number", async () => {
+  const out = await openPrLocal({
+    repoRoot: "/x",
+    defaultBranch: "develop",
+    branchName: "migrate/app-4.9.18-java17",
+    title: "t",
+    body: "b",
+    deps: { runGh: () => "https://github.com/avatansh/acb/pull/57\n" },
+  });
+  assert.deepEqual(out, { prUrl: "https://github.com/avatansh/acb/pull/57", prNumber: 57 });
+});
+
+test("openPrLocal: gh ENOENT → falls back to the REST API using coords", async () => {
+  let opened = null;
+  const api = {
+    openPr: async (owner, repo, payload) => {
+      opened = { owner, repo, payload };
+      return { number: 58, html_url: `https://github.com/${owner}/${repo}/pull/58` };
+    },
+  };
+  const out = await openPrLocal({
+    repoRoot: "/x",
+    defaultBranch: "develop",
+    branchName: "migrate/app-4.9.18-java17",
+    title: "t",
+    body: "b",
+    coords: { owner: "avatansh", repo: "acb" },
+    deps: {
+      runGh: () => {
+        throw GH_ENOENT;
+      },
+      api,
+    },
+  });
+  assert.deepEqual(out, { prUrl: "https://github.com/avatansh/acb/pull/58", prNumber: 58 });
+  assert.equal(opened.owner, "avatansh");
+  assert.equal(opened.repo, "acb");
+  assert.equal(opened.payload.head, "migrate/app-4.9.18-java17");
+  assert.equal(opened.payload.base, "develop");
+});
+
+test("openPrLocal: gh ENOENT + no coords → derives owner/repo from the git remote for the fallback", async () => {
+  const out = await openPrLocal({
+    repoRoot: "/x",
+    defaultBranch: "main",
+    branchName: "b",
+    title: "t",
+    body: "b",
+    deps: {
+      runGh: () => {
+        throw GH_ENOENT;
+      },
+      git: (_root, gitArgs) =>
+        gitArgs[0] === "remote" ? "git@github.com:avatansh/customer-sfdc-sapi.git" : "",
+      api: {
+        openPr: async (owner, repo) => ({
+          number: 9,
+          html_url: `https://github.com/${owner}/${repo}/pull/9`,
+        }),
+      },
+    },
+  });
+  assert.equal(out.prUrl, "https://github.com/avatansh/customer-sfdc-sapi/pull/9");
+  assert.equal(out.prNumber, 9);
+});
+
+test("openPrLocal: gh ENOENT + no token → throws PR_OPEN_FAILED with a manual compare URL", async () => {
+  await assert.rejects(
+    () =>
+      openPrLocal({
+        repoRoot: "/x",
+        defaultBranch: "develop",
+        branchName: "migrate/app-4.9.18-java17",
+        title: "t",
+        body: "b",
+        coords: { owner: "avatansh", repo: "acb" },
+        deps: {
+          runGh: () => {
+            throw GH_ENOENT;
+          },
+          api: null, // no token available
+        },
+      }),
+    (e) =>
+      e.code === "PR_OPEN_FAILED" &&
+      /was pushed/.test(e.message) &&
+      /pull\/new\/migrate%2Fapp-4\.9\.18-java17|pull\/new\/migrate\/app-4\.9\.18-java17/.test(e.message)
+  );
+});
 
 // ── pr_meta — pure helpers ───────────────────────────────────────────────────────────────
 test("prmeta-branchBase-format", () => {

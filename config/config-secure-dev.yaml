@@ -1,11 +1,11 @@
 github:
-  token: "![dpXfQHnkldxs1aaYFynTo3gk4HSY0R+qFY5jEAL5k/4NCHW5BgQl5+fZGDOoc8pf]"
-  webhookSecret: "![Ej9H/Koy5zklsBF6g5R4Jy9+f0oxwgHta150h/A17Qvhd7mNxsqmUSzL0ON06ev4fB6VE15b/kw8sH42Yav0Hk4DDbGwLh/EfsizzL915ec=]"
+  token: "![hW2k2Z4Ber7hNE6iRB2YXm6C9T437s1iuY8mhpesqhi7xVrwTWyErlMRE+/okcKy1gMSXv59o08+BciBGECHc03kqIM9odHc47XAY7CrqHqGxZGem51718LFsoRwQQjpojswRZ9mJawSEzDEnI8erw==]"
+  webhookSecret: "![zbuntO0nUXsuOaJDs8O9WMR3TWsjmyZSknbQJgIJmbe2fMDlkYy/HyERRTE8WwCTXZHpC66P80JpNIHo7ncDV8/IwsB+fiyTb6rB6xBTLTD0tH2Q31lzdGHvFjdyoHQN]"
 anypoint:
-  clientId: "![rJUSIpxl8jzb4l6kwuM7fBd3LE8FgVrefpp8FD3FY+/s/FoLzAPrkV0Bykr9f2J7]"
-  clientSecret: "![YCFKkmjim2oO7wk9vwA8xclq28WwkqIEcyOMcE+6vioAGjlQYOgEmXPYk5lCMV3l]"
+  clientId: "![pKapTVdaHPkk5Qk9wXlMPX8sYbVGC0uvgzA/kSAUAKmm/gWtp8L7Ks7y0KlvWj/speCxECoiSMhUZ0hIK2YM5A==]"
+  clientSecret: "![FofzoI+VO/wVY4TcnRjRjPGY/WiN/FhywpKSo/vY/tuG3Bnol04bTBBLmUqYw5acIfy0jUVfGR1sVF+43JrBVA==]"
 slack:
-  webhookUrl: "![CuV7j87VpsJ41F4so4nJgS0VfliEw/0zGm+jxBoaabxYaMxQbrBQ8YUthn/w6MjehT0pD/iKQw4LlWHDSiNsjv6GpHWKhM4LhD2F7dMelTQQRr/U4vSKZrZTQoPHhZtY]"
+  webhookUrl: "![GrCBr22cWZK3Roe3fIVXgfk+n6iMYWhfKceE6BbwyDy6rglkjg2PTTotI6QT394/efG3SLxQXzglLHM9xJIKKhDQj6a3SnxZPXtnAekd9m/PcbOujVGjZSUO/0zZv9tJzCNLi5IkxPAeO+97HOrf4A==]"
 jira:
-  email: "![TL6SRMGqJXLneDwlYyV/WizYU7w+fc1bVnmcOBYpXWc=]"
-  apiToken: "![Rr21ySlgVGyULc+/doVhPIXsarQA0vZ3mzkxC4eBJQdVemEBFxo2VFMoocNeZhgbBHyaaRaZ8zahicJqxk1GjihLQYB2MaaoaZaYdbUQrcE3mTsme9/CfVX9QfPG73jbShrExGM9WT7eHFpbmXGMEiaDQJ9ZMYRm8qJMSLZ5DMBxUJZIp8h+274637vZ89dU0VFSrg17+Sm+dZpoO+h97BkyFl8Qnm79NbcbT0VPZNuXvxC3XG4Adk9q88F37ASfi+uswiLTL0W6Ecs5Jv0TEw==]"
+  email: "![i4a9ZcCunqthV5D9XAhud1fuvYdOn7fAkNpLpxdHxHk5ByzQtSvUrgqsqk7O/ZNx]"
+  apiToken: "![xTxMFWDISoXJjmoBJBYfrAWIeJNs68BbJ9GULo2PkkLy/xs81jmuA/4DOIMCVMLzfqF7D96gaKHRMVooXt4qBknSTU2i0WKoQ2Z+eHMX9sSK1mDgXUwfeNTFQHS19AIcdckigV6TqcBl/sZMOmFk94CToyljhom2Sca6pmSX8Bca0av0Q0/0Lo6MWTa7+Nw8P65ZVYhgSkW3ciL1DIFDvwXXcyrYjr9qjm4hmHKBAXIWnFStEumPPt8uX9FpFMGv5I9AbYMwrt4Y2GZMSzQkqgEP94WAZNdtrNQnp1C3xXY=]"

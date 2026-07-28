@@ -9,7 +9,6 @@
 // nextPollSeconds === 0 means terminal — the caller should stop polling.
 export const statusMeta = {
   PROCESSING: { message: "Upgrade accepted and queued.", nextPollSeconds: 5 },
-  ASSESSING: { message: "Analyzing the repository and computing the change plan.", nextPollSeconds: 5 },
   COMMITTING: { message: "Applying transforms and committing changes to a branch.", nextPollSeconds: 5 },
   COMMITTED: { message: "Changes committed; opening a pull request.", nextPollSeconds: 5 },
   PR_OPEN: { message: "Pull request is open and ready for review/merge.", nextPollSeconds: 0 },
@@ -36,7 +35,6 @@ export const statusMeta = {
   },
   FAILED_ASSESS: { message: "Assessment failed. See error for details.", nextPollSeconds: 0 },
   FAILED_COMMIT: { message: "Commit/transform stage failed. See error for details.", nextPollSeconds: 0 },
-  FAILED_CI: { message: "CI build/tests failed after merge. See error for details.", nextPollSeconds: 0 },
   FAILED_DEPLOY: { message: "Deployment failed. See error for details.", nextPollSeconds: 0 },
   FAILED_INTERRUPTED: {
     message:
@@ -54,11 +52,10 @@ const isEmpty = (v) => v == null || (Array.isArray(v) && v.length === 0);
  * @returns {object} JobStatus response
  */
 export function buildJobStatus(rec, jiraBaseUrl = "") {
-  const meta =
-    statusMeta[rec?.status] ?? {
-      message: `Status: ${rec?.status ?? "UNKNOWN"}`,
-      nextPollSeconds: 10,
-    };
+  const meta = statusMeta[rec?.status] ?? {
+    message: `Status: ${rec?.status ?? "UNKNOWN"}`,
+    nextPollSeconds: 10,
+  };
 
   // Sub-stage refinement: "MUnit tests passed" is still PR_OPEN (the RAML enum is fixed), so we
   // surface the finer stage through `message` instead of a new enum value.
@@ -73,6 +70,9 @@ export function buildJobStatus(rec, jiraBaseUrl = "") {
     status: rec?.status,
     message,
     nextPollSeconds: meta.nextPollSeconds,
+    // Identify the job kind so "check status now" clearly says whether this is a parent/BOM upgrade
+    // or an app upgrade. Only parent-pom jobs stamp changePlan.kind; everything else is an app upgrade.
+    kind: rec?.changePlan?.kind === "parentPomUpgrade" ? "parentPomUpgrade" : "appUpgrade",
   };
 
   if (rec?.branchName != null) out.branchName = rec.branchName;

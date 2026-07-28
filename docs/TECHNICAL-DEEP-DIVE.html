@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Technical Deep-Dive — The MuleSoft Java 17 Upgrade Agent</title>
+<style>
+  :root {
+    --ink: #16212b; --muted: #5b6b7b; --line: #e3e8ee; --bg: #ffffff;
+    --panel: #f6f8fa; --accent: #0b6bcb; --accent2:#6d28d9; --accent-soft: #eaf2fb;
+    --code-bg: #0f172a; --code-ink: #e6edf3; --warn-bg: #fff8e6; --warn-line: #f0c34e;
+    --ok-bg: #e9f7ee; --ok-line: #52b788; --tip-bg: #eef4ff; --tip-line: #6a8fd8;
+    --bad-bg:#fdeceb; --bad-line:#e0655a;
+    --mono: "SFMono-Regular", ui-monospace, "Cascadia Code", Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.65; font-size: 16px; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 44px 26px 120px; }
+  h1 { font-size: 2.1rem; line-height: 1.15; margin: 0 0 .3em; letter-spacing: -.02em; }
+  h2 { font-size: 1.5rem; margin: 2.6em 0 .7em; padding-bottom: .35em; border-bottom: 2px solid var(--line); letter-spacing: -.01em; }
+  h3 { font-size: 1.18rem; margin: 1.7em 0 .5em; }
+  h4 { font-size: 1.02rem; margin: 1.3em 0 .3em; color:#233; }
+  p { margin: .75em 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: .86em; background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: .12em .4em; }
+  pre { background: var(--code-bg); color: var(--code-ink); border-radius: 10px; padding: 15px 17px; overflow-x: auto; margin: 1em 0; font-size: .84rem; line-height: 1.55; }
+  pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 1.1em 0; font-size: .9rem; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--panel); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  td code, th code { background: var(--accent-soft); border-color: #cfe1f6; }
+  ul, ol { margin: .7em 0; padding-left: 1.4em; }
+  li { margin: .3em 0; }
+  hr { border: none; border-top: 1px solid var(--line); margin: 2.6em 0; }
+  .subtitle { color: var(--muted); font-size: 1.08rem; margin-top: .2em; }
+  .callout { margin: 1.1em 0; padding: 12px 16px 12px 18px; border-radius: 0 8px 8px 0; }
+  .callout p:first-child { margin-top: 0; } .callout p:last-child { margin-bottom: 0; }
+  .warn { background: var(--warn-bg); border-left: 4px solid var(--warn-line); color: #664d03; }
+  .ok   { background: var(--ok-bg);   border-left: 4px solid var(--ok-line);   color: #1b5e37; }
+  .tip  { background: var(--tip-bg);  border-left: 4px solid var(--tip-line);  color: #26406e; }
+  .bad  { background: var(--bad-bg);  border-left: 4px solid var(--bad-line);  color: #7a2018; }
+  .warn code, .ok code, .tip code, .bad code { background: rgba(255,255,255,.6); }
+  .toc { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 22px; columns: 2; column-gap: 34px; }
+  .toc ol { margin: .2em 0; }
+  .toc a { color: var(--ink); } .toc a:hover { color: var(--accent); }
+  .pill { display: inline-block; background: var(--accent-soft); border: 1px solid #cfe1f6; color: var(--accent); font-size: .8rem; padding: 3px 10px; border-radius: 999px; }
+  .fig { margin: 1.6em 0; border: 1px solid var(--line); border-radius: 12px; padding: 16px 16px 8px; background: #fcfdff; }
+  .fig svg { display:block; width:100%; height:auto; }
+  .fig .cap { color: var(--muted); font-size: .86rem; margin: 6px 4px 8px; text-align:center; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 1.1em 0; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 13px 15px; background: var(--panel); }
+  .card b { display: block; margin-bottom: 3px; }
+  .card span { color: var(--muted); font-size: .9rem; }
+  .lead { font-size:1.06rem; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; } @media(max-width:760px){ .grid2{grid-template-columns:1fr;} .toc{columns:1;} }
+  .kbd { font-family:var(--mono); background:#eef2f7; border:1px solid #d7dee7; border-bottom-width:2px; border-radius:5px; padding:1px 6px; font-size:.82em; }
+  .tag { display:inline-block; font-size:.72rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; padding:2px 8px; border-radius:999px; }
+  .tag.a{background:#e7f0ff;color:#1b4c9b;} .tag.b{background:#efe8ff;color:#5b32a8;} .tag.c{background:#e9f7ee;color:#1b5e37;}
+  .anchor { scroll-margin-top: 16px; }
+  .num { color:var(--accent); font-weight:700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<span class="pill">Technical deep-dive · panel-ready · read to become an expert</span>
+<h1>The MuleSoft Java&nbsp;17 Upgrade Agent</h1>
+<p class="subtitle">An agentic system that automates the end-to-end Java&nbsp;8/11&nbsp;→&nbsp;Java&nbsp;17 (Mule runtime 4.9.18 LTS) upgrade of MuleSoft applications — architecture, design rationale, security, scalability, testing, risks, and the MVP, explained in depth and in plain language.</p>
+
+<div class="callout tip">
+<p><strong>How to read this.</strong> Sections 1–3 give the big picture. Sections 4–7 are the technical core (architecture, tools, the engine, prompting/instruction design). Sections 8–12 map one-to-one to the panel's <em>Technical Expectations</em> (security, scalability, reusability/maintainability, testing, risks &amp; trade-offs, key decisions &amp; alternatives). Section 13 is the <em>MVP</em> summary (input/output, the demo, assumptions, test evidence). Every diagram is inline and self-contained.</p>
+</div>
+
+<h2 style="border:none;padding:0;margin-top:1.4em">Contents</h2>
+<div class="toc">
+<ol>
+<li><a href="#problem">The problem &amp; why it's hard</a></li>
+<li><a href="#solution">Solution at a glance</a></li>
+<li><a href="#context">System context &amp; the two runtimes</a></li>
+<li><a href="#arch">Agent architecture &amp; design choices</a></li>
+<li><a href="#stack">Tools, frameworks, platforms &amp; models</a></li>
+<li><a href="#engine">The engine internals (deep)</a></li>
+<li><a href="#prompting">Prompting &amp; instruction design</a></li>
+<li><a href="#security">Security &amp; access considerations</a></li>
+<li><a href="#scale">Scalability considerations</a></li>
+<li><a href="#reuse">Reusability &amp; maintainability</a></li>
+<li><a href="#testing">Testing approach</a></li>
+<li><a href="#risks">Risks, trade-offs &amp; limitations</a></li>
+<li><a href="#decisions">Key decisions &amp; alternatives</a></li>
+<li><a href="#mvp">The MVP</a></li>
+<li><a href="#glossary">Glossary</a></li>
+</ol>
+</div>
+
+<!-- ============================================================= 1 -->
+<h2 id="problem" class="anchor">1. The problem &amp; why it's hard</h2>
+<p class="lead">MuleSoft applications built on Java 8 or 11 must migrate to <strong>Java 17</strong> on the <strong>Mule 4.9.18 LTS</strong> runtime before the old lines fall out of support. Across a fleet of dozens or hundreds of apps, doing this by hand is slow, repetitive, and dangerously easy to get subtly wrong.</p>
+<p>A single app upgrade touches many coordinated points, each with its own rules:</p>
+<div class="cards">
+<div class="card"><b>The pom chain</b><span>Runtime + Java properties, compiler source/target, the mule-maven-plugin, MUnit runner/extensions, and every incompatible <em>connector</em> — some pinned in the app, some inherited from a shared parent/BOM.</span></div>
+<div class="card"><b>mule-artifact.json</b><span><code>minMuleVersion</code> and <code>javaSpecificationVersions</code> must be raised (never downgraded).</span></div>
+<div class="card"><b>CI workflows</b><span><code>actions/setup-java</code> versions, and JPMS <code>--add-opens</code> argLines the 4.9 container rejects on Java 17.</span></div>
+<div class="card"><b>Which version is safe?</b><span>Every connector has a <em>minimum</em> Java-17-safe version. “Latest” may be a breaking major. This knowledge lives on scattered release-notes pages.</span></div>
+<div class="card"><b>Shared inheritance</b><span>If connectors are managed by a parent-pom/BOM (often in a different repo), the app pom <em>cannot</em> fix them — the shared pom must move first, in order.</span></div>
+<div class="card"><b>The tail</b><span>Open a PR, wait for review + CI (MUnit, dependency guard), merge, deploy, verify on Anypoint, and roll back if the deploy fails.</span></div>
+</div>
+<p>A naïve script that regex-bumps versions misses custom Java sources, DataWeave POJOs, matrix <code>java:</code> blocks in CI, and inherited connector gaps — and it can't have a safe conversation with a human about trade-offs. The goal was an <strong>agentic system</strong>: it reasons about the request, runs deterministic tooling, and keeps a human in control of every write.</p>
+
+<div class="callout tip"><p><strong>Heritage.</strong> This suite is a skill-native re-implementation of an internal MuleSoft app, the <em>Platform Lifecycle Orchestrator</em> (a Mule 4.9.18 REST API + 6 MCP tools). Every rewrite, the rules engine, the job state machine, and the atomic-commit GitHub sequence were ported faithfully, then improved (full-clone assessment, explained edits, a synchronous run + polling tail instead of an async worker).</p></div>
+
+<!-- ============================================================= 2 -->
+<h2 id="solution" class="anchor">2. Solution at a glance</h2>
+<p>The system is a suite of <strong>10 composable skills</strong> (9 you run + 1 that documents the server) sharing <em>one deterministic engine</em>, fronted by a <strong>conversational agent</strong>, and optionally exposed as a <strong>hosted MCP + REST server</strong> with the identical 12 tools.</p>
+<div class="cards">
+<div class="card"><b>Agentic, not a bot</b><span>A human-in-the-loop conductor gathers inputs, assesses, previews, and waits for an explicit “go” before anything is written.</span></div>
+<div class="card"><b>Deterministic engine</b><span>The LLM never invents versions or edits. A rules engine + a curated compatibility matrix produce a byte-level change plan; the LLM narrates and orchestrates.</span></div>
+<div class="card"><b>Safe by construction</b><span>A dry-run gate, single-flight locks, a stale-plan guard, and non-fatal integrations mean the worst case is “nothing happened, here's why.”</span></div>
+<div class="card"><b>Two runtimes, one codebase</b><span>Run as IDE skills (Claude Code / Vibes, no server) or as a hosted server for remote agents (Agentforce) + event-driven CI/CD.</span></div>
+</div>
+
+<div class="fig">
+<svg viewBox="0 0 940 250" role="img" aria-label="High-level solution map">
+  <defs>
+    <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#5b6b7b"/></marker>
+  </defs>
+  <!-- humans -->
+  <rect x="20" y="90" width="160" height="70" rx="10" fill="#eef4ff" stroke="#6a8fd8"/>
+  <text x="100" y="118" text-anchor="middle" font-size="14" font-weight="700" fill="#26406e">Human / Agent</text>
+  <text x="100" y="138" text-anchor="middle" font-size="11.5" fill="#26406e">“upgrade app to Java 17”</text>
+  <!-- host -->
+  <rect x="230" y="70" width="180" height="110" rx="10" fill="#f6f8fa" stroke="#b9c4d0"/>
+  <text x="320" y="96" text-anchor="middle" font-size="13.5" font-weight="700">Host LLM surface</text>
+  <text x="320" y="118" text-anchor="middle" font-size="11.5" fill="#5b6b7b">Claude Code · Vibes</text>
+  <text x="320" y="135" text-anchor="middle" font-size="11.5" fill="#5b6b7b">Agentforce (server)</text>
+  <text x="320" y="158" text-anchor="middle" font-size="11" fill="#5b6b7b">conversation + tool calls</text>
+  <!-- engine -->
+  <rect x="460" y="40" width="220" height="170" rx="10" fill="#eaf2fb" stroke="#0b6bcb"/>
+  <text x="570" y="66" text-anchor="middle" font-size="14" font-weight="700" fill="#0b4e97">Deterministic engine</text>
+  <text x="570" y="90" text-anchor="middle" font-size="11.5" fill="#0b4e97">assess · apply · commit/PR</text>
+  <text x="570" y="108" text-anchor="middle" font-size="11.5" fill="#0b4e97">job store · reconcile · scan</text>
+  <text x="570" y="126" text-anchor="middle" font-size="11.5" fill="#0b4e97">compatibility matrix</text>
+  <text x="570" y="150" text-anchor="middle" font-size="11" fill="#5b6b7b">Node.js ES modules</text>
+  <text x="570" y="167" text-anchor="middle" font-size="11" fill="#5b6b7b">skills CLI ⇄ MCP tools</text>
+  <text x="570" y="190" text-anchor="middle" font-size="11" fill="#5b6b7b">local JSON job store</text>
+  <!-- externals -->
+  <rect x="730" y="20" width="190" height="46" rx="8" fill="#fff" stroke="#b9c4d0"/>
+  <text x="825" y="40" text-anchor="middle" font-size="12" font-weight="700">GitHub</text>
+  <text x="825" y="56" text-anchor="middle" font-size="10.5" fill="#5b6b7b">Git Data API · gh · REST</text>
+  <rect x="730" y="76" width="190" height="46" rx="8" fill="#fff" stroke="#b9c4d0"/>
+  <text x="825" y="96" text-anchor="middle" font-size="12" font-weight="700">Anypoint</text>
+  <text x="825" y="112" text-anchor="middle" font-size="10.5" fill="#5b6b7b">Exchange · ARM/AMC</text>
+  <rect x="730" y="132" width="190" height="46" rx="8" fill="#fff" stroke="#b9c4d0"/>
+  <text x="825" y="152" text-anchor="middle" font-size="12" font-weight="700">Jira · Slack</text>
+  <text x="825" y="168" text-anchor="middle" font-size="10.5" fill="#5b6b7b">tickets · notifications</text>
+  <!-- arrows -->
+  <line x1="180" y1="125" x2="228" y2="125" stroke="#5b6b7b" stroke-width="1.6" marker-end="url(#ah)"/>
+  <line x1="410" y1="125" x2="458" y2="125" stroke="#5b6b7b" stroke-width="1.6" marker-end="url(#ah)"/>
+  <line x1="680" y1="80" x2="728" y2="52" stroke="#5b6b7b" stroke-width="1.6" marker-end="url(#ah)"/>
+  <line x1="680" y1="110" x2="728" y2="100" stroke="#5b6b7b" stroke-width="1.6" marker-end="url(#ah)"/>
+  <line x1="680" y1="150" x2="728" y2="152" stroke="#5b6b7b" stroke-width="1.6" marker-end="url(#ah)"/>
+</svg>
+<div class="cap">Figure 1 — The human describes intent to a host LLM, which calls the deterministic engine; the engine (never the LLM) talks to GitHub, Anypoint, Jira, and Slack.</div>
+</div>
+
+<!-- ============================================================= 3 -->
+<h2 id="context" class="anchor">3. System context &amp; the two runtimes</h2>
+<p>The exact same skill scripts and job store back both deployment shapes. You pick a runtime per situation; nothing about the engine changes.</p>
+<div class="grid2">
+<div>
+<h4>Runtime A — IDE skills (default)</h4>
+<p>Claude Code or MuleSoft Vibes invokes the skills against a local clone or the GitHub API. Merge/CI/deploy detection is <strong>polling</strong> (<code>gh</code> + a token + Anypoint verify). No server, no open ports. Best for hands-on, project-pinned upgrades.</p>
+</div>
+<div>
+<h4>Runtime B — Hosted MCP + REST server</h4>
+<p><code>server/server.js</code> exposes the same 12 tools over <strong>MCP JSON-RPC</strong> (<code>POST /mcp</code>) and a <strong>REST facade</strong> (<code>/api/v1/tools/*</code>), guarded by a bearer token, plus <strong>HMAC-verified</strong> CI/CD webhooks (<code>POST /webhook/cd-result</code>) that drive the state machine without polling. Best for remote agents (Agentforce) and event-driven CD.</p>
+</div>
+</div>
+<div class="callout tip"><p><strong>Why this matters:</strong> a skill cannot host a long-lived webhook listener, so in Runtime A the deploy tail is <em>polled</em>. When you want true event-driven CD, Runtime B adds the inbound webhook — but both share one engine and one <code>~/.mule-upgrade/</code> JSON job store, so you can even mix them (skills for assess/upgrade, server for the webhook-driven tail).</p></div>
+
+<!-- ============================================================= 4 -->
+<h2 id="arch" class="anchor">4. Agent architecture &amp; design choices</h2>
+<p class="lead">The architecture is a <strong>three-layer composition</strong>: a conversational <em>conductor</em> on top, a non-interactive <em>orchestrator</em> in the middle, and single-purpose <em>worker</em> skills underneath — all sharing common libraries and a durable job store.</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 430" role="img" aria-label="Skill composition architecture">
+  <defs><marker id="ah2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#5b6b7b"/></marker></defs>
+  <!-- layer labels -->
+  <text x="16" y="40" font-size="12" font-weight="700" fill="#6d28d9">CONDUCTOR</text>
+  <text x="16" y="140" font-size="12" font-weight="700" fill="#0b6bcb">ORCHESTRATOR</text>
+  <text x="16" y="250" font-size="12" font-weight="700" fill="#1b5e37">WORKERS</text>
+  <text x="16" y="390" font-size="12" font-weight="700" fill="#8a6d00">SHARED</text>
+
+  <!-- conductor -->
+  <rect x="300" y="18" width="340" height="56" rx="10" fill="#efe8ff" stroke="#6d28d9"/>
+  <text x="470" y="42" text-anchor="middle" font-size="14" font-weight="700" fill="#4a1e9e">mule-upgrade-agent</text>
+  <text x="470" y="61" text-anchor="middle" font-size="11" fill="#5b3aa5">the human loop: ask → assess → preview → confirm → track</text>
+
+  <!-- orchestrator -->
+  <rect x="300" y="112" width="340" height="52" rx="10" fill="#eaf2fb" stroke="#0b6bcb"/>
+  <text x="470" y="134" text-anchor="middle" font-size="13.5" font-weight="700" fill="#0b4e97">mule-upgrade  (orchestrator pipeline)</text>
+  <text x="470" y="152" text-anchor="middle" font-size="11" fill="#0b4e97">assess → apply → commit → PR → track · start + poll</text>
+
+  <!-- workers -->
+  <g font-size="11.5" font-weight="600" fill="#1b5e37">
+   <rect x="40" y="210" width="150" height="52" rx="8" fill="#e9f7ee" stroke="#52b788"/><text x="115" y="232" text-anchor="middle">mule-upgrade-assess</text><text x="115" y="250" text-anchor="middle" font-size="10" font-weight="400" fill="#3a6b52">plan · versions · drift</text>
+   <rect x="205" y="210" width="140" height="52" rx="8" fill="#e9f7ee" stroke="#52b788"/><text x="275" y="232" text-anchor="middle">mule-upgrade-apply</text><text x="275" y="250" text-anchor="middle" font-size="10" font-weight="400" fill="#3a6b52">8 byte-preserving rewrites</text>
+   <rect x="360" y="210" width="130" height="52" rx="8" fill="#e9f7ee" stroke="#52b788"/><text x="425" y="232" text-anchor="middle">mule-upgrade-pr</text><text x="425" y="250" text-anchor="middle" font-size="10" font-weight="400" fill="#3a6b52">commit · PR · rollback</text>
+   <rect x="505" y="210" width="150" height="52" rx="8" fill="#e9f7ee" stroke="#52b788"/><text x="580" y="228" text-anchor="middle">mule-upgrade-parent-pom</text><text x="580" y="250" text-anchor="middle" font-size="10" font-weight="400" fill="#3a6b52">shared BOM · chained</text>
+   <rect x="670" y="210" width="120" height="52" rx="8" fill="#e9f7ee" stroke="#52b788"/><text x="730" y="232" text-anchor="middle">mule-upgrade-job</text><text x="730" y="250" text-anchor="middle" font-size="10" font-weight="400" fill="#3a6b52">store · status · reconcile</text>
+   <rect x="805" y="210" width="120" height="52" rx="8" fill="#e9f7ee" stroke="#52b788"/><text x="865" y="232" text-anchor="middle">mule-upgrade-scan</text><text x="865" y="250" text-anchor="middle" font-size="10" font-weight="400" fill="#3a6b52">fleet · notify</text>
+   <rect x="360" y="276" width="230" height="40" rx="8" fill="#f0fbf4" stroke="#8fd3ac"/><text x="475" y="300" text-anchor="middle" font-size="11">mule-upgrade-matrix-update (maintenance)</text>
+  </g>
+
+  <!-- shared -->
+  <rect x="120" y="356" width="700" height="46" rx="10" fill="#fff8e6" stroke="#f0c34e"/>
+  <text x="470" y="376" text-anchor="middle" font-size="12.5" font-weight="700" fill="#7a5b00">lib_shared/ (config, secure-props, coordinates, semver, cache) · config/*.yaml · ~/.mule-upgrade/ job store</text>
+  <text x="470" y="393" text-anchor="middle" font-size="10.5" fill="#8a6d00">server/ (MCP JSON-RPC + REST + HMAC webhooks) wraps the very same handlers</text>
+
+  <!-- arrows -->
+  <line x1="470" y1="74" x2="470" y2="110" stroke="#5b6b7b" stroke-width="1.6" marker-end="url(#ah2)"/>
+  <line x1="470" y1="164" x2="470" y2="206" stroke="#5b6b7b" stroke-width="1.4" marker-end="url(#ah2)"/>
+  <line x1="360" y1="150" x2="120" y2="208" stroke="#b9c4d0" stroke-width="1.2" marker-end="url(#ah2)"/>
+  <line x1="580" y1="164" x2="730" y2="208" stroke="#b9c4d0" stroke-width="1.2" marker-end="url(#ah2)"/>
+</svg>
+<div class="cap">Figure 2 — Layered composition. The conductor talks to people; the orchestrator runs the pipeline; workers do one thing each; everything reads shared libs, the matrix, and the job store. The server is a thin transport over the same handlers.</div>
+</div>
+
+<h3>4.1 The conductor: a human-in-the-loop state machine</h3>
+<p>The <code>mule-upgrade-agent</code> skill is the primary entry point for any person. It's not a free-form chatbot — its <code>SKILL.md</code> encodes an 11-step state machine that the host LLM must follow in order, asking rather than inventing at every step:</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 150" role="img" aria-label="Conductor state machine">
+  <defs><marker id="ah3" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#6d28d9"/></marker></defs>
+  <g font-size="10.5" text-anchor="middle">
+    <!-- row of steps -->
+    <g>
+     <rect x="10"  y="30" width="86" height="40" rx="8" fill="#efe8ff" stroke="#6d28d9"/><text x="53" y="47">1 Source</text><text x="53" y="61" font-size="9" fill="#5b3aa5">local | api</text>
+     <rect x="106" y="30" width="86" height="40" rx="8" fill="#efe8ff" stroke="#6d28d9"/><text x="149" y="47">2 Location</text><text x="149" y="61" font-size="9" fill="#5b3aa5">repo/path</text>
+     <rect x="202" y="30" width="86" height="40" rx="8" fill="#efe8ff" stroke="#6d28d9"/><text x="245" y="47">3 Env</text><text x="245" y="61" font-size="9" fill="#5b3aa5">required</text>
+     <rect x="298" y="30" width="86" height="40" rx="8" fill="#efe8ff" stroke="#6d28d9"/><text x="341" y="47">4 Deployed?</text><text x="341" y="61" font-size="9" fill="#5b3aa5">ARM lookup</text>
+     <rect x="394" y="30" width="86" height="40" rx="8" fill="#e9f7ee" stroke="#52b788"/><text x="437" y="47">5 Assess</text><text x="437" y="61" font-size="9" fill="#3a6b52">lean plan</text>
+     <rect x="490" y="30" width="86" height="40" rx="8" fill="#e9f7ee" stroke="#52b788"/><text x="533" y="47">6 Versions</text><text x="533" y="61" font-size="9" fill="#3a6b52">menu (opt)</text>
+     <rect x="586" y="30" width="86" height="40" rx="8" fill="#e9f7ee" stroke="#52b788"/><text x="629" y="47">7 Strategy</text><text x="629" y="61" font-size="9" fill="#3a6b52">min…latest</text>
+     <rect x="682" y="30" width="86" height="40" rx="8" fill="#fff8e6" stroke="#f0c34e"/><text x="725" y="47">8 Dry-run</text><text x="725" y="61" font-size="9" fill="#7a5b00">PREVIEW</text>
+     <rect x="778" y="30" width="70" height="40" rx="8" fill="#fff8e6" stroke="#f0c34e"/><text x="813" y="47">9 Confirm</text><text x="813" y="61" font-size="9" fill="#7a5b00">explicit yes</text>
+     <rect x="858" y="14" width="72" height="34" rx="8" fill="#fdeceb" stroke="#e0655a"/><text x="894" y="34">10 Execute</text>
+     <rect x="858" y="60" width="72" height="34" rx="8" fill="#eaf2fb" stroke="#0b6bcb"/><text x="894" y="80">11 Track</text>
+    </g>
+    <!-- arrows between 1..9 -->
+    <g stroke="#6d28d9" stroke-width="1.3" marker-end="url(#ah3)">
+     <line x1="96" y1="50" x2="105" y2="50"/><line x1="192" y1="50" x2="201" y2="50"/><line x1="288" y1="50" x2="297" y2="50"/>
+     <line x1="384" y1="50" x2="393" y2="50"/><line x1="480" y1="50" x2="489" y2="50"/><line x1="576" y1="50" x2="585" y2="50"/>
+     <line x1="672" y1="50" x2="681" y2="50"/><line x1="768" y1="50" x2="777" y2="50"/>
+     <line x1="848" y1="45" x2="856" y2="35"/><line x1="894" y1="48" x2="894" y2="58"/>
+    </g>
+    <text x="470" y="120" font-size="11.5" fill="#8a2a22" font-weight="700">Gate: nothing is written before step 8's PLAN_PREVIEW and step 9's explicit “yes”.</text>
+  </g>
+</svg>
+<div class="cap">Figure 3 — The conductor's 11-step conversation. Steps 5–7 are read-only; steps 8–9 are the safety gate; only step 10 writes.</div>
+</div>
+
+<h4>Why a conductor at all?</h4>
+<p>Every worker skill is non-interactive: given inputs, it runs to completion. That's perfect for scripts and CI, but a person needs to be <em>asked</em> (which repo? which env? which version strategy?) and <em>shown a preview</em> before a PR is opened. The conductor supplies exactly that missing conversation — nothing more. It's a thin layer that <em>routes intent to the same CLIs/tools</em> the orchestrator exposes, so there's no second implementation to keep in sync.</p>
+
+<h3>4.2 The prime directive: preview before you write</h3>
+<p>The single most important design choice is that <strong>nothing is written until the user has seen a dry-run plan and explicitly confirmed</strong>. “Writing” means acquiring the app lock, creating a job, editing a file, or opening a PR. The mechanism is the <code>dryRun</code> flag on <code>start_upgrade</code>:</p>
+<ul>
+<li><code>dryRun: true</code> → runs assessment, builds the full plan (file edits, connector choices, warnings, deployed-state), returns <strong><code>PLAN_PREVIEW</code></strong>, and writes <em>nothing</em> — no lock, no job, no edit, no PR.</li>
+<li><code>dryRun: false</code> → executes the pipeline and opens the PR.</li>
+</ul>
+<p>The agent always calls dry-run first, shows the preview, gets an unambiguous yes, then re-calls with the <em>identical arguments</em> and <code>dryRun:false</code>. This is verified by a test that asserts a dry run acquires no lock, creates no job, and never reaches apply/commit.</p>
+
+<h3>4.3 The execution contract: act only through the engine</h3>
+<p>Because a capable LLM will happily “help” by hand-editing a pom or guessing a version, the skills carry an explicit, non-negotiable <strong>execution contract</strong> baked into their instructions. The agent may <em>never</em>:</p>
+<ul>
+<li>hand-write, hand-edit, or <em>simulate</em> a pom.xml / mule-artifact.json / CI workflow / ChangePlan / PLAN_PREVIEW — the engine produces these; the agent reports what it returns;</li>
+<li>invent, guess, or “reason out” connector/runtime/plugin versions — the compatibility matrix is the sole authority;</li>
+<li>call GitHub itself (<code>curl</code>, <code>gh api</code>, fetching a repo) or ask the user to paste a pom or a token in chat — the engine reads the repo;</li>
+<li>modify, patch, or work around the suite's own source — even if it believes it found a bug. <strong>A command error is a valid final result: report it verbatim and stop.</strong></li>
+</ul>
+<div class="callout ok"><p><strong>Design value:</strong> this contract is what makes an LLM-driven system <em>trustworthy for production changes</em>. The LLM's creativity is confined to conversation and narration; all consequential decisions are deterministic engine output. Determinism where it matters, flexibility where it's safe.</p></div>
+
+<h3>4.4 Why skills-native (and not a monolith or a pile of prompts)?</h3>
+<table>
+<thead><tr><th>Choice</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><b>Composable skills over one monolith</b></td><td>Each skill has a single responsibility, its own tests, and its own trigger phrases. They compose (conductor → orchestrator → workers) but can also be used à la carte (just assess; just scan). Adding a capability is a new skill, not a fork of a giant script.</td></tr>
+<tr><td><b>A deterministic engine over “ask the model”</b></td><td>Version selection and file rewrites must be exact and repeatable. A rules engine + curated matrix gives auditable, testable output; the model would drift and hallucinate versions.</td></tr>
+<tr><td><b>CLI + MCP parity from one codebase</b></td><td>The same handlers back the skills CLIs and the server tools; JSON Schemas are the single source of truth for inputs. No divergence between “IDE” and “server” behavior.</td></tr>
+<tr><td><b>Synchronous run + polling tail over an async worker</b></td><td>The original Mule app needed an async worker + inbound webhooks to survive across callbacks. A skill invocation <em>is</em> the worker, so the pipeline runs start-to-finish in one call and the deploy tail is polled — no server, no idempotency dance for the happy path.</td></tr>
+</tbody>
+</table>
+
+<!-- ============================================================= 5 -->
+<h2 id="stack" class="anchor">5. Tools, frameworks, platforms &amp; models</h2>
+<h3>5.1 Runtime &amp; language</h3>
+<ul>
+<li><strong>Node.js ≥ 18</strong> (developed on v24), <strong>ES modules</strong> throughout. The only runtime dependency is <strong><code>js-yaml</code></strong> — everything else (HTTP, crypto, file I/O, child processes) uses the Node standard library. This keeps the supply chain tiny and the install trivial (<code>npm ci</code>).</li>
+<li><strong>Dependency-free HTTP</strong> via the global <code>fetch</code> (Node 18+) for GitHub/Anypoint/Jira/Slack, and <strong><code>execFile</code>-style</strong> child processes for <code>git</code>/<code>gh</code> (never a shell string — see Security).</li>
+</ul>
+
+<h3>5.2 The agent/model layer</h3>
+<p>The system is deliberately <strong>model-agnostic</strong>. There is no hard-coded model; the “intelligence” is whatever host LLM drives the skills or the MCP tools:</p>
+<ul>
+<li><strong>Claude Code</strong> (IDE) and <strong>MuleSoft Vibes</strong> (Anypoint Code Builder) natively speak the Agent Skills / <code>SKILL.md</code> format and auto-invoke a skill by trigger phrase via their <code>use_skill</code> tool.</li>
+<li><strong>Agentforce</strong> (or any MCP client) drives the hosted server's 12 tools over MCP JSON-RPC / REST.</li>
+</ul>
+<p>The model's job is narrow: interpret intent, drive the 11-step conversation, and turn structured JSON into readable prose. All facts come from the engine. This is why the same suite runs identically under different models — the correctness lives in the engine, not the prompt.</p>
+
+<h3>5.3 Protocols &amp; integration surfaces</h3>
+<div class="cards">
+<div class="card"><b>MCP (Model Context Protocol)</b><span>JSON-RPC 2.0 over <code>POST /mcp</code>: <code>initialize</code> / <code>tools/list</code> / <code>tools/call</code>. Every tool's <code>inputSchema</code> is enforced by a dependency-free schema validator before dispatch.</span></div>
+<div class="card"><b>REST facade</b><span><code>GET /api/v1/tools</code> + <code>POST /api/v1/tools/{name}</code> — identical validation &amp; result payloads, for clients that don't speak JSON-RPC.</span></div>
+<div class="card"><b>GitHub</b><span>Git Data API (blob→tree→commit→ref→PR) in <em>api</em> mode; <code>git</code>+<code>gh</code> with a REST fallback in <em>local</em> mode; token or <code>gh</code> auth.</span></div>
+<div class="card"><b>Anypoint Platform</b><span>Exchange <em>Graph API</em> + release-notes for connector versions; ARM/AMC for deployed-state &amp; fleet scan; token cached to disk.</span></div>
+<div class="card"><b>Jira &amp; Slack</b><span>Auto-create ticket + PR comment; PR-ready / failure notifications — both env-gated and non-fatal.</span></div>
+<div class="card"><b>CI/CD</b><span>GitHub Actions shims: test.yml, a <code>workflow_dispatch</code> upgrade runner, and an HMAC-signed <code>ci-result</code> callback into the server webhook.</span></div>
+</div>
+
+<!-- ============================================================= 6 -->
+<h2 id="engine" class="anchor">6. The engine internals (deep)</h2>
+<p class="lead">The heart of the system. This is where “Java 17 upgrade” becomes a precise, byte-level set of edits, a PR, and a tracked lifecycle.</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 132" role="img" aria-label="Upgrade pipeline">
+  <defs><marker id="ah4" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#0b6bcb"/></marker></defs>
+  <g text-anchor="middle" font-size="12">
+   <rect x="8"   y="44" width="150" height="46" rx="9" fill="#e9f7ee" stroke="#52b788"/><text x="83" y="64" font-weight="700">Assess</text><text x="83" y="80" font-size="10" fill="#3a6b52">ChangePlan + gaps</text>
+   <rect x="196" y="44" width="150" height="46" rx="9" fill="#e9f7ee" stroke="#52b788"/><text x="271" y="64" font-weight="700">Apply</text><text x="271" y="80" font-size="10" fill="#3a6b52">8 rewrites, byte-safe</text>
+   <rect x="384" y="44" width="150" height="46" rx="9" fill="#e9f7ee" stroke="#52b788"/><text x="459" y="64" font-weight="700">Commit + PR</text><text x="459" y="80" font-size="10" fill="#3a6b52">atomic · stale-guard</text>
+   <rect x="572" y="44" width="150" height="46" rx="9" fill="#eaf2fb" stroke="#0b6bcb"/><text x="647" y="64" font-weight="700">Job PR_OPEN</text><text x="647" y="80" font-size="10" fill="#0b4e97">Slack+Jira · index</text>
+   <rect x="760" y="44" width="172" height="46" rx="9" fill="#eaf2fb" stroke="#0b6bcb"/><text x="846" y="64" font-weight="700">Track / reconcile</text><text x="846" y="80" font-size="10" fill="#0b4e97">merge→CI→deploy</text>
+   <g stroke="#0b6bcb" stroke-width="1.6" marker-end="url(#ah4)">
+    <line x1="158" y1="67" x2="194" y2="67"/><line x1="346" y1="67" x2="382" y2="67"/><line x1="534" y1="67" x2="570" y2="67"/><line x1="722" y1="67" x2="758" y2="67"/>
+   </g>
+   <text x="83" y="24" font-size="10.5" fill="#5b6b7b">topology routing</text>
+   <line x1="83" y1="30" x2="83" y2="42" stroke="#b9c4d0"/>
+  </g>
+</svg>
+<div class="cap">Figure 4 — The one-shot pipeline (port of <code>pf-start-upgrade</code>). Runs to <code>PR_OPEN</code> in a single call; the deploy tail is a separate polling step.</div>
+</div>
+
+<h3>6.1 Assessment — from repo to ChangePlan</h3>
+<p><code>mule-upgrade-assess</code> is a faithful Node port of the Mule app's assessment DataWeave, plus a dynamic matrix fetch the original couldn't do inline. It:</p>
+<ol>
+<li><strong>Walks the pom inheritance chain</strong> (app → parent → BOM), re-parsing each pom from raw text so repeated <code>&lt;dependency&gt;</code>/<code>&lt;plugin&gt;</code> elements survive (a Map parse would collapse duplicates and silently drop pins).</li>
+<li><strong>Classifies topology</strong> — <code>APP_STANDALONE</code> / <code>PARENT_APP</code> / <code>BOM_PARENT_APP</code> / <code>MULTI_LEVEL</code> — from chain depth + top-of-chain <code>dependencyManagement</code>.</li>
+<li><strong>Applies the compatibility matrix</strong> (§6.2) to emit a byte-level <code>ChangePlan.fileEdits[]</code> with a fixed <em>kind</em> per edit (<code>pomProperty</code>, <code>depVersion</code>, <code>pluginVersion</code>, <code>muleArtifactJson</code>, <code>ciWorkflow</code>, <code>munitRuntimeVersion</code>, <code>munitArgLines</code>, <code>pomVersion</code>).</li>
+<li>Emits <strong><code>connectorsInApp[]</code></strong> (each app connector's current version, matrix pin, willChange) network-free, always; <strong><code>connectorGaps[]</code></strong> (below-target connectors pinned upstream, unfixable in the app pom); and <strong><code>missingFromMatrix[]</code></strong> (declared but uncovered) — the last two are surfaced as human-judgement items.</li>
+<li>Optionally does a <strong>verbatim deployed-state check</strong> against ARM (exact name match, cross-environment fallback), reporting the running runtime/Java — always with a stated reason when skipped.</li>
+</ol>
+<div class="callout tip"><p><strong>Lean by default (the “Full Split”).</strong> A plain assess returns in ~1–3s with the network-free plan. The two slow, advisory features are opt-in tools so the common path stays fast: the per-connector <em>version menu</em> (<code>resolve_versions</code>) and the <em>matrix-drift</em> audit (<code>check_drift</code>).</p></div>
+
+<h3>6.2 The compatibility matrix — hybrid, dynamic + static</h3>
+<div class="fig">
+<svg viewBox="0 0 940 220" role="img" aria-label="Compatibility matrix data flow">
+  <defs><marker id="ah5" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#5b6b7b"/></marker></defs>
+  <!-- sources -->
+  <rect x="20" y="20" width="230" height="54" rx="9" fill="#fff" stroke="#b9c4d0"/><text x="135" y="42" text-anchor="middle" font-size="12.5" font-weight="700">Anypoint Exchange asset</text><text x="135" y="60" text-anchor="middle" font-size="10.5" fill="#5b6b7b">governed matrix (gating + connectors)</text>
+  <rect x="20" y="88" width="230" height="54" rx="9" fill="#fff" stroke="#b9c4d0"/><text x="135" y="110" text-anchor="middle" font-size="12.5" font-weight="700">Exchange Graph + release-notes</text><text x="135" y="128" text-anchor="middle" font-size="10.5" fill="#5b6b7b">per-connector versions + OpenJDK table</text>
+  <rect x="20" y="156" width="230" height="46" rx="9" fill="#fff8e6" stroke="#f0c34e"/><text x="135" y="176" text-anchor="middle" font-size="12.5" font-weight="700">Bundled compatibility-matrix.yaml</text><text x="135" y="193" text-anchor="middle" font-size="10.5" fill="#8a6d00">curated Java-17-safe floor (always present)</text>
+  <!-- resolver -->
+  <rect x="360" y="70" width="210" height="80" rx="10" fill="#eaf2fb" stroke="#0b6bcb"/><text x="465" y="98" text-anchor="middle" font-size="13" font-weight="700" fill="#0b4e97">matrix resolver</text><text x="465" y="118" text-anchor="middle" font-size="10.5" fill="#0b4e97">exchange source → bundled fallback</text><text x="465" y="134" text-anchor="middle" font-size="10.5" fill="#0b4e97">on ANY failure, never a hard error</text>
+  <!-- outputs -->
+  <rect x="680" y="24" width="240" height="46" rx="9" fill="#e9f7ee" stroke="#52b788"/><text x="800" y="44" text-anchor="middle" font-size="12" font-weight="700">Gating pins (authoritative)</text><text x="800" y="60" text-anchor="middle" font-size="10" fill="#3a6b52">runtime · plugin · MUnit · compiler</text>
+  <rect x="680" y="82" width="240" height="46" rx="9" fill="#e9f7ee" stroke="#52b788"/><text x="800" y="102" text-anchor="middle" font-size="12" font-weight="700">Connector menu (advisory)</text><text x="800" y="118" text-anchor="middle" font-size="10" fill="#3a6b52">min · first-compat · in-major · latest</text>
+  <rect x="680" y="140" width="240" height="46" rx="9" fill="#fdeceb" stroke="#e0655a"/><text x="800" y="160" text-anchor="middle" font-size="12" font-weight="700">Drift advisory (never writes)</text><text x="800" y="176" text-anchor="middle" font-size="10" fill="#8a2a22">pins trailing latest LTS release</text>
+  <!-- arrows -->
+  <g stroke="#5b6b7b" stroke-width="1.5" marker-end="url(#ah5)">
+   <line x1="250" y1="47" x2="358" y2="95"/><line x1="250" y1="115" x2="358" y2="110"/><line x1="250" y1="179" x2="358" y2="128"/>
+   <line x1="570" y1="95" x2="678" y2="47"/><line x1="570" y1="110" x2="678" y2="105"/><line x1="570" y1="128" x2="678" y2="160"/>
+  </g>
+</svg>
+<div class="cap">Figure 5 — The hybrid matrix: static gating pins stay authoritative; live Exchange/release-notes data <em>enriches</em> a version menu and a drift advisory but never replaces the curated floor. Any fetch failure silently falls back to the bundled YAML.</div>
+</div>
+<p>The split is deliberate: <strong>gating</strong> versions (runtime patch, mule-maven-plugin, MUnit runner/extensions, compiler source/target) encode a <em>minimum required for Java 17</em> — a policy floor that doesn't live on connector release-notes pages, so it stays static and authoritative. <strong>Connector</strong> versions are enriched live (highest-in-major, latest, and the <em>first Java-17-safe</em> version parsed from each release-note's OpenJDK compatibility row), but the curated pin is the default and “latest” is never auto-adopted (it may be a breaking major).</p>
+<p>Three caching layers keep repeated runs fast and non-fatal: the Anypoint bearer token, the Exchange matrix fetch, per-connector <code>listVersions</code>, and a ~24h disk cache of release-notes pages (<code>~/.mule-upgrade/matrix-cache.json</code>). A missing/corrupt cache silently degrades to a live fetch.</p>
+
+<h3>6.3 The 8 byte-preserving rewrites</h3>
+<p><code>mule-upgrade-apply</code> consumes the ChangePlan and applies edits grouped by file in a <strong>fixed order</strong>:</p>
+<pre><code>depVersion → pluginVersion → pomProperty → munitRuntimeVersion
+→ muleArtifactJson → ciWorkflow → munitArgLines → pomVersion</code></pre>
+<p>Every rewrite is <strong>byte-preserving</strong>: only the targeted value changes — comments, ordering, indentation, and unrelated elements are left exactly as-is (no YAML/XML round-trip through a dumper that would reflow the file). The <em>appOverride</em> strategy writes each version edit into the app's <em>own</em> module pom so sibling modules sharing a parent/BOM are never touched. This byte-fidelity is what makes the PR diff reviewable — a human sees only the intended change.</p>
+
+<h3>6.4 Commit + PR — atomic, with a stale-plan guard</h3>
+<p><code>mule-upgrade-pr</code> ports the Git flows into two interchangeable modes:</p>
+<div class="grid2">
+<div><h4><code>api</code> mode (default)</h4><p>Pure GitHub Git Data API: create a branch ref at the assessed <code>headSha</code>, one blob per file, a tree with <code>base_tree=headSha</code>, a commit with <code>parents=[headSha]</code>, move the ref, open the PR. Fully atomic; never touches a working copy — the exact byte-level commit, reproducibly.</p></div>
+<div><h4><code>local</code> mode</h4><p><code>git checkout -b</code> → write files → commit → push → open the PR. PR creation tries the <code>gh</code> CLI and <strong>automatically falls back to the REST API</strong> if <code>gh</code> can't be spawned (the common Windows <code>spawnSync gh ENOENT</code>), so a token alone is enough. Returns a <code>prNumber</code> so local jobs are pollable like api-mode ones.</p></div>
+</div>
+<p>Both enforce the <strong>stale-plan guard</strong>: if the repo HEAD moved since assessment, they raise <code>STALE_PLAN</code> rather than commit a stale plan onto newer work. Branch names are collision-free: <code>migrate/&lt;app&gt;-&lt;runtime&gt;-java&lt;java&gt;</code>, then <code>-1..-50</code>, then <code>-&lt;jobId&gt;</code>. <strong>Rollback</strong> recreates the pre-upgrade parent's <em>tree</em> on a fresh <code>revert/</code> branch — immune to intervening unrelated changes.</p>
+
+<h3>6.5 The job store &amp; state machine</h3>
+<p><code>mule-upgrade-job</code> is a dependency-free JSON re-implementation of the Mule app's Object Store, with four partitions under <code>~/.mule-upgrade/</code> (override via <code>MULE_UPGRADE_HOME</code>):</p>
+<table>
+<thead><tr><th>Partition</th><th>Key</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>jobs/&lt;jobId&gt;.json</code></td><td><code>job-&lt;uuid&gt;</code></td><td>the job record (status, coords, changePlan, PR, timestamps, error)</td></tr>
+<tr><td><code>locks/…</code></td><td>per-module</td><td>single-flight lock; value = jobId (<code>lockKey = &lt;repo&gt;::&lt;pomPath&gt;</code>)</td></tr>
+<tr><td><code>index/…</code></td><td>branch name</td><td>branch → jobId correlation for the reconcile/poll tail</td></tr>
+<tr><td><code>idem/…</code></td><td>delivery/poll key</td><td>idempotency markers so a repeated webhook/poll doesn't re-transition</td></tr>
+</tbody>
+</table>
+<p>Keys containing <code>:</code>/<code>/</code> are encoded to a safe filename stem + short hash. Writes are <strong>atomic</strong> (temp file + rename); locks and idempotency markers use exclusive create (<code>wx</code>) so contention is detected without a read-modify-write race — crash-safe by construction.</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 250" role="img" aria-label="Job lifecycle state machine">
+  <defs><marker id="ah6" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#5b6b7b"/></marker></defs>
+  <g text-anchor="middle" font-size="11">
+   <rect x="20"  y="100" width="96" height="38" rx="19" fill="#eaf2fb" stroke="#0b6bcb"/><text x="68" y="123">PROCESSING</text>
+   <rect x="140" y="100" width="96" height="38" rx="19" fill="#eaf2fb" stroke="#0b6bcb"/><text x="188" y="123">COMMITTING</text>
+   <rect x="260" y="100" width="96" height="38" rx="19" fill="#eaf2fb" stroke="#0b6bcb"/><text x="308" y="123">PR_OPEN</text>
+   <rect x="392" y="100" width="96" height="38" rx="19" fill="#eaf2fb" stroke="#0b6bcb"/><text x="440" y="123">DEPLOYING</text>
+   <rect x="512" y="100" width="96" height="38" rx="19" fill="#e9f7ee" stroke="#52b788"/><text x="560" y="123" font-weight="700">DEPLOYED</text>
+   <!-- terminals/branches -->
+   <rect x="252" y="30" width="120" height="34" rx="17" fill="#e9f7ee" stroke="#52b788"/><text x="312" y="52">NO_CHANGE</text>
+   <rect x="392" y="30" width="120" height="34" rx="17" fill="#fff8e6" stroke="#f0c34e"/><text x="452" y="52">MUNIT_FAILED</text>
+   <rect x="392" y="176" width="130" height="34" rx="17" fill="#fff8e6" stroke="#f0c34e"/><text x="457" y="198">DEP_GUARD_FAILED</text>
+   <rect x="260" y="176" width="96" height="34" rx="17" fill="#f3f5f7" stroke="#9aa7b4"/><text x="308" y="198">CLOSED</text>
+   <rect x="640" y="100" width="130" height="38" rx="19" fill="#fdeceb" stroke="#e0655a"/><text x="705" y="123">FAILED_DEPLOY</text>
+   <rect x="640" y="30" width="150" height="34" rx="17" fill="#fdeceb" stroke="#e0655a"/><text x="715" y="52">FAILED_ASSESS/COMMIT</text>
+   <rect x="640" y="176" width="170" height="34" rx="17" fill="#fdeceb" stroke="#e0655a"/><text x="725" y="198">FAILED_INTERRUPTED</text>
+   <g stroke="#5b6b7b" stroke-width="1.4" marker-end="url(#ah6)">
+     <line x1="116" y1="119" x2="139" y2="119"/>
+     <line x1="236" y1="119" x2="259" y2="119"/>
+     <line x1="356" y1="119" x2="391" y2="119"/>
+     <line x1="488" y1="119" x2="511" y2="119"/>
+     <line x1="308" y1="100" x2="312" y2="66"/>
+     <line x1="356" y1="110" x2="392" y2="60"/>
+     <line x1="356" y1="128" x2="392" y2="180"/>
+     <line x1="308" y1="138" x2="308" y2="174"/>
+     <line x1="488" y1="112" x2="639" y2="52"/>
+     <line x1="488" y1="119" x2="639" y2="119"/>
+     <line x1="188" y1="138" x2="640" y2="185"/>
+   </g>
+  </g>
+</svg>
+<div class="cap">Figure 6 — The job state machine (ported verbatim). On any pipeline error the job goes terminal and the lock is released; a manually-closed PR is detected too (→ <code>CLOSED</code>).</div>
+</div>
+
+<h3>6.6 Reconcile — polling, not webhooks (in skills mode)</h3>
+<p>A skill can't host a listener, so <code>reconcile</code> <em>polls</em> external state for every stale job: a stale <code>PR_OPEN</code> polls the PR (merged → <code>DEPLOYING</code>; closed-unmerged → <code>CLOSED</code> + lock release; still open → untouched); a stale <code>DEPLOYING</code> verifies the deploy on Anypoint (healthy → <code>DEPLOYED</code>, else <code>FAILED_DEPLOY</code>); a stale early-stage job is treated as orphaned → <code>FAILED_INTERRUPTED</code> + lock release. Even jobs parked at <code>MUNIT_FAILED</code>/<code>DEP_GUARD_FAILED</code> re-poll the PR, so a manual close is reflected. The pollers, deploy verifier, and notifier are all injectable, so the sweep is pure and unit-tested. In server mode, the same transitions are driven by the HMAC webhook instead.</p>
+
+<h3>6.7 Chained parent → BOM → app upgrades</h3>
+<p>Most apps are standalone. But when the app assess reports <code>connectorGaps</code>, the incompatible connectors are pinned <em>upstream</em> and the app pom can't fix them. The suite handles the three real-world topologies, upgrading upstream first so the app PR's <em>first</em> commit already repoints its <code>&lt;parent&gt;</code>:</p>
+<div class="fig">
+<svg viewBox="0 0 940 170" role="img" aria-label="Chained topologies">
+  <defs><marker id="ah7" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#5b6b7b"/></marker></defs>
+  <g font-size="11" text-anchor="middle">
+   <!-- A -->
+   <text x="120" y="24" font-weight="700" fill="#1b4c9b">A · Standalone (majority)</text>
+   <rect x="70" y="40" width="100" height="40" rx="8" fill="#e7f0ff" stroke="#1b4c9b"/><text x="120" y="64">App upgrade</text>
+   <text x="120" y="104" font-size="10" fill="#5b6b7b">no connectorGaps → done</text>
+   <!-- B -->
+   <text x="470" y="24" font-weight="700" fill="#5b32a8">B · App → parent-pom (the ~80%)</text>
+   <rect x="330" y="40" width="110" height="40" rx="8" fill="#efe8ff" stroke="#5b32a8"/><text x="385" y="60">parent-pom</text><text x="385" y="74" font-size="9">(own repo)</text>
+   <rect x="500" y="40" width="110" height="40" rx="8" fill="#e7f0ff" stroke="#1b4c9b"/><text x="555" y="60">App (LAST)</text><text x="555" y="74" font-size="9">repoint parent</text>
+   <line x1="440" y1="60" x2="498" y2="60" stroke="#5b6b7b" stroke-width="1.4" marker-end="url(#ah7)"/>
+   <text x="470" y="104" font-size="10" fill="#5b6b7b">upgrade parent first, then app once</text>
+   <!-- C -->
+   <text x="820" y="24" font-weight="700" fill="#1b5e37">C · + BOM (rare full chain)</text>
+   <rect x="700" y="40" width="70" height="40" rx="8" fill="#e9f7ee" stroke="#52b788"/><text x="735" y="64">BOM</text>
+   <rect x="782" y="40" width="80" height="40" rx="8" fill="#efe8ff" stroke="#5b32a8"/><text x="822" y="64">parent</text>
+   <rect x="874" y="40" width="58" height="40" rx="8" fill="#e7f0ff" stroke="#1b4c9b"/><text x="903" y="64">App</text>
+   <g stroke="#5b6b7b" stroke-width="1.4" marker-end="url(#ah7)"><line x1="770" y1="60" x2="781" y2="60"/><line x1="862" y1="60" x2="873" y2="60"/></g>
+   <text x="820" y="104" font-size="10" fill="#5b6b7b">BOM → parent → app, in order</text>
+  </g>
+</svg>
+<div class="cap">Figure 7 — The three topologies. Each pom is a tracked job locked per-module; the agent stops and asks at every arrow. “Upgrade the app LAST” folds the parent repoint into the app PR's first commit.</div>
+</div>
+
+<h3>6.8 Proactive fleet scan</h3>
+<p><code>mule-upgrade-scan</code> turns the system from reactive to proactive: it enumerates AMC deployments across environments, classifies each app stale (Mule below a threshold or Java below 17), maps it to a GitHub repo (registry → request → convention), and de-dups across environments. <code>scan_notify</code> diffs against a remembered baseline and pushes a Slack alert only when the stale set <em>changes</em> — so a 15-minute timer reports change, not steady state.</p>
+
+<!-- ============================================================= 7 -->
+<h2 id="prompting" class="anchor">7. Prompting &amp; instruction design</h2>
+<p>Because the model is the conversational driver, the <strong>instruction design lives in each skill's <code>SKILL.md</code></strong> — the frontmatter and prose <em>are</em> the prompt. Key techniques:</p>
+<ul>
+<li><strong>Trigger-phrase routing.</strong> Each <code>SKILL.md</code> frontmatter has a <code>name</code> and a <code>description</code> full of natural trigger phrases (“upgrade mule app to java 17”, “what's the status of job …”, “scan the fleet”). The host auto-invokes the right skill from intent. The conductor's description explicitly positions it as the <em>default human entry point</em>, so a plain request routes to the guided flow, not the raw pipeline.</li>
+<li><strong>The execution contract as a hard prompt.</strong> The “act only through the engine; never guess versions; never hand-edit; a command error is the final answer” rules (§4.3) are stated up front and non-negotiable — this is what prevents hallucinated poms/versions.</li>
+<li><strong>Explicit state machine.</strong> The 11 steps are enumerated with per-step prompts, so the model asks in the right order and never invents a missing input (env is required; it must ask).</li>
+<li><strong>“Present results as prose, never echo raw output.”</strong> The agent is told to pass <code>--quiet</code> (JSON-only) and write a short human summary — this eliminated a real bug where relaying both the JSON and the CLI's human summary produced a duplicated warning list.</li>
+<li><strong>Guardrails baked in:</strong> confirm before executing; treat <code>CONFLICT</code> as “already done, stop”; raise <code>connectorGaps</code>/<code>missingFromMatrix</code> as human-judgement items; never print secrets; collapse noisy “using bundled matrix” warnings into one calm sentence.</li>
+<li><strong>Anti-self-modification.</strong> The suite's own source is READ-ONLY to the agent — even if it believes it found a bug — so it can't “fix” the engine mid-conversation. Defects go through the maintainer.</li>
+</ul>
+<div class="callout ok"><p><strong>Design principle:</strong> constrain the model to do only what it's good at (understanding intent, conversing, summarizing) and forbid it from doing what it's bad at (precise, consequential edits). The prompt is a <em>contract</em>, not a suggestion.</p></div>
+
+<!-- ============================================================= 8 -->
+<h2 id="security" class="anchor">8. Security &amp; access considerations</h2>
+<div class="fig">
+<svg viewBox="0 0 940 180" role="img" aria-label="Auth model">
+  <defs><marker id="ah8" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#5b6b7b"/></marker></defs>
+  <g font-size="11" text-anchor="middle">
+   <rect x="20" y="30" width="150" height="44" rx="8" fill="#eef4ff" stroke="#6a8fd8"/><text x="95" y="50" font-weight="700">MCP / REST client</text><text x="95" y="66" font-size="10" fill="#26406e">Vibes · Agentforce</text>
+   <rect x="20" y="104" width="150" height="44" rx="8" fill="#eef4ff" stroke="#6a8fd8"/><text x="95" y="124" font-weight="700">CI/CD pipeline</text><text x="95" y="140" font-size="10" fill="#26406e">post CI result</text>
+   <rect x="300" y="24" width="160" height="56" rx="9" fill="#eaf2fb" stroke="#0b6bcb"/><text x="380" y="46" font-weight="700" fill="#0b4e97">Bearer guard</text><text x="380" y="64" font-size="10" fill="#0b4e97">constant-time · /mcp, /api</text>
+   <rect x="300" y="98" width="160" height="56" rx="9" fill="#fdeceb" stroke="#e0655a"/><text x="380" y="120" font-weight="700" fill="#8a2a22">HMAC-SHA256</text><text x="380" y="138" font-size="10" fill="#8a2a22">exact bytes · de-dup</text>
+   <rect x="560" y="62" width="180" height="56" rx="9" fill="#e9f7ee" stroke="#52b788"/><text x="650" y="84" font-weight="700">Engine handlers</text><text x="650" y="102" font-size="10" fill="#3a6b52">schema-validated inputs</text>
+   <rect x="800" y="62" width="120" height="56" rx="9" fill="#fff8e6" stroke="#f0c34e"/><text x="860" y="84" font-weight="700" fill="#7a5b00">Secrets</text><text x="860" y="102" font-size="10" fill="#8a6d00">AES ![…] · env</text>
+   <g stroke="#5b6b7b" stroke-width="1.5" marker-end="url(#ah8)">
+     <line x1="170" y1="52" x2="298" y2="52"/><line x1="170" y1="126" x2="298" y2="126"/>
+     <line x1="460" y1="52" x2="558" y2="82"/><line x1="460" y1="126" x2="558" y2="98"/>
+     <line x1="740" y1="90" x2="798" y2="90"/>
+   </g>
+  </g>
+</svg>
+<div class="cap">Figure 8 — Two separate auth paths: a constant-time <em>bearer</em> guard for tool calls, and <em>HMAC-SHA256</em> over exact bytes for CI/CD webhooks. Inputs are schema-validated; secrets never reach the transcript.</div>
+</div>
+<h4>Secrets management</h4>
+<ul>
+<li><strong>MuleSoft secure-property format.</strong> Credentials ship AES-encrypted as <code>![…]</code> (IV-prefixed) in <code>config-secure-&lt;env&gt;.yaml</code>. One key (<code>MULE_CONFIG_KEY</code>) decrypts them at runtime; per-env keys (<code>MULE_CONFIG_KEY_&lt;ENV&gt;</code>) are supported for the day an env is re-encrypted separately.</li>
+<li><strong>Plaintext override precedence.</strong> Every client resolves a secret as: plaintext env var → decrypted YAML → default. So you can rotate a single credential without the key.</li>
+<li><strong>Never leak.</strong> Guardrails forbid printing decrypted secrets or the decryption key to stdout/transcript; <code>.env</code> is git-ignored; <code>.env.example</code> keeps the key empty.</li>
+</ul>
+<h4>Transport &amp; access</h4>
+<ul>
+<li><strong>Bearer auth</strong> (<code>MCP_BEARER_TOKEN</code>) protects <code>/mcp</code> + <code>/api/v1/*</code> with a <em>constant-time</em> compare; unset = open (local dev only). TLS is expected in front for remote hosts.</li>
+<li><strong>HMAC-SHA256</strong> (<code>GITHUB_WEBHOOK_SECRET</code>) authenticates CI/CD webhooks over the <em>exact received bytes</em>, with delivery de-dup via idempotency markers so a replayed delivery can't re-transition a job.</li>
+<li><strong>Schema-contract guard.</strong> Every tool input is validated against its JSON Schema <em>before</em> the handler runs — a violation is a protocol error, never a half-applied action.</li>
+<li><strong>Least privilege:</strong> GitHub token needs only <code>repo</code> scope; the Anypoint connected app needs Runtime/API-Manager read; Slack is a single webhook URL.</li>
+</ul>
+<h4>Change-safety controls (security of the <em>action</em>, not just the transport)</h4>
+<ul>
+<li><strong>Shell safety:</strong> <code>git</code>/<code>gh</code> are invoked via <code>execFile</code>-style calls — inputs are arguments, never interpolated into a shell string (no command injection).</li>
+<li><strong>Stale-plan guard:</strong> a commit aborts if the branch moved since assessment, so a stale plan is never applied over newer work.</li>
+<li><strong>Human-gated writes:</strong> the dry-run gate + explicit confirmation mean no unreviewed change reaches a repo; the PR is opened but <em>never merged</em> by the agent.</li>
+<li><strong>Non-fatal integrations:</strong> a missing/rotated credential or an outage is logged and skipped with a reason — it degrades cleanly instead of failing the pipeline or leaking a stack trace of internals.</li>
+</ul>
+
+<!-- ============================================================= 9 -->
+<h2 id="scale" class="anchor">9. Scalability considerations</h2>
+<div class="cards">
+<div class="card"><b>Per-module single-flight locks</b><span>Locks are keyed <code>&lt;repo&gt;::&lt;pomPath&gt;</code>, so different apps/modules never block each other. A monorepo can have its BOM, parent, and app PRs open at once; a second run of the <em>same</em> pom returns <code>CONFLICT</code> (“already in flight”).</span></div>
+<div class="card"><b>Stateless engine + durable store</b><span>The engine holds no in-memory session; all durable state is atomic JSON files. Many upgrades across many repos run independently and in parallel.</span></div>
+<div class="card"><b>Caching everywhere it pays</b><span>Anypoint token, Exchange matrix, per-connector <code>listVersions</code>, and a ~24h release-notes disk cache — cross-process, file-per-key, and fully non-fatal. A multi-connector assess + upgrade won't re-download the same pages.</span></div>
+<div class="card"><b>Lean-by-default assessment</b><span>The common path skips all live version/drift fetches (~1–3s); the slow, advisory lookups are opt-in tools. Fast where it's used most.</span></div>
+<div class="card"><b>Polling ↔ event-driven</b><span>Skills mode polls the deploy tail (fine for tens of jobs on a timer); server mode adds the HMAC webhook for event-driven CD at fleet scale without polling.</span></div>
+<div class="card"><b>Fleet scale, de-duped</b><span><code>scan_fleet</code> enumerates the whole org; <code>scan_notify</code> only alerts on <em>change</em>, so a frequent schedule doesn't spam. The server is a thin transport, so it scales horizontally behind a load balancer.</span></div>
+</div>
+
+<!-- ============================================================= 10 -->
+<h2 id="reuse" class="anchor">10. Reusability &amp; maintainability</h2>
+<ul>
+<li><strong>Composable, single-responsibility skills.</strong> Each does one thing and is usable à la carte or composed. New capability = new skill, not a fork.</li>
+<li><strong>One engine, two transports.</strong> The CLIs and the server tools call the <em>same handlers</em>; <code>server/schemas/*.json</code> are the single source of truth for every tool's input (MCP <code>tools/list</code>, the REST facade, and validation all read them). No drift between IDE and server behavior.</li>
+<li><strong>Data-driven rules.</strong> The compatibility matrix, the connector notes-map (artifactId → release-notes URL), and the app-registry are YAML data files. Tuning the upgrade policy is editing data, not code — and <code>mule-upgrade-matrix-update</code> maintains the matrix safely (text-preserving, guarded, dry-run by default).</li>
+<li><strong>Injectable dependencies.</strong> The orchestrator, PR client, reconcile pollers, deploy verifier, and notifiers are all injectable, so the whole pipeline is unit-testable with zero network. This is both a testing win and a maintainability win (swap an integration without touching the core).</li>
+<li><strong>Byte-preserving rewrites.</strong> No reflow means small, reviewable diffs and no accidental churn — the code stays maintainable because its <em>output</em> is legible.</li>
+<li><strong>Docs per skill.</strong> Every skill's <code>SKILL.md</code> documents flags, outcome objects, and exit codes; <code>AGENTS.md</code> is the operating contract; the docs folder has setup + live-integration runbooks.</li>
+</ul>
+
+<!-- ============================================================= 11 -->
+<h2 id="testing" class="anchor">11. Testing approach</h2>
+<p>Testing is layered, deterministic, and offline-first — a direct consequence of the injectable-deps design.</p>
+<ul>
+<li><strong>Unit + behavior suites</strong> via the built-in <code>node --test</code> runner (<code>npm test</code>), one suite per skill: assessment, rewrites, PR/Git-Data sequence, job store + state machine, reconcile, orchestrate, parent-pom, scan, server. Several hundred tests, all runnable with no secrets and no network.</li>
+<li><strong>MUnit parity.</strong> The Mule app's MUnit cases (e.g. the DataWeave assessment suite, the GitHub atomic-commit/open-PR/rollback suite, the job-status suite) are <strong>ported 1:1</strong> as Node tests, so the port is provably faithful.</li>
+<li><strong>Golden + guard tests</strong> for the rewrites (exact <code>from → to</code>, byte-preservation), the dry-run gate (no lock/job/edit on <code>dryRun:true</code>), the state-machine transitions, the stale-plan conflict, branch-collision suffixing, and the local-mode <code>gh</code>→REST fallback.</li>
+<li><strong>Injected fetch/pollers</strong> make every network path deterministic — the Git Data API endpoint <em>order</em> is asserted, reconcile transitions are driven by injected pollers with a fixed clock.</li>
+<li><strong>Two-phase manual verification</strong> (documented runbooks): first prove every skill from the terminal (offline, then live), <em>then</em> repeat the same functions inside Vibes — isolating “is the toolkit healthy?” from “is Vibes wired?”.</li>
+</ul>
+<div class="callout tip"><p><strong>Primary-scenario evidence:</strong> the happy path (assess → PR_OPEN), the already-upgraded short-circuit, CONFLICT on a held lock, the FAILED_ASSESS/FAILED_COMMIT taxonomy with lock release, and the deploy-tail transitions are all covered by tests <em>and</em> exercised live in the runbook (real PR, Jira ticket, Slack post, poll advancing the job, rollback/reapply/delete).</p></div>
+
+<!-- ============================================================= 12 -->
+<h2 id="risks" class="anchor">12. Risks, trade-offs &amp; known limitations</h2>
+<table>
+<thead><tr><th>Area</th><th>Risk / limitation</th><th>Mitigation / rationale</th></tr></thead>
+<tbody>
+<tr><td>Deploy tail (skills mode)</td><td>Polling has latency vs. instant webhooks, and needs a timer/cron.</td><td>Skills can't host a listener — polling is the correct trade-off for a server-free install. Runtime B adds the HMAC webhook for event-driven CD when needed.</td></tr>
+<tr><td>Fleet scan coverage</td><td>v1 scans CloudHub 2.0 / Runtime Fabric (AMC) only — not CloudHub 1.0 or on-prem/hybrid ARM.</td><td>Stated explicitly in the report's <code>coverageNote</code> so the count is never mistaken for the whole estate. Additional surfaces are a planned enhancement.</td></tr>
+<tr><td>Deployed-state depth</td><td>ARM exposes runtime/Java but <em>not</em> deployed connector versions.</td><td>The check informs the runtime/Java picture only; connector pins always come from the matrix. Said plainly whenever asked.</td></tr>
+<tr><td>“Latest” connector versions</td><td>Newest published may be a breaking major or not yet Java-17-verified.</td><td>The matrix pin is the authoritative default; “latest” is advisory and never auto-adopted — an explicit, flagged opt-in.</td></tr>
+<tr><td>Matrix floors rot</td><td>Static gating pins fall behind newer patch releases over time.</td><td><code>check_drift</code> audits them against live Maven metadata and warns; <code>mule-upgrade-matrix-update</code> adopts bumps under human review (LTS-line / in-major constrained).</td></tr>
+<tr><td>Windows <code>gh</code> quirk</td><td><code>spawnSync gh ENOENT</code> even when <code>gh</code> is installed.</td><td>Local-mode PR creation auto-falls back to the GitHub REST API using the same token; the branch is already pushed, so a token alone completes it.</td></tr>
+<tr><td>Human still required</td><td>The agent opens a PR but never merges or deploys autonomously.</td><td><em>By design.</em> A human reviews/merges; the agent tracks and can roll back. Safety over full autonomy for production changes.</td></tr>
+<tr><td>LLM variability</td><td>A model could, in principle, try to improvise around the tools.</td><td>The execution contract + dry-run gate + read-only-source rule confine the model to conversation; all consequential output is deterministic engine code.</td></tr>
+<tr><td>Live-data dependency</td><td>Exchange/release-notes/Anypoint could be unreachable.</td><td>Every live call is non-fatal and falls back to the bundled matrix / a skip-with-reason; the assessment stays correct offline.</td></tr>
+</tbody>
+</table>
+
+<!-- ============================================================= 13 -->
+<h2 id="decisions" class="anchor">13. Key design decisions &amp; alternatives considered</h2>
+<table>
+<thead><tr><th>Decision</th><th>Alternative considered</th><th>Why this way</th></tr></thead>
+<tbody>
+<tr><td>Deterministic rules engine + curated matrix</td><td>Let the LLM choose versions/edits from reasoning</td><td>Correctness must be exact, auditable, and repeatable; an LLM would hallucinate versions and produce non-reproducible diffs.</td></tr>
+<tr><td>Skills-native suite (Agent Skills / <code>SKILL.md</code>)</td><td>A single monolithic CLI, or a pure prompt library</td><td>Composability, per-skill tests, and host-native auto-invocation; à-la-carte reuse; clean layering.</td></tr>
+<tr><td>Full-clone assessment</td><td>Paged GitHub Contents-API reads (as the original did)</td><td>Sees custom <code>.java</code>, DW POJOs, matrix <code>java:</code> blocks, and env-var CI Java versions the regex transforms missed.</td></tr>
+<tr><td>Synchronous run + polling tail</td><td>Async worker + inbound webhooks (the original)</td><td>A skill invocation is the worker; no server, no callback endpoints, no idempotency dance for the happy path. Webhook is still available in server mode.</td></tr>
+<tr><td>Byte-preserving rewrites (in-place token edits)</td><td>Parse → model → re-serialize (dump) the pom/YAML</td><td>A dumper strips comments and reflows files; byte-fidelity keeps PR diffs minimal and reviewable.</td></tr>
+<tr><td>Local JSON job store</td><td>A database / the Mule Object Store</td><td>Zero infrastructure, crash-safe atomic writes + exclusive-create locks; mirrors the original's partitions 1:1.</td></tr>
+<tr><td>Hybrid matrix (static gating + live connectors)</td><td>Fully live, or fully static</td><td>Gating rules aren't on release-notes pages (must be static/authoritative); connector versions benefit from live enrichment but must never auto-adopt a breaking “latest”.</td></tr>
+<tr><td>Per-module locking</td><td>Per-app (coarser) locking</td><td>Enables monorepo concurrency and independent parallel upgrades without false conflicts.</td></tr>
+<tr><td>CLI ⇄ MCP parity from one codebase</td><td>Separate IDE and server implementations</td><td>One source of truth (the schemas + handlers); no behavioral drift; less to maintain.</td></tr>
+<tr><td>Preview-before-write + read-only source</td><td>Let the agent act (and self-fix bugs) freely</td><td>Trust for production changes: nothing is written without an explicit yes, and the agent can't “fix” the engine mid-run.</td></tr>
+</tbody>
+</table>
+
+<!-- ============================================================= 14 -->
+<h2 id="mvp" class="anchor">14. The MVP</h2>
+<p class="lead">A working, demonstrable, technically sound agent-enabled workflow that upgrades a MuleSoft app to Java 17 end-to-end, with a human in control.</p>
+
+<h3>14.1 The working agent / workflow</h3>
+<p>The MVP is the <code>mule-upgrade-agent</code> conductor driving the full pipeline, runnable today in Claude Code or MuleSoft Vibes (skills) or via the hosted MCP server (Agentforce). The core use case — <em>“help me upgrade a Mule app to Java 17”</em> — runs through assess → version choice → dry-run preview → confirm → PR → track, and can chain a shared parent-pom/BOM when required.</p>
+
+<h3>14.2 Clearly defined input and output</h3>
+<div class="grid2">
+<div>
+<h4>Inputs</h4>
+<ul>
+<li><b>Source:</b> <code>local</code> clone path, or <code>api</code> owner/repo (+ branch, + optional module sub-path).</li>
+<li><b>Environment:</b> <code>dev|test|prod</code> (required — selects config + credentials).</li>
+<li><b>Deployed name</b> (optional): for the verbatim ARM check.</li>
+<li><b>Version strategy:</b> <code>min</code> (default) · <code>first-compatible</code> · <code>in-major</code> · <code>latest</code> · <code>manual</code>.</li>
+<li><b>Confirmation:</b> an explicit “yes” after the dry-run.</li>
+</ul>
+</div>
+<div>
+<h4>Outputs</h4>
+<ul>
+<li><b>Assessment:</b> current → target runtime/Java, the file-edit list, <code>connectorsInApp[]</code>, <code>connectorGaps</code>, warnings.</li>
+<li><b><code>PLAN_PREVIEW</code></b>: the exact plan (nothing written).</li>
+<li><b><code>PR_OPEN</code></b>: <code>{jobId, branchName, commitSha, prNumber, prUrl}</code> + Jira ticket + Slack post.</li>
+<li><b>Job status:</b> stage + sub-checks + <code>nextPollSeconds</code>, advancing PR&nbsp;open → deploying → deployed.</li>
+<li><b>On failure:</b> a terminal status with a reason + an offered rollback.</li>
+</ul>
+</div>
+</div>
+
+<h3>14.3 Demonstration of the main use case</h3>
+<p>See <a href="./VIBES-BEGINNER-GUIDE.html">the beginner guide, Step 9</a> for the full chat transcript and a per-skill runbook. In short: the operator says “upgrade orders-api to Java 17,” answers a few questions, reviews the dry-run plan, says “yes,” and receives a real PR link + job id; the agent then tracks the merge/CI/deploy and offers rollback if the deploy fails.</p>
+
+<h3>14.4 Assumptions &amp; limitations</h3>
+<ul>
+<li>Target is <strong>Mule 4.9.18 LTS / Java 17</strong>; the compatibility matrix encodes the safe pins.</li>
+<li>The operator has GitHub access (token or <code>gh</code>) and, for live features, Anypoint/Jira/Slack credentials — all optional and non-fatal if absent.</li>
+<li>The agent <strong>opens</strong> a PR; a human reviews, merges, and owns the production deploy decision.</li>
+<li>Fleet scan currently covers CloudHub 2.0 / Runtime Fabric; deployed-state doesn't expose connector versions (see §12).</li>
+</ul>
+
+<h3>14.5 Evidence the MVP has been tested for the primary scenarios</h3>
+<ul>
+<li><strong>Automated:</strong> several hundred <code>node --test</code> cases (many ported 1:1 from the original app's MUnit suites) cover assessment, the eight rewrites, the Git Data API commit/PR/rollback sequence, the job state machine, reconcile transitions, the dry-run gate, and the parent-pom flow — all deterministic and offline.</li>
+<li><strong>Live end-to-end:</strong> the <a href="./WIRE-LIVE-INTEGRATIONS.html">live-integration runbook</a> exercises every skill against real GitHub/Anypoint/Jira/Slack (real PR opened, J1U ticket created, Slack posted, poll advancing the job, rollback/reapply/delete), then repeats the same functions inside Vibes.</li>
+<li><strong>Failure modes verified:</strong> 401 credentials, <code>STALE_PLAN</code>, <code>CONFLICT</code>, manual PR close (→ <code>CLOSED</code>), and the Windows <code>gh</code>→REST fallback are all handled and reported verbatim rather than routed around.</li>
+</ul>
+<div class="callout ok"><p><strong>Bottom line:</strong> the MVP is functional, demonstrable, and technically sound — a deterministic engine wrapped in a safe, conversational agent, with automated tests and a live runbook proving the primary scenarios.</p></div>
+
+<!-- ============================================================= 15 -->
+<h2 id="glossary" class="anchor">15. Glossary</h2>
+<table>
+<tbody>
+<tr><td><b>Agent Skill / <code>SKILL.md</code></b></td><td>A folder with instruction frontmatter (name + trigger phrases) + scripts that a host LLM auto-invokes. The unit of this suite.</td></tr>
+<tr><td><b>Conductor</b></td><td><code>mule-upgrade-agent</code> — the human-in-the-loop conversation layer (the 11-step state machine).</td></tr>
+<tr><td><b>Orchestrator</b></td><td><code>mule-upgrade</code> — the non-interactive pipeline (assess → apply → commit → PR → track).</td></tr>
+<tr><td><b>MCP</b></td><td>Model Context Protocol — the JSON-RPC tool interface a remote agent (Agentforce) uses; mirrored by a REST facade.</td></tr>
+<tr><td><b>ChangePlan</b></td><td>The byte-level list of file edits the assessment emits; consumed by apply.</td></tr>
+<tr><td><b>Compatibility matrix</b></td><td>The curated Java-17-safe versions (static gating pins + live-enriched connector versions).</td></tr>
+<tr><td><b>Connector gap</b></td><td>A below-target connector pinned upstream (parent/BOM) that the app pom can't fix — triggers the chained flow.</td></tr>
+<tr><td><b>Dry-run / <code>PLAN_PREVIEW</code></b></td><td>A full plan that writes nothing; the safety gate before any real change.</td></tr>
+<tr><td><b>Stale-plan guard</b></td><td>Aborts a commit if the repo HEAD moved since assessment.</td></tr>
+<tr><td><b>Single-flight lock</b></td><td>A per-module lock (<code>&lt;repo&gt;::&lt;pomPath&gt;</code>) preventing two concurrent upgrades of the same pom.</td></tr>
+<tr><td><b>Reconcile</b></td><td>The polling sweep that advances/fails stale jobs (skills mode); the webhook does this in server mode.</td></tr>
+<tr><td><b>ARM / AMC</b></td><td>Anypoint Runtime Manager / Application Manager — deployed-state + fleet scan sources.</td></tr>
+<tr><td><b>Secure property (<code>![…]</code>)</b></td><td>MuleSoft's AES-encrypted config value format; decrypted at runtime with <code>MULE_CONFIG_KEY</code>.</td></tr>
+</tbody>
+</table>
+
+<hr>
+<p class="subtitle">Companion docs in this folder: <a href="./VIBES-BEGINNER-GUIDE.html">VIBES-BEGINNER-GUIDE</a> (set up &amp; test every skill) · <a href="./SETUP-VIBES.html">SETUP-VIBES</a> · <a href="./SETUP-AGENTFORCE.html">SETUP-AGENTFORCE</a> · <a href="./WIRE-LIVE-INTEGRATIONS.html">WIRE-LIVE-INTEGRATIONS</a> · <a href="./GETTING-STARTED.html">GETTING-STARTED</a>.</p>
+
+</div>
+</body>
+</html>

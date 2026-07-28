@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "assess_app",
+  "title": "assess_app",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["appName"],
+  "properties": {
+    "appName": {
+      "type": "string",
+      "description": "Name of the MuleSoft application as it appears in Anypoint Runtime Manager."
+    },
+    "environment": {
+      "type": "string",
+      "description": "Anypoint environment where the app runs (e.g. Production, Staging, Development)."
+    },
+    "jiraTicketId": {
+      "type": "string",
+      "description": "Optional Jira ticket ID to link the assessment to a migration ticket."
+    },
+    "repo": {
+      "type": "string",
+      "description": "GitHub repository override (used only when the app is not in the registry)."
+    },
+    "headSha": {
+      "type": "string",
+      "description": "Repo HEAD at assess time (stale-plan anchor)."
+    },
+    "owner": {
+      "type": "string",
+      "description": "GitHub owner/org override (used only when the app is not in the registry)."
+    },
+    "appPath": {
+      "type": "string",
+      "description": "Path to the Mule module within the repo (e.g. \".\" for repo root)."
+    },
+    "orgId": {
+      "type": "string",
+      "description": "Anypoint organization ID override (registry/convention fallback otherwise)."
+    },
+    "branch": {
+      "type": "string",
+      "description": "Explicit branch. Highest precedence over registry default / discovered default."
+    },
+    "deployedApiName": {
+      "type": "string",
+      "description": "Exact deployed application name in Anypoint Runtime Manager to look up (matched VERBATIM in the given environment). When found, the running runtime/Java/status/replicas/last-deploy are reported on deployedStateCheck; when omitted, not configured, or not found, the check is skipped with a stated reason. ARM does not expose deployed connector versions, so this informs the runtime/Java picture only. Non-fatal."
+    },
+    "includeVersions": {
+      "type": "boolean",
+      "description": "Opt in to the rich connector version MENU (connectorChoices[]: options, firstCompatible, latestInMajor, latest, staleness). Default false — assess is LEAN and the ChangePlan's connectorsInApp[] already shows each app connector's current vs matrix pin. For the full menu prefer the resolve_versions tool. Adds live Exchange + release-notes fetches (slower)."
+    },
+    "includeDrift": {
+      "type": "boolean",
+      "description": "Opt in to the gating matrix-drift advisory (matrixDrift: runtime patch, mule-maven-plugin, MUnit plugins vs live Maven metadata). Default false. For the standalone drift audit prefer the check_drift tool. Adds live metadata fetches (slower)."
+    }
+  }
+}

@@ -23,7 +23,10 @@
 import { assess } from "../../mule-upgrade-assess/scripts/assess.js";
 import { applyChangePlan } from "../../mule-upgrade-apply/scripts/apply_edits.js";
 import { commitAndPrApi, commitAndPrLocal } from "../../mule-upgrade-pr/scripts/commit_pr.js";
+import { GitHubApi } from "../../mule-upgrade-pr/scripts/lib/gh_api.js";
+import { runParentPomJob } from "../../mule-upgrade-parent-pom/scripts/parent_pom.js";
 import * as store from "../../mule-upgrade-job/scripts/jobstore.js";
+import { routeUpgradeStrategy } from "./lib/topology_route.js";
 import {
   slackNotify,
   jiraComment,
@@ -46,7 +49,16 @@ import {
  * @param {string} [opts.headSha]       repo HEAD at assess time (stale-plan anchor)
  * @param {string} [opts.jiraBaseUrl]
  * @param {object} [opts.assessResult]  pre-computed AssessmentResult (skip the assess step)
- * @param {object} [opts.deps]          injectable {assess, applyChangePlan, commitApi, commitLocal, notify}
+ * @param {object} [opts.assessOpts]    extra options forwarded to assess() (appPath, environment, orgId, versionStrategy, connectorSelections)
+ * @param {object} [opts.approvedChangePlan]  operator-approved ChangePlan recorded on the job
+ * @param {boolean} [opts.dryRun]       preview ONLY: assess + build the plan, then return status
+ *   PLAN_PREVIEW / ALREADY_UPGRADED WITHOUT acquiring a lock, applying edits, or opening a PR.
+ *   The confirmation gate for the interactive agent — nothing is written and no job is created.
+ * @param {boolean} [opts.routeParentPom] when the assessment routes to "parent-pom" (no app-pom
+ *   edits but inherited connector gaps), dispatch the parent-pom job (default true). Set false to
+ *   force the plain app pipeline (which would then no-op to ALREADY_UPGRADED).
+ * @param {object} [opts.deps]          injectable {assess, applyChangePlan, commitApi, commitLocal,
+ *   notify, runParentPomJob, parentPomDeps}
  * @returns {Promise<object>}
  */
 export async function runUpgrade(opts) {
@@ -58,6 +70,7 @@ export async function runUpgrade(opts) {
     repo,
     repoRoot = opts.repo,
     headSha,
+    dryRun = false,
     jiraBaseUrl = process.env.JIRA_BASE_URL || "",
     deps = {},
   } = opts;
@@ -76,18 +89,35 @@ export async function runUpgrade(opts) {
   // ── (1) pre-flight assess (synchronous) ────────────────────────────────────────────────
   let assessment = opts.assessResult;
   if (!assessment) {
-    const { result } = await doAssess({ repo, appName, headSha, ...(opts.assessOpts ?? {}) });
+    const { result } = await doAssess({
+      repo,
+      appName,
+      headSha,
+      // Forward GitHub source/coords when running in API mode (no local clone).
+      ...(mode === "api" && coords
+        ? { source: "github", owner: coords.owner, repoName: coords.repo, branch: coords.defaultBranch }
+        : {}),
+      ...(opts.assessOpts ?? {}),
+    });
     assessment = result;
   }
   const changePlan = assessment.changePlan;
   const warnings = assessment.warnings ?? [];
 
-  // short-circuit: nothing to change → ALREADY_UPGRADED (no lock, no job)
-  if (!changePlan || (changePlan.fileEdits ?? []).length === 0) {
+  // ── (1a) topology routing (Tier 2c) — pick the strategy from the ChangePlan ──────────────
+  // "app-pom"    → the app's own pom carries edits: run the app pipeline below.
+  // "parent-pom" → no app edits but the app inherits connector(s) below the matrix from a
+  //                parent/BOM: the app pom is clean, the shared parent must be bumped. Hand off to
+  //                the mule-upgrade-parent-pom job (unless this run already IS a parent-pom pass).
+  // "none"       → nothing to change anywhere → ALREADY_UPGRADED (no lock, no job).
+  const route = routeUpgradeStrategy(changePlan);
+
+  if (route.strategy === "none") {
     return {
       status: "ALREADY_UPGRADED",
       appName,
       environment,
+      topology: route.topology,
       currentRuntime: assessment.currentRuntime ?? "unknown",
       currentJavaVersion: assessment.currentJavaVersion ?? "unknown",
       targetRuntime: changePlan?.targetRuntime,
@@ -96,6 +126,93 @@ export async function runUpgrade(opts) {
         assessment.currentRuntime ?? "unknown"
       }, Java ${assessment.currentJavaVersion ?? "unknown"}). No upgrade required.`,
       warnings,
+    };
+  }
+
+  // parent-pom route: the fix belongs on the shared parent/BOM, not the app pom. Dispatch the
+  // parent-pom job (the two skills call each other). Guarded by opts.routeParentPom !== false so a
+  // caller can force the plain app pipeline, and skipped in dryRun (the preview shows the routing).
+  if (route.strategy === "parent-pom" && !dryRun && opts.routeParentPom !== false) {
+    const doParentPomJob = deps.runParentPomJob ?? runParentPomJob;
+    const parent = await doParentPomJob({
+      owner: coords?.owner,
+      repo: coords?.repo,
+      branch: coords?.defaultBranch,
+      environment,
+      jiraTicketId,
+      jiraBaseUrl,
+      mode,
+      repoRoot,
+      matrixOpts: opts.assessOpts?.matrixOpts ?? {},
+      deps: deps.parentPomDeps ?? {},
+    });
+    // Annotate the parent-pom result so the caller can see WHY it was routed here.
+    return {
+      ...parent,
+      routedVia: "parent-pom",
+      topology: route.topology,
+      routeReason: route.reason,
+      connectorGaps: route.connectorGaps,
+      appName: parent.appName ?? appName,
+      warnings: [...(warnings ?? []), ...(parent.warnings ?? [])],
+    };
+  }
+
+  // The app pipeline below only makes sense for the "app-pom" route (fileEdits > 0). If we're here
+  // with a parent-pom route that was NOT dispatched (routeParentPom:false) — and it isn't a dry-run
+  // (which previews below) — there is nothing the APP pom can do: report ALREADY_UPGRADED rather
+  // than create a zero-edit job. The inherited gap remains visible in warnings/connectorGaps.
+  if (route.strategy !== "app-pom" && !dryRun) {
+    return {
+      status: "ALREADY_UPGRADED",
+      appName,
+      environment,
+      topology: route.topology,
+      currentRuntime: assessment.currentRuntime ?? "unknown",
+      currentJavaVersion: assessment.currentJavaVersion ?? "unknown",
+      targetRuntime: changePlan?.targetRuntime,
+      targetJavaVersion: changePlan?.targetJavaVersion,
+      connectorGaps: route.connectorGaps,
+      message:
+        `App '${appName}' pom needs no edits. ${route.reason} ` +
+        `(Parent-pom routing was disabled for this run.)`,
+      warnings,
+    };
+  }
+
+  // ── (1b) dry-run gate — the interactive agent's CONFIRM step ────────────────────────────
+  // Preview what the upgrade WOULD do (assess + connector choices + edits + warnings) without
+  // acquiring the app lock, applying any transform, creating a job, or opening a PR. Nothing is
+  // written. The agent shows this to the operator and re-invokes with dryRun:false to execute.
+  if (dryRun) {
+    return {
+      status: "PLAN_PREVIEW",
+      dryRun: true,
+      appName,
+      environment,
+      mode,
+      currentRuntime: assessment.currentRuntime ?? "unknown",
+      currentJavaVersion: assessment.currentJavaVersion ?? "unknown",
+      targetRuntime: changePlan.targetRuntime,
+      targetJavaVersion: changePlan.targetJavaVersion,
+      topology: changePlan.topology,
+      // Tier 2c: surface WHERE a real run would route (app-pom | parent-pom | none) so the agent
+      // can tell the operator whether this becomes an app PR or a parent/BOM PR before confirming.
+      route: { strategy: route.strategy, reason: route.reason },
+      filesToChange: changePlan.filesToChange ?? [],
+      fileEdits: changePlan.fileEdits ?? [],
+      connectorGaps: changePlan.connectorGaps ?? [],
+      connectorChoices: assessment.connectorChoices ?? [],
+      versionSelections: assessment.versionSelections ?? [],
+      deployedStateCheck: assessment.deployedStateCheck ?? null,
+      warnings,
+      message:
+        `DRY RUN for '${appName}': route=${route.strategy}; ` +
+        `${(changePlan.fileEdits ?? []).length} app file edit(s), ` +
+        `${(changePlan.connectorGaps ?? []).length} inherited connector gap(s) ` +
+        `(runtime ${assessment.currentRuntime ?? "?"} → ${changePlan.targetRuntime}, Java ` +
+        `${assessment.currentJavaVersion ?? "?"} → ${changePlan.targetJavaVersion}). ` +
+        `${route.reason} Nothing was written. Re-run with dryRun=false to execute.`,
     };
   }
 
@@ -142,8 +259,27 @@ export async function runUpgrade(opts) {
 
     store.setStatus(jobId, "COMMITTING");
 
-    // apply transforms (SKILL 2) → staged files [{path, content}]
-    const stagedFiles = doApply(changePlan, repoRoot);
+    // apply transforms (SKILL 2) → staged files [{path, content}]. In API mode there is NO local clone
+    // (repoRoot is undefined), so applyChangePlan can't read files off disk — it must read each file
+    // over the GitHub Contents API at the assessed ref. We build that reader here and pass it through.
+    // (Skipped when a test injects deps.applyChangePlan — that mock supplies its own staged files —
+    // which also avoids constructing GitHubApi, whose ctor requires a token.)
+    let apiReadFile;
+    if (mode === "api" && !deps.applyChangePlan) {
+      const gh = deps.gh ?? new GitHubApi();
+      const ref = changePlan.headSha || coords?.defaultBranch || undefined;
+      apiReadFile = async (p) => {
+        const resp = await gh.getContents(coords.owner, coords.repo, p, ref);
+        if (typeof resp?.content !== "string" || resp.content === "") {
+          throw new Error(
+            `Could not read "${p}" from ${coords?.owner}/${coords?.repo}@${ref ?? "default"} ` +
+              `(path may be a directory, empty, or too large).`
+          );
+        }
+        return Buffer.from(resp.content.replace(/[\r\n\t ]/g, ""), "base64").toString("utf-8");
+      };
+    }
+    const stagedFiles = await doApply(changePlan, repoRoot, apiReadFile);
 
     // commit + open PR (SKILL 3)
     const commitArgs = {
@@ -155,10 +291,9 @@ export async function runUpgrade(opts) {
       jiraBaseUrl,
       warnings,
     };
-    const pr =
-      mode === "local"
-        ? doCommitLocal({ ...commitArgs, repoRoot })
-        : await doCommitApi({ ...commitArgs, coords });
+    const pr = await (mode === "local"
+      ? doCommitLocal({ ...commitArgs, repoRoot, coords })
+      : doCommitApi({ ...commitArgs, coords }));
 
     store.setStatus(jobId, "COMMITTED", {
       branchName: pr.branchName,
@@ -174,7 +309,14 @@ export async function runUpgrade(opts) {
     if (pr.branchName) store.putBranchIndex(pr.branchName, jobId);
 
     // notify (Slack + Jira) — non-fatal
-    const slackText = prOpenedSlackText({ appName, prUrl: pr.prUrl, jobId, jiraTicketId, jiraBaseUrl, warnings });
+    const slackText = prOpenedSlackText({
+      appName,
+      prUrl: pr.prUrl,
+      jobId,
+      jiraTicketId,
+      jiraBaseUrl,
+      warnings,
+    });
     await notifiers.slackNotify(slackText);
     await notifiers.jiraComment(
       jiraTicketId,

@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "reconcile",
+  "title": "reconcile",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "staleSeconds": {
+      "type": "number",
+      "description": "Idle seconds before a job is considered stale (defaults to config)."
+    }
+  }
+}

@@ -15,6 +15,7 @@ import { AnypointClient, makeDeployVerifier } from "./lib/anypoint.js";
 import { slackNotify } from "./lib/notify.js";
 import { resolveCoordinates } from "../../../lib_shared/coordinates.js";
 import { GitHubApi } from "../../mule-upgrade-pr/scripts/lib/gh_api.js";
+import { requireEnv } from "../../../lib_shared/config.js";
 
 function parseArgs(argv) {
   const out = { _: [] };
@@ -43,7 +44,14 @@ async function main() {
 
   if (cmd === "start") {
     if (!args.app) return fail(2, "start requires --app");
-    if (!args.repo && args.mode !== "api") return fail(2, "start requires --repo (local clone for assess/apply)");
+    if (!args.repo && args.mode !== "api")
+      return fail(2, "start requires --repo (local clone for assess/apply)");
+    let environment;
+    try {
+      environment = requireEnv(args.env); // mandatory: --env or MULE_UPGRADE_ENV, no default
+    } catch (e) {
+      return fail(2, e.message);
+    }
     try {
       // Resolve coordinates from --coords if given, else via pf-resolve-coordinates parity:
       // registry (app-registry.yaml) → request overrides → config convention → live default-branch.
@@ -63,20 +71,40 @@ async function main() {
         }
         coords = await resolveCoordinates({ appName: args.app, request, deps: { getRepo } });
       }
+      // Optional per-connector manual selections: --connector-selections '{"artifactId":"version"}'.
+      const connectorSelections = jsonArg(args, "connector-selections") ?? undefined;
       const result = await runUpgrade({
         appName: args.app,
-        environment: args.env || "dev",
+        environment,
         jiraTicketId: args.jira || null,
         mode: args.mode || "api",
         coords,
         repo: args.repo,
         repoRoot: args["repo-root"] || args.repo,
         headSha: args["head-sha"],
+        // --dry-run: preview the plan (assess + edits + connector choices) without writing anything.
+        dryRun: Boolean(args["dry-run"]),
         jiraBaseUrl: args["jira-base-url"] || process.env.JIRA_BASE_URL || "",
         assessOpts: {
           appPath: args["app-path"],
-          releaseNotesUrl: args["release-notes-url"],
           noFetch: Boolean(args["no-fetch"]),
+          // EPIC B — connector version CHOICE (forwarded so the plan pins the chosen versions).
+          versionStrategy: args["version-strategy"],
+          connectorSelections,
+          // EPIC C — verbatim deployed-state (ARM) lookup. Defaults to the app name so the live
+          // Runtime Manager check runs inline (matching the MCP start_upgrade behavior); override the
+          // exact RM app name with --deployed-api-name and the Anypoint env label with --env-name.
+          deployedApiName: args["deployed-api-name"] ?? args.app,
+          environment: args["env-name"] ?? environment,
+          // Chained flow: fold the app's <parent> repoint into THIS (first) PR commit + show it in the
+          // dry-run. Pass --parent-ref-artifact + --parent-ref-version (optional --parent-ref-group).
+          parentRef: args["parent-ref-version"]
+            ? {
+                groupId: args["parent-ref-group"] || undefined,
+                artifactId: args["parent-ref-artifact"] || undefined,
+                toVersion: args["parent-ref-version"],
+              }
+            : undefined,
         },
       });
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
@@ -97,7 +125,7 @@ async function main() {
       const res = await runReconcile({
         staleSeconds,
         nowMs: Date.parse(new Date().toISOString()),
-        verifyDeploy,
+        verifyDeploy: /** @type {(rec:any) => Promise<{status:string, detail?:any}>} */ (verifyDeploy),
         notify: (ev) => void notify(ev),
       });
       process.stdout.write(JSON.stringify(res, null, 2) + "\n");
@@ -124,10 +152,13 @@ async function main() {
   fail(
     2,
     "usage:\n" +
-      "  node upgrade.js start --app <name> [--env <env>] [--mode api|local] [--coords <json>]\n" +
+      "  node upgrade.js start --app <name> --env <dev|local|prod> [--mode api|local] [--coords <json>]\n" +
+      "         --env is REQUIRED (or set MULE_UPGRADE_ENV) — no default, mirrors Mule's -Denv\n" +
       "         coords auto-resolve (registry→request→config→live branch) unless --coords given:\n" +
       "         [--owner o] [--repo-name r] [--app-path p] [--org-id id] [--branch b]\n" +
-      "         [--repo <local-clone-path>] [--repo-root <path>] [--head-sha <sha>] [--jira <t>] [--jira-base-url <u>] [--release-notes-url <u>] [--no-fetch]\n" +
+      "         [--repo <local-clone-path>] [--repo-root <path>] [--head-sha <sha>] [--jira <t>] [--jira-base-url <u>] [--no-fetch]\n" +
+      "         [--dry-run] preview the plan (no writes) · [--version-strategy min|first-compatible|in-major|latest|manual] [--connector-selections '{\"artifactId\":\"version\"}']\n" +
+      "         [--parent-ref-artifact <a> --parent-ref-version <v> [--parent-ref-group <g>]] chained: fold the app's <parent> repoint into THIS first PR commit\n" +
       "  node upgrade.js poll [--stale-seconds N] [--watch --interval <sec>]"
   );
 }

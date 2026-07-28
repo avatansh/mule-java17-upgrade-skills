@@ -16,7 +16,16 @@
 #       "<orgId>/java17-compatibility-matrix/1.0.0"
 #   Bump the version (and config.yaml matrix.exchange.version) when publishing a new revision.
 #   Keep this bundled copy in sync so the fallback stays accurate.
-schemaVersion: "1.1"
+#
+# AUTHORITY MODEL (read before editing connector versions):
+#   This matrix is the AUTHORITATIVE source for the Java-17-SAFE judgment. Live enrichment
+#   (resolve_versions.js: Exchange Graph API for published versions + the curated
+#   connector-notes-map for each connector's OpenJDK/Mule-runtime compatibility table) adds a
+#   run's connector firstJava17Version + latest / latest-in-major, but "latest published" is
+#   deliberately NOT auto-adopted as the pin, because a newer version may be a breaking major or
+#   not yet Java-17-verified. Live data drives the version CHOICE offered to the user and a
+#   staleness advisory; this curated matrix remains the fallback and the compatibility floor.
+schemaVersion: "1.2"
 target:
   runtime: "4.9.18"          # app.runtime AND app.runtime.semver
   javaVersion: "17"
@@ -34,7 +43,9 @@ gating:
   javaVersion:        { property: "java.version",                      in: ["1.8","8","11"], set: "17" }
   javaCompilerSource: { property: "maven.compiler.source",             in: ["1.8","8","11"], set: "17" }
   javaCompilerTarget: { property: "maven.compiler.target",             in: ["1.8","8","11"], set: "17" }
-  muleMavenPlugin:    { property: "mule.maven.plugin.version",         min: "4.1.0", set: "4.10.0", pluginGroupId: "org.mule.tools.maven",     pluginArtifactId: "mule-maven-plugin" }
+  # mule-maven-plugin 4.1.1+ is the documented floor for Java-17 DEPLOY (mvn deploy w/ -Dmule.jvm=17).
+  # Releases < 4.1.1 predate Java-17 packaging support, so 4.1.0 is flagged and bumped.
+  muleMavenPlugin:    { property: "mule.maven.plugin.version",         min: "4.1.1", set: "4.10.0", pluginGroupId: "org.mule.tools.maven",     pluginArtifactId: "mule-maven-plugin" }
   # MUnit 3.6.3+ is REQUIRED on Mule 4.9 / Java 17. Releases < 3.6.3 fail embedded-container
   # startup with "javax.naming is not open to module org.mule.runtime.jpms.utils" (fixed by
   # W-20335051). min is set to 3.6.3 so 3.6.1/3.6.2 are flagged and bumped, never left as-is.
@@ -77,11 +88,17 @@ removeJvmFlags: ["-XX:-UseBiasedLocking", "-M-XX:-UseBiasedLocking"]
 removeMunitJpmsFlags: ["--add-opens", "--add-exports", "--add-modules"]
 
 # MANUAL-REVIEW FLAGS - never auto-fix; raise warnings (rule_7, rule_8)
+# `scanGlobs` match file PATHS in the repo tree; `scanRegex` match file CONTENT (Java sources +
+# pom text). Each hit raises the `warn` prose (deduped) - the upgrade never edits these for you.
 manualReview:
   customJavaCode:   { scanGlobs: ["src/main/java/**/*.java"], warn: "Custom Java - reflection/SecurityManager restricted on 17" }
   javaPojoInDw:     { scanRegex: "as Object \\{ class:",        warn: "DataWeave Java POJO needs getters AND setters on 17" }
   apiPolicies:      { source: "apiManager",                 warn: "App has API Manager policies - re-validate after upgrade" }
   munitJpmsFlags:   { scanRegex: "add-(opens|exports|modules)", warn: "Remove add-opens/add-exports argLines from the MUnit plugin - rejected by the Mule 4.9 embedded container on Java 17" }
+  # Java-17 hardening scans (per MuleSoft customer/partner connector-upgrade guides):
+  setAccessible:    { scanRegex: "setAccessible\\s*\\(",       warn: "Reflective setAccessible() found - Java 17 strong encapsulation blocks setAccessible on JDK internals; refactor or you will hit InaccessibleObjectException at runtime." }
+  resourceBundle:   { scanRegex: "ResourceBundle\\.getBundle", warn: "ResourceBundle.getBundle() found - JPMS changes resource/bundle loading on Java 17; verify bundles resolve (consider ResourceBundleProvider) or move them onto the classpath." }
+  powermock:        { scanRegex: "(?:org\\.powermock|powermock-)", warn: "PowerMock detected - it cannot mock JVM classes under Java 17; migrate the affected tests to a current Mockito (inline mock maker) before upgrading." }
 
 # mule-artifact.json target
 muleArtifact: { minMuleVersion: "4.9.0", javaSpecificationVersions: ["17"] }

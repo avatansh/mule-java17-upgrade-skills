@@ -14,14 +14,22 @@ function typeOf(v) {
 
 function matchesType(value, type) {
   switch (type) {
-    case "string": return typeof value === "string";
-    case "number": return typeof value === "number" && !Number.isNaN(value);
-    case "integer": return typeof value === "number" && Number.isInteger(value);
-    case "boolean": return typeof value === "boolean";
-    case "object": return value !== null && typeof value === "object" && !Array.isArray(value);
-    case "array": return Array.isArray(value);
-    case "null": return value === null;
-    default: return true; // unknown/absent type → accept
+    case "string":
+      return typeof value === "string";
+    case "number":
+      return typeof value === "number" && !Number.isNaN(value);
+    case "integer":
+      return typeof value === "number" && Number.isInteger(value);
+    case "boolean":
+      return typeof value === "boolean";
+    case "object":
+      return value !== null && typeof value === "object" && !Array.isArray(value);
+    case "array":
+      return Array.isArray(value);
+    case "null":
+      return value === null;
+    default:
+      return true; // unknown/absent type → accept
   }
 }
 

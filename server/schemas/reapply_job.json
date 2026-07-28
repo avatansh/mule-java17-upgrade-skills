@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "reapply_job",
+  "title": "reapply_job",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobId"],
+  "properties": {
+    "jobId": {
+      "type": "string",
+      "description": "The source job identifier to reseed from."
+    }
+  }
+}

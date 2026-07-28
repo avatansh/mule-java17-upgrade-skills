@@ -23,9 +23,7 @@ export function analyzeTree(tree, appPath0, gating, connectors) {
   if (treePaths.includes(nominalPom)) {
     appPomPath = nominalPom;
   } else {
-    const firstPom = items.find(
-      (i) => i.type === "blob" && /(?:^|\/)pom\.xml$/.test(i.path)
-    );
+    const firstPom = items.find((i) => i.type === "blob" && /(?:^|\/)pom\.xml$/.test(i.path));
     appPomPath = firstPom ? firstPom.path : null;
   }
 

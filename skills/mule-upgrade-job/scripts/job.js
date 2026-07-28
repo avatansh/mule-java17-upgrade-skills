@@ -24,7 +24,21 @@ import {
   deleteJob,
 } from "./jobstore.js";
 import { buildJobStatus } from "./status.js";
-import { runReconcile } from "./reconcile.js";
+import { runReconcile, reconcileJob } from "./reconcile.js";
+import { AnypointClient, makeDeployVerifier } from "../../mule-upgrade/scripts/lib/anypoint.js";
+
+// Build the Anypoint deploy verifier for the poll-driven CLI paths (status --refresh / reconcile),
+// mirroring server/lib/tools.js safeDeployVerifier(). Without it, runReconcile keeps its "unknown"
+// verifyDeploy default (reconcile.js:324) and a DEPLOYING job checked from the CLI never advances to
+// DEPLOYED / FAILED_DEPLOY — even with Anypoint fully configured. Non-fatal: if creds aren't present
+// (ctor throws), return undefined so runReconcile keeps the "unknown" default and never crashes.
+function safeDeployVerifier() {
+  try {
+    return makeDeployVerifier(new AnypointClient());
+  } catch {
+    return undefined;
+  }
+}
 
 function parseArgs(argv) {
   const a = { _: [] };
@@ -68,7 +82,7 @@ function out(obj) {
   process.stdout.write(JSON.stringify(obj, null, 2) + "\n");
 }
 
-function main() {
+async function main() {
   const cmd = process.argv[2];
   const args = parseArgs(process.argv.slice(3));
 
@@ -92,9 +106,26 @@ function main() {
     }
     case "status": {
       if (!args.job) throw usage("status requires --job");
+      if (!getJob(args.job)) throw notFound(args.job);
+      // --refresh (opt-in on the CLI): poll live PR/CI/deploy state before reading, mirroring the
+      // MCP get_job_status auto-refresh. Non-fatal — a poll error still prints the last-known status.
+      let checks;
+      if (args.refresh) {
+        try {
+          // Wire the Anypoint verifier so a DEPLOYING job's deploy state is actually verified here,
+          // matching the MCP get_job_status path (server/lib/tools.js:195).
+          const r = await reconcileJob(args.job, { verifyDeploy: safeDeployVerifier() });
+          checks = r.checks;
+        } catch {
+          /* keep last-known status */
+        }
+      }
       const rec = getJob(args.job);
-      if (!rec) throw notFound(args.job);
-      out(buildJobStatus(rec, typeof args["jira-base-url"] === "string" ? args["jira-base-url"] : ""));
+      const status = buildJobStatus(rec, typeof args["jira-base-url"] === "string" ? args["jira-base-url"] : "");
+      if (Array.isArray(checks) && checks.length) {
+        status.checks = checks.map((c) => ({ stage: c.stage, result: c.result }));
+      }
+      out(status);
       break;
     }
     case "set": {
@@ -145,9 +176,11 @@ function main() {
       break;
     }
     case "reconcile": {
-      const res = runReconcile({
+      const res = await runReconcile({
         staleSeconds: args["stale-seconds"] ? Number(args["stale-seconds"]) : undefined,
         nowMs: args["now-ms"] ? Number(args["now-ms"]) : undefined,
+        // Verify deployments on Anypoint (matches the MCP `reconcile` tool, server/lib/tools.js:306).
+        verifyDeploy: safeDeployVerifier(),
       });
       out(res);
       break;
@@ -172,10 +205,8 @@ function notFound(jobId) {
 
 const isMain = process.argv[1] && process.argv[1].endsWith("job.js");
 if (isMain) {
-  try {
-    main();
-  } catch (err) {
+  main().catch((err) => {
     console.error(`JOB ERROR: ${err?.message ?? err}`);
     process.exit(err?.exitCode ?? 1);
-  }
+  });
 }

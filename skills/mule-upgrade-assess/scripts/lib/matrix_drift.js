@@ -146,7 +146,15 @@ export async function checkMatrixDrift(matrix, opts = {}) {
 
   if (opts.noFetch || !enabled) {
     for (const a of artifacts) {
-      results.push({ key: a.key, label: a.label, pinned: a.matrixValue(matrix) ?? null, latest: null, drift: false, unknown: true, note: opts.noFetch ? "drift check skipped (noFetch)" : "drift check disabled" });
+      results.push({
+        key: a.key,
+        label: a.label,
+        pinned: a.matrixValue(matrix) ?? null,
+        latest: null,
+        drift: false,
+        unknown: true,
+        note: opts.noFetch ? "drift check skipped (noFetch)" : "drift check disabled",
+      });
     }
     return { checked: false, results, warnings, driftCount: 0 };
   }
@@ -160,27 +168,157 @@ export async function checkMatrixDrift(matrix, opts = {}) {
       const { versions } = parseMavenMetadata(xml);
       const latest = highestClean(versions, linePrefix);
       if (!latest) {
-        results.push({ key: a.key, label: a.label, pinned, latest: null, drift: false, unknown: true, note: `no clean release found${linePrefix ? ` on the ${linePrefix}x line` : ""}` });
+        results.push({
+          key: a.key,
+          label: a.label,
+          pinned,
+          latest: null,
+          drift: false,
+          unknown: true,
+          note: `no clean release found${linePrefix ? ` on the ${linePrefix}x line` : ""}`,
+        });
         continue;
       }
       const drift = pinned != null && lt(pinned, latest);
       if (drift) {
         driftCount += 1;
-        warnings.push(`Matrix drift: ${a.label} pins ${pinned}, latest published is ${latest}${linePrefix ? ` (on the ${linePrefix}x line)` : ""}. Consider bumping the bundled matrix.`);
+        warnings.push(
+          `Matrix drift: ${a.label} pins ${pinned}, latest published is ${latest}${linePrefix ? ` (on the ${linePrefix}x line)` : ""}. Consider bumping the bundled matrix.`
+        );
       }
       results.push({ key: a.key, label: a.label, pinned, latest, drift });
     } catch (err) {
-      results.push({ key: a.key, label: a.label, pinned, latest: null, drift: false, unknown: true, note: `fetch failed (${err?.message ?? err})` });
+      results.push({
+        key: a.key,
+        label: a.label,
+        pinned,
+        latest: null,
+        drift: false,
+        unknown: true,
+        note: `fetch failed (${err?.message ?? err})`,
+      });
     }
   }
 
   return { checked: true, results, warnings, driftCount };
 }
 
+/**
+ * checkConnectorDrift({ matrix, choices }): ADVISORY drift check for the CONNECTOR pins (G5).
+ *
+ * The matrix pins each connector to a curated Java-17-SAFE `set` — the authoritative floor. This does
+ * NOT change that: it compares each pin against the latest PUBLISHED version WITHIN THE SAME MAJOR
+ * (never across a breaking major) and reports where the pin trails. Input is the connector CHOICES
+ * already produced by resolveVersions() (which carry `latestInMajor` / `latest` from Exchange Graph),
+ * so this adds NO network — it's a pure reduction. NEVER writes the matrix; the operator bumps the
+ * YAML themselves (or feeds the candidate matrix below to a review).
+ *
+ * @param {{matrix?:object, choices?:Array}} [o]  o.matrix: the (merged/bundled) matrix — source of the
+ *   connector list + pins; o.choices: connector choices from resolveVersions(), absent/empty → all "unknown".
+ * @returns {{checked:boolean, results:object[], warnings:string[], driftCount:number}}
+ *   Each result: { artifactId, groupId, pinned, latestInMajor, latest, drift, unknown?, note? }.
+ */
+export function checkConnectorDrift({ matrix, choices } = {}) {
+  const byArtifact = new Map((choices ?? []).map((c) => [c.artifactId, c]));
+  const results = [];
+  const warnings = [];
+  let driftCount = 0;
+
+  for (const conn of matrix?.connectors ?? []) {
+    const artifactId = conn.artifactId;
+    if (!artifactId) continue;
+    const pinned = conn.set ?? null;
+    const choice = byArtifact.get(artifactId);
+    // No live data for this connector (Exchange failed / matrix-only run) → unknown, non-fatal.
+    if (!choice || (!choice.latestInMajor && !choice.latest)) {
+      results.push({
+        artifactId,
+        groupId: conn.groupId ?? null,
+        pinned,
+        latestInMajor: null,
+        latest: choice?.latest ?? null,
+        drift: false,
+        unknown: true,
+        note: "no live version data (matrix-only)",
+      });
+      continue;
+    }
+    const latestInMajor = choice.latestInMajor ?? null;
+    const drift = pinned != null && latestInMajor != null && lt(pinned, latestInMajor);
+    if (drift) {
+      driftCount += 1;
+      const majorNote =
+        choice.latest && choice.latest !== latestInMajor
+          ? ` (${choice.latest} exists in a newer major — verify separately)`
+          : "";
+      warnings.push(
+        `Connector drift: ${artifactId} pins ${pinned}, latest in-major is ${latestInMajor}${majorNote}. Advisory only — the curated pin stays the Java-17-safe floor.`
+      );
+    }
+    results.push({
+      artifactId,
+      groupId: conn.groupId ?? null,
+      pinned,
+      latestInMajor,
+      latest: choice.latest ?? null,
+      drift,
+    });
+  }
+
+  return { checked: byArtifact.size > 0, results, warnings, driftCount };
+}
+
+/**
+ * candidateMatrix(matrix, connectorReport): produce a PROPOSED matrix (a NEW object) whose drifting
+ * connector `set` pins are bumped to their latest-in-major. This is a REVIEW ARTIFACT ONLY — it is
+ * returned, never written to disk, and the curated matrix stays authoritative until a human adopts it.
+ * Connectors with no drift (or unknown) are left untouched.
+ * @param {object} matrix
+ * @param {{results:object[]}} connectorReport  output of checkConnectorDrift
+ * @returns {{matrix:object, proposed:Array<{artifactId,from,to}>}}
+ */
+export function candidateMatrix(matrix, connectorReport) {
+  const bumpTo = new Map(
+    (connectorReport?.results ?? [])
+      .filter((r) => r.drift && r.latestInMajor)
+      .map((r) => [r.artifactId, r.latestInMajor])
+  );
+  const proposed = [];
+  const connectors = (matrix?.connectors ?? []).map((c) => {
+    const to = bumpTo.get(c.artifactId);
+    if (to && to !== c.set) {
+      proposed.push({ artifactId: c.artifactId, from: c.set ?? null, to });
+      return { ...c, set: to };
+    }
+    return c;
+  });
+  return { matrix: { ...matrix, connectors }, proposed };
+}
+
+/** One-line-per-connector human summary for CLI. */
+export function formatConnectorDrift(report) {
+  const lines = [];
+  lines.push(
+    report.checked
+      ? `Connector drift check — ${report.driftCount} connector(s) behind (advisory, matrix stays authoritative):`
+      : "Connector drift check: no live data."
+  );
+  for (const r of report.results) {
+    if (r.unknown) lines.push(`  ? ${r.artifactId}: pinned ${r.pinned ?? "?"} — ${r.note}`);
+    else if (r.drift) lines.push(`  ! ${r.artifactId}: pinned ${r.pinned} < latest-in-major ${r.latestInMajor}`);
+    else lines.push(`  ✓ ${r.artifactId}: pinned ${r.pinned} is current in-major`);
+  }
+  return lines.join("\n");
+}
+
 /** One-line-per-artifact human summary for CLI. */
 export function formatDrift(report) {
   const lines = [];
-  lines.push(report.checked ? `Matrix drift check — ${report.driftCount} version(s) behind:` : "Matrix drift check: not run.");
+  lines.push(
+    report.checked
+      ? `Matrix drift check — ${report.driftCount} version(s) behind:`
+      : "Matrix drift check: not run."
+  );
   for (const r of report.results) {
     if (r.unknown) lines.push(`  ? ${r.label}: pinned ${r.pinned ?? "?"} — ${r.note}`);
     else if (r.drift) lines.push(`  ! ${r.label}: pinned ${r.pinned} < latest ${r.latest}`);
@@ -189,12 +327,83 @@ export function formatDrift(report) {
   return lines.join("\n");
 }
 
+/**
+ * runDriftCheck(opts): the Full Split's ③ check_drift — the on-demand / scheduled ADVISORY that audits
+ * whether the bundled matrix YAML is trailing. Runs the gating drift (runtime patch, mule-maven-plugin,
+ * MUnit plugins vs live Maven metadata) and, when includeConnectors, the connector staleness (each pin
+ * vs its latest-in-major from Exchange Graph). Builds the live Exchange + release-notes sources itself
+ * (unconfigured Anypoint → matrix-only, non-fatal). NEVER writes the matrix; the curated pins stay the
+ * Java-17-safe floor. Shared by the CLI and the check_drift MCP/REST tool so both behave identically.
+ * @param {object} [opts]
+ * @param {object} [opts.matrix]            pre-loaded matrix; else the bundled matrix is loaded
+ * @param {boolean}[opts.noFetch]           skip ALL network → gating "unchecked", connectors "unknown"
+ * @param {boolean}[opts.includeConnectors] also run the connector-staleness check (default true)
+ * @param {boolean}[opts.candidate]         also produce a PROPOSED candidate matrix (review artifact)
+ * @param {any}    [opts.exchange]          injectable ExchangeClient (tests)
+ * @param {(url:string)=>Promise<string>} [opts.fetchHtml]  injectable release-notes fetcher (tests)
+ * @returns {Promise<{gating:object, connectors:(object|null), candidate:(object|null), warnings:string[]}>}
+ */
+export async function runDriftCheck(opts = {}) {
+  const { loadBundledMatrix } = await import("./matrix.js");
+  const matrix = opts.matrix ?? loadBundledMatrix();
+  const noFetch = opts.noFetch === true;
+  const includeConnectors = opts.includeConnectors !== false; // default on
+  const gating = await checkMatrixDrift(matrix, { noFetch });
+  const warnings = [...(gating.warnings ?? [])];
+
+  let connectors = null;
+  let candidate = null;
+  if (includeConnectors) {
+    const { resolveVersions } = await import("./resolve_versions.js");
+    let choices = [];
+    try {
+      // Build the same Exchange + release-notes live sources assess.js wires, so the staleness check
+      // gets real latest-in-major data (not matrix-only). Non-fatal: unconfigured Anypoint → matrix-only.
+      let exchange = opts.exchange ?? null;
+      let fetchHtml = opts.fetchHtml ?? null;
+      if (!noFetch && exchange == null && fetchHtml == null) {
+        const { AnypointClient } = await import("../../../mule-upgrade/scripts/lib/anypoint.js");
+        const { ExchangeClient } = await import("../../../../lib_shared/exchange.js");
+        const { fetchReleaseNotesCached } = await import("./matrix_fetch.js");
+        const anypoint = new AnypointClient();
+        exchange = anypoint.configured?.() ? new ExchangeClient({ anypoint }) : null;
+        fetchHtml = fetchReleaseNotesCached;
+      }
+      const rv = await resolveVersions({ matrix, exchange, fetchHtml, noFetch });
+      choices = rv.choices;
+    } catch {
+      /* advisory; degrade to no live data */
+    }
+    connectors = checkConnectorDrift({ matrix, choices });
+    if (connectors.warnings?.length) warnings.push(...connectors.warnings);
+    if (opts.candidate) candidate = candidateMatrix(matrix, connectors);
+  }
+  return { gating, connectors, candidate, warnings };
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────────────────────────
 const isMain = process.argv[1] && process.argv[1].endsWith("matrix_drift.js");
 if (isMain) {
-  const { loadBundledMatrix } = await import("./matrix.js");
   const args = process.argv.slice(2);
-  const report = await checkMatrixDrift(loadBundledMatrix(), { noFetch: args.includes("--no-fetch") });
-  if (args.includes("--json")) process.stdout.write(JSON.stringify(report, null, 2) + "\n");
-  else process.stdout.write(formatDrift(report) + "\n");
+  const noFetch = args.includes("--no-fetch");
+  // --connectors / --candidate opt into the connector-staleness half; default is gating-only.
+  const includeConnectors = args.includes("--connectors") || args.includes("--candidate");
+  const { gating: report, connectors: connectorReport, candidate } = await runDriftCheck({
+    noFetch,
+    includeConnectors,
+    candidate: args.includes("--candidate"),
+  });
+
+  if (args.includes("--json")) {
+    process.stdout.write(JSON.stringify({ gating: report, connectors: connectorReport, candidate }, null, 2) + "\n");
+  } else {
+    process.stdout.write(formatDrift(report) + "\n");
+    if (connectorReport) process.stdout.write("\n" + formatConnectorDrift(connectorReport) + "\n");
+    if (candidate?.proposed?.length)
+      process.stdout.write(
+        `\nProposed connector bumps (candidate matrix — NOT written):\n` +
+          candidate.proposed.map((p) => `  ${p.artifactId}: ${p.from} -> ${p.to}`).join("\n") +
+          "\n"
+      );
+  }
 }

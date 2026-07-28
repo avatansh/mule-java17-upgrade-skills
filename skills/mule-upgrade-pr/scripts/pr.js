@@ -89,15 +89,15 @@ async function main() {
     if (!args.app) return fail(2, "commit requires --app");
 
     try {
-      const result =
-        mode === "local"
-          ? commitAndPrLocal({
-              ...common,
-              repoRoot: args["repo-root"] || process.cwd(),
-              defaultBranch: args["default-branch"],
-              push: args["no-push"] ? false : true,
-            })
-          : await commitAndPrApi({ ...common, coords });
+      const result = await (mode === "local"
+        ? commitAndPrLocal({
+            ...common,
+            repoRoot: args["repo-root"] || process.cwd(),
+            defaultBranch: args["default-branch"],
+            push: args["no-push"] ? false : true,
+            coords, // used by the REST fallback if `gh` is unavailable (else derived from the remote)
+          })
+        : commitAndPrApi({ ...common, coords }));
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
     } catch (e) {
       exitForError(e);

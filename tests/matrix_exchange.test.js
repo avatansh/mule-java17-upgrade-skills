@@ -46,27 +46,43 @@ test("classpath source → tryExchangeMatrix returns null (branch skipped)", asy
   assert.equal(r, null);
 });
 
-test("exchange-latest healthy → resolveMatrix returns exchange matrix, no fetch", async () => {
+test("exchange-latest healthy → resolveMatrix returns the exchange matrix", async () => {
   writeSource("exchange-latest");
-  let htmlFetched = false;
   const { matrix, source, warnings } = await resolveMatrix({
     noFetch: false,
-    fetchHtml: async () => ((htmlFetched = true), "<html/>"),
-    exchange: fakeExchange({ ok: true, version: "2.3.0", source: "exchange-latest", data: { connectors: [{ artifactId: "x", set: "1.0.0" }], gating: [] } }),
+    exchange: fakeExchange({
+      ok: true,
+      version: "2.3.0",
+      source: "exchange-latest",
+      data: { connectors: [{ artifactId: "x", set: "1.0.0" }], gating: [] },
+    }),
   });
   assert.equal(source, "exchange:2.3.0");
   assert.equal(matrix.connectors.length, 1);
-  assert.equal(htmlFetched, false, "exchange short-circuits the release-notes fetch");
   assert.equal(warnings.length, 0);
 });
 
-test("exchange failure → warns and falls back to bundled/release-notes chain", async () => {
+test("exchange failure → warns and falls back to the bundled matrix", async () => {
   writeSource("exchange");
+  // Injected fake exchange (no real network) returns ok:false → the source attempt fails.
   const { source, warnings } = await resolveMatrix({
-    noFetch: true, // skip network; forces bundled fallback after exchange miss
     exchange: fakeExchange({ ok: false, reason: "empty connectors block" }),
   });
   assert.equal(source, "bundled");
   assert.equal(warnings.length, 1);
-  assert.match(warnings[0], /Exchange matrix source failed \(empty connectors block\)/);
+  // The verbose exception detail is now debug-only (stderr under LOG_LEVEL=debug); the user-facing
+  // warning collapses to a single clean line whenever a live source was attempted and failed.
+  assert.match(warnings[0], /Live matrix fetch unavailable — using the bundled compatibility matrix/);
+});
+
+test("noFetch skips the Exchange source entirely → bundled, no warning", async () => {
+  writeSource("exchange");
+  let attempted = false;
+  const { source, warnings } = await resolveMatrix({
+    noFetch: true,
+    exchange: { fetchAsset: async () => ((attempted = true), { ok: false, reason: "x" }) },
+  });
+  assert.equal(source, "bundled");
+  assert.equal(attempted, false, "noFetch means no network — the Exchange source is not attempted");
+  assert.equal(warnings.length, 0);
 });

@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "resolve_versions",
+  "title": "resolve_versions",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["appName"],
+  "properties": {
+    "appName": {
+      "type": "string",
+      "description": "Name of the MuleSoft application to resolve versions for. The connector menu is scoped to the connectors THIS app references (declared or inherited), with each one's current version populated."
+    },
+    "repo": {
+      "type": "string",
+      "description": "GitHub repository override (used only when the app is not in the registry)."
+    },
+    "owner": {
+      "type": "string",
+      "description": "GitHub owner/org override (used only when the app is not in the registry)."
+    },
+    "appPath": {
+      "type": "string",
+      "description": "Path to the Mule module within the repo (e.g. \".\" for repo root)."
+    },
+    "orgId": {
+      "type": "string",
+      "description": "Anypoint organization ID override (registry/convention fallback otherwise)."
+    },
+    "branch": {
+      "type": "string",
+      "description": "Explicit branch. Highest precedence over registry default / discovered default."
+    },
+    "artifactIds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Further narrow the resolved menu to these connector artifactIds (on top of the app scope). Omit to return every connector the app references."
+    },
+    "noFetch": {
+      "type": "boolean",
+      "description": "Skip ALL network (Exchange + release-notes). Returns matrix-only choices (recommended pin only), still app-scoped and current-populated. Default false."
+    }
+  }
+}

@@ -23,29 +23,22 @@
 import * as defaultStore from "./jobstore.js";
 import { nowUtc } from "../../../lib_shared/dates.js";
 
-// Statuses that make a failure callback a no-op (already parked or terminal).
-// DEP_GUARD_FAILED is included so an out-of-order / concurrent MUnit failure does NOT clobber a
-// job already parked on the higher-priority dependency gate (symmetric with DEPGUARD_NOOP).
-const MUNIT_NOOP = new Set([
+// Statuses that make a CI *failure* callback a no-op (the job is already parked or terminal). Both the
+// MUnit (stage=test) and dependency-guard gates use the SAME set: each includes BOTH park states, so an
+// out-of-order / concurrent failure on one gate never clobbers a job already parked on the other
+// (the higher-priority dependency gate in particular) — the two were byte-identical, so they share one
+// constant. Named aliases are kept for readability at the two call sites.
+const CI_FAILURE_NOOP = new Set([
   "MUNIT_FAILED",
   "DEP_GUARD_FAILED",
   "DEPLOYED",
   "FAILED_DEPLOY",
-  "FAILED_CI",
   "FAILED_ASSESS",
   "FAILED_COMMIT",
   "FAILED_INTERRUPTED",
 ]);
-const DEPGUARD_NOOP = new Set([
-  "DEP_GUARD_FAILED",
-  "MUNIT_FAILED",
-  "DEPLOYED",
-  "FAILED_DEPLOY",
-  "FAILED_CI",
-  "FAILED_ASSESS",
-  "FAILED_COMMIT",
-  "FAILED_INTERRUPTED",
-]);
+const MUNIT_NOOP = CI_FAILURE_NOOP;
+const DEPGUARD_NOOP = CI_FAILURE_NOOP;
 const DEPLOY_TERMINAL = new Set(["DEPLOYED", "FAILED_DEPLOY"]);
 
 const ack = (extra) => ({ acknowledged: true, ...extra });
@@ -57,11 +50,12 @@ const ack = (extra) => ({ acknowledged: true, ...extra });
  * @param {object} [opts]
  * @param {object} [opts.store]    job store (getJob/setStatus/patchJob/releaseLock) — injectable
  * @param {(event:string, rec:object)=>void} [opts.notify]   fired on each transition (non-fatal)
- * @param {(rec:object)=>{status:'healthy'|'unhealthy'|'unknown'|'disabled', platform?}} [opts.verifyDeploy]
+ * @param {(rec:object)=>({status:'healthy'|'unhealthy'|'unknown'|'disabled', platform?}|Promise<{status:string, platform?}>)} [opts.verifyDeploy]
  *        platform confirmation for stage=deploy success (ADR-015). Omitted/disabled → trust CI.
- * @returns {{statusCode:number, response:object, updated?:object}}
+ *        May be sync OR async (e.g. makeDeployVerifier) — the result is awaited.
+ * @returns {Promise<{statusCode:number, response:object, updated?:object}>}
  */
-export function ingestCiResult(body = {}, opts = {}) {
+export async function ingestCiResult(body = {}, opts = {}) {
   const store = opts.store ?? defaultStore;
   const notify = opts.notify ?? (() => {});
   const verifyDeploy = opts.verifyDeploy ?? null;
@@ -161,7 +155,8 @@ export function ingestCiResult(body = {}, opts = {}) {
     let verify = { verified: false, status: "DISABLED", healthy: false };
     if (verifyDeploy) {
       try {
-        const v = verifyDeploy(rec) ?? {};
+        // verifyDeploy may be sync or async (makeDeployVerifier is async) — await handles both.
+        const v = /** @type {any} */ ((await verifyDeploy(rec)) ?? {});
         const s = String(v.status ?? "unknown").toLowerCase();
         verify = {
           verified: s === "healthy" || s === "unhealthy",
@@ -182,7 +177,7 @@ export function ingestCiResult(body = {}, opts = {}) {
       extra.error = `CD reported success but platform status=${verify.status ?? "UNKNOWN"}`;
     }
     const updated = store.setStatus(jobId, verdict, extra);
-    if (rec.appName) store.releaseLock(rec.appName);
+    if (rec.appName) store.releaseLock(rec.lockKey ?? rec.appName);
     notify(verdict === "DEPLOYED" ? "DEPLOYED" : "FAILED_DEPLOY_DISCREPANCY", updated);
     return {
       statusCode: 200,
@@ -196,7 +191,7 @@ export function ingestCiResult(body = {}, opts = {}) {
       error: cdError ?? "CD pipeline reported failure",
       rolledBack: true,
     });
-    if (rec.appName) store.releaseLock(rec.appName);
+    if (rec.appName) store.releaseLock(rec.lockKey ?? rec.appName);
     notify("FAILED_DEPLOY", updated);
     return { statusCode: 200, response: ack({ jobId, status: "FAILED_DEPLOY" }), updated };
   }

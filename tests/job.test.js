@@ -27,9 +27,8 @@ afterEach(() => {
 
 // jobstore/reconcile read MULE_UPGRADE_HOME at call time, so a normal static import is fine.
 const store = await import("../skills/mule-upgrade-job/scripts/jobstore.js");
-const { runReconcile, classifyCheck, reconcileCiChecks } = await import(
-  "../skills/mule-upgrade-job/scripts/reconcile.js"
-);
+const { runReconcile, classifyCheck, reconcileCiChecks } =
+  await import("../skills/mule-upgrade-job/scripts/reconcile.js");
 
 // ── buildJobStatus — ported 1:1 from pf-get-job-status-suite.xml ─────────────────────────
 test("jobStatus-PROCESSING-minimal", () => {
@@ -94,6 +93,15 @@ test("jobStatus-unknown-status-fallback", () => {
   assert.equal(p.status, "CUSTOM_STATE");
   assert.equal(p.nextPollSeconds, 10);
   assert.ok(p.message);
+});
+
+test("jobStatus-surfaces-kind (parentPomUpgrade vs appUpgrade)", () => {
+  // A parent-pom job stamps changePlan.kind; everything else reports as an app upgrade. Lets
+  // "check status now" clearly identify a parent/BOM job via the same generic status path.
+  const app = buildJobStatus({ jobId: "j-app", status: "PR_OPEN" });
+  assert.equal(app.kind, "appUpgrade");
+  const pp = buildJobStatus({ jobId: "j-pp", status: "PR_OPEN", changePlan: { kind: "parentPomUpgrade" } });
+  assert.equal(pp.kind, "parentPomUpgrade");
 });
 
 test("jobStatus-with-jira-builds-url", () => {
@@ -244,7 +252,7 @@ test("jobstore-reapply-reseeds-new-job", () => {
 const STALE = "2020-01-01T00:00:00Z";
 const NOW_MS = Date.parse("2020-01-02T00:00:00Z"); // 24h later → stale under any small threshold
 
-test("reconcile-stale-PR_OPEN-merged-goes-DEPLOYING", () => {
+test("reconcile-stale-PR_OPEN-merged-goes-DEPLOYING", async () => {
   const { jobId } = store.createJob({ appName: "app-h", coords: { owner: "o", repo: "r" } });
   store.setStatus(jobId, "PR_OPEN", { prNumber: 5 });
   // force staleness
@@ -254,7 +262,7 @@ test("reconcile-stale-PR_OPEN-merged-goes-DEPLOYING", () => {
   store.putJob(rec);
 
   const notes = [];
-  const res = runReconcile({
+  const res = await runReconcile({
     staleSeconds: 900,
     nowMs: NOW_MS,
     pollPr: () => ({ merged: true, closed: false, open: false }),
@@ -265,14 +273,14 @@ test("reconcile-stale-PR_OPEN-merged-goes-DEPLOYING", () => {
   assert.deepEqual(notes, ["PR_OPEN->DEPLOYING"]);
 });
 
-test("reconcile-stale-PR_OPEN-closed-goes-CLOSED-and-releases-lock", () => {
+test("reconcile-stale-PR_OPEN-closed-goes-CLOSED-and-releases-lock", async () => {
   const { jobId } = store.createJob({ appName: "app-i", coords: { owner: "o", repo: "r" } });
   store.setStatus(jobId, "PR_OPEN", { prNumber: 6 });
   const rec = store.getJob(jobId);
   rec.updatedAt = STALE;
   store.putJob(rec);
 
-  const res = runReconcile({
+  const res = await runReconcile({
     staleSeconds: 900,
     nowMs: NOW_MS,
     pollPr: () => ({ merged: false, closed: true, open: false }),
@@ -282,14 +290,14 @@ test("reconcile-stale-PR_OPEN-closed-goes-CLOSED-and-releases-lock", () => {
   assert.equal(store.lockHolder("app-i"), null);
 });
 
-test("reconcile-stale-DEPLOYING-healthy-goes-DEPLOYED", () => {
+test("reconcile-stale-DEPLOYING-healthy-goes-DEPLOYED", async () => {
   const { jobId } = store.createJob({ appName: "app-j" });
   store.setStatus(jobId, "DEPLOYING");
   const rec = store.getJob(jobId);
   rec.updatedAt = STALE;
   store.putJob(rec);
 
-  const res = runReconcile({
+  const res = await runReconcile({
     staleSeconds: 900,
     nowMs: NOW_MS,
     verifyDeploy: () => ({ status: "healthy" }),
@@ -298,14 +306,14 @@ test("reconcile-stale-DEPLOYING-healthy-goes-DEPLOYED", () => {
   assert.equal(store.getJob(jobId).status, "DEPLOYED");
 });
 
-test("reconcile-stale-DEPLOYING-unhealthy-goes-FAILED_DEPLOY", () => {
+test("reconcile-stale-DEPLOYING-unhealthy-goes-FAILED_DEPLOY", async () => {
   const { jobId } = store.createJob({ appName: "app-k" });
   store.setStatus(jobId, "DEPLOYING");
   const rec = store.getJob(jobId);
   rec.updatedAt = STALE;
   store.putJob(rec);
 
-  const res = runReconcile({
+  const res = await runReconcile({
     staleSeconds: 900,
     nowMs: NOW_MS,
     verifyDeploy: () => ({ status: "unhealthy" }),
@@ -314,33 +322,33 @@ test("reconcile-stale-DEPLOYING-unhealthy-goes-FAILED_DEPLOY", () => {
   assert.equal(store.getJob(jobId).status, "FAILED_DEPLOY");
 });
 
-test("reconcile-stale-early-stage-goes-FAILED_INTERRUPTED-and-releases-lock", () => {
+test("reconcile-stale-early-stage-goes-FAILED_INTERRUPTED-and-releases-lock", async () => {
   const { jobId } = store.createJob({ appName: "app-l" }); // PROCESSING
   const rec = store.getJob(jobId);
   rec.updatedAt = STALE;
   store.putJob(rec);
 
-  const res = runReconcile({ staleSeconds: 900, nowMs: NOW_MS });
+  const res = await runReconcile({ staleSeconds: 900, nowMs: NOW_MS });
   assert.equal(res.fixed, 1);
   assert.equal(store.getJob(jobId).status, "FAILED_INTERRUPTED");
   assert.equal(store.lockHolder("app-l"), null);
 });
 
-test("reconcile-fresh-job-untouched", () => {
+test("reconcile-fresh-job-untouched", async () => {
   const { jobId } = store.createJob({ appName: "app-m" }); // fresh updatedAt (~now)
-  const res = runReconcile({ staleSeconds: 900, nowMs: Date.parse(new Date().toISOString()) });
+  const res = await runReconcile({ staleSeconds: 900, nowMs: Date.parse(new Date().toISOString()) });
   assert.equal(res.fixed, 0);
   assert.equal(store.getJob(jobId).status, "PROCESSING");
 });
 
-test("reconcile-stale-PR_OPEN-still-open-not-fixed", () => {
+test("reconcile-stale-PR_OPEN-still-open-not-fixed", async () => {
   const { jobId } = store.createJob({ appName: "app-n", coords: { owner: "o", repo: "r" } });
   store.setStatus(jobId, "PR_OPEN", { prNumber: 7 });
   const rec = store.getJob(jobId);
   rec.updatedAt = STALE;
   store.putJob(rec);
 
-  const res = runReconcile({
+  const res = await runReconcile({
     staleSeconds: 900,
     nowMs: NOW_MS,
     pollPr: () => ({ merged: false, closed: false, open: true }),
@@ -363,11 +371,11 @@ test("classifyCheck-dependency-guard-wins-over-test-substring", () => {
   assert.equal(classifyCheck("lint", CI_PATTERNS), null);
 });
 
-test("reconcileCiChecks-test-failure-parks-MUNIT_FAILED", () => {
+test("reconcileCiChecks-test-failure-parks-MUNIT_FAILED", async () => {
   const { jobId } = store.createJob({ appName: "app-o", coords: { owner: "o", repo: "r" } });
   store.setStatus(jobId, "PR_OPEN", { prNumber: 10 });
   const rec = store.getJob(jobId);
-  const applied = reconcileCiChecks(rec, {
+  const applied = await reconcileCiChecks(rec, {
     pollChecks: () => [{ name: "MUnit tests", conclusion: "failure" }],
     ciPatterns: CI_PATTERNS,
   });
@@ -375,11 +383,11 @@ test("reconcileCiChecks-test-failure-parks-MUNIT_FAILED", () => {
   assert.equal(store.getJob(jobId).status, "MUNIT_FAILED");
 });
 
-test("reconcileCiChecks-pending-checks-are-skipped", () => {
+test("reconcileCiChecks-pending-checks-are-skipped", async () => {
   const { jobId } = store.createJob({ appName: "app-p", coords: { owner: "o", repo: "r" } });
   store.setStatus(jobId, "PR_OPEN", { prNumber: 11 });
   const rec = store.getJob(jobId);
-  const applied = reconcileCiChecks(rec, {
+  const applied = await reconcileCiChecks(rec, {
     pollChecks: () => [{ name: "MUnit tests", conclusion: "pending" }],
     ciPatterns: CI_PATTERNS,
   });
@@ -387,12 +395,12 @@ test("reconcileCiChecks-pending-checks-are-skipped", () => {
   assert.equal(store.getJob(jobId).status, "PR_OPEN");
 });
 
-test("reconcileCiChecks-dependency-guard-failure-wins-and-parks-first", () => {
+test("reconcileCiChecks-dependency-guard-failure-wins-and-parks-first", async () => {
   const { jobId } = store.createJob({ appName: "app-q", coords: { owner: "o", repo: "r" } });
   store.setStatus(jobId, "PR_OPEN", { prNumber: 12 });
   const rec = store.getJob(jobId);
   // Both fail: dependency-guard is ingested first, and DEPGUARD_NOOP then makes the test-failure a no-op.
-  const applied = reconcileCiChecks(rec, {
+  const applied = await reconcileCiChecks(rec, {
     pollChecks: () => [
       { name: "MUnit tests", conclusion: "failure" },
       { name: "java17-guard", conclusion: "failure" },
@@ -404,12 +412,12 @@ test("reconcileCiChecks-dependency-guard-failure-wins-and-parks-first", () => {
   assert.equal(store.getJob(jobId).status, "DEP_GUARD_FAILED");
 });
 
-test("reconcileCiChecks-failure-beats-success-for-same-stage", () => {
+test("reconcileCiChecks-failure-beats-success-for-same-stage", async () => {
   const { jobId } = store.createJob({ appName: "app-r", coords: { owner: "o", repo: "r" } });
   store.setStatus(jobId, "PR_OPEN", { prNumber: 13 });
   const rec = store.getJob(jobId);
   // Two test-stage checks disagree; failure must win (fail-closed).
-  const applied = reconcileCiChecks(rec, {
+  const applied = await reconcileCiChecks(rec, {
     pollChecks: () => [
       { name: "unit test (jdk8)", conclusion: "success" },
       { name: "unit test (jdk17)", conclusion: "failure" },
@@ -420,14 +428,14 @@ test("reconcileCiChecks-failure-beats-success-for-same-stage", () => {
   assert.equal(store.getJob(jobId).status, "MUNIT_FAILED");
 });
 
-test("runReconcile-stale-MUNIT_FAILED-resumes-to-PR_OPEN-on-test-success", () => {
+test("runReconcile-stale-MUNIT_FAILED-resumes-to-PR_OPEN-on-test-success", async () => {
   const { jobId } = store.createJob({ appName: "app-s", coords: { owner: "o", repo: "r" } });
   store.setStatus(jobId, "MUNIT_FAILED", { prNumber: 14, error: "boom" });
   const rec = store.getJob(jobId);
   rec.updatedAt = STALE;
   store.putJob(rec);
 
-  const res = runReconcile({
+  const res = await runReconcile({
     staleSeconds: 900,
     nowMs: NOW_MS,
     pollChecks: () => [{ name: "MUnit tests", conclusion: "success" }],
@@ -438,7 +446,7 @@ test("runReconcile-stale-MUNIT_FAILED-resumes-to-PR_OPEN-on-test-success", () =>
   assert.equal(res.actions[0].reason, "ci:test=success");
 });
 
-test("runReconcile-stale-PR_OPEN-parks-on-CI-failure-and-skips-PR-poll", () => {
+test("runReconcile-stale-PR_OPEN-parks-on-CI-failure-and-skips-PR-poll", async () => {
   const { jobId } = store.createJob({ appName: "app-t", coords: { owner: "o", repo: "r" } });
   store.setStatus(jobId, "PR_OPEN", { prNumber: 15 });
   const rec = store.getJob(jobId);
@@ -446,7 +454,7 @@ test("runReconcile-stale-PR_OPEN-parks-on-CI-failure-and-skips-PR-poll", () => {
   store.putJob(rec);
 
   let prPolled = false;
-  const res = runReconcile({
+  const res = await runReconcile({
     staleSeconds: 900,
     nowMs: NOW_MS,
     pollChecks: () => [{ name: "MUnit tests", conclusion: "failure" }],
@@ -461,14 +469,14 @@ test("runReconcile-stale-PR_OPEN-parks-on-CI-failure-and-skips-PR-poll", () => {
   assert.equal(prPolled, false, "PR merge poll must be skipped once parked by CI this sweep");
 });
 
-test("runReconcile-stale-PR_OPEN-passing-CI-then-merges", () => {
+test("runReconcile-stale-PR_OPEN-passing-CI-then-merges", async () => {
   const { jobId } = store.createJob({ appName: "app-u", coords: { owner: "o", repo: "r" } });
   store.setStatus(jobId, "PR_OPEN", { prNumber: 16 });
   const rec = store.getJob(jobId);
   rec.updatedAt = STALE;
   store.putJob(rec);
 
-  const res = runReconcile({
+  await runReconcile({
     staleSeconds: 900,
     nowMs: NOW_MS,
     pollChecks: () => [{ name: "MUnit tests", conclusion: "success" }], // passing → no park
@@ -480,7 +488,7 @@ test("runReconcile-stale-PR_OPEN-passing-CI-then-merges", () => {
   assert.equal(store.getJob(jobId).munit?.result, "passed");
 });
 
-test("runReconcile-ciChecks-false-disables-polling", () => {
+test("runReconcile-ciChecks-false-disables-polling", async () => {
   const { jobId } = store.createJob({ appName: "app-v", coords: { owner: "o", repo: "r" } });
   store.setStatus(jobId, "MUNIT_FAILED", { prNumber: 17 });
   const rec = store.getJob(jobId);
@@ -488,7 +496,7 @@ test("runReconcile-ciChecks-false-disables-polling", () => {
   store.putJob(rec);
 
   let checksPolled = false;
-  const res = runReconcile({
+  await runReconcile({
     staleSeconds: 900,
     nowMs: NOW_MS,
     ciChecks: false,
@@ -499,4 +507,39 @@ test("runReconcile-ciChecks-false-disables-polling", () => {
   });
   assert.equal(checksPolled, false);
   assert.equal(store.getJob(jobId).status, "MUNIT_FAILED"); // untouched
+});
+
+// ── B4: lock TTL + steal (self-healing single-flight) ────────────────────────────────────────────
+test("lockIsStale: false for a live non-terminal holder, true when holder gone/terminal/aged", () => {
+  const { jobId } = store.createJob({ appName: "lock-live" }); // PROCESSING (live)
+  const held = { jobId, at: store._paths ? new Date(NOW_MS).toISOString() : undefined };
+  assert.equal(store.lockIsStale({ jobId }), false, "live PROCESSING holder → not stale");
+  assert.equal(store.lockIsStale(null), true, "no lock record → stale");
+  assert.equal(store.lockIsStale({ jobId: "ghost-none" }), true, "holder record gone → stale");
+  store.setStatus(jobId, "DEPLOYED"); // terminal
+  assert.equal(store.lockIsStale({ jobId }), true, "terminal holder → stale");
+  // aged-out: fresh live holder, but the lock file timestamp is older than the 6h TTL.
+  const { jobId: j2 } = store.createJob({ appName: "lock-aged" });
+  const longAgo = new Date(Date.parse("2000-01-01T00:00:00Z")).toISOString();
+  assert.equal(store.lockIsStale({ jobId: j2, at: longAgo }), true, "aged past TTL → stale");
+  assert.equal(store.lockIsStale({ jobId: j2, at: new Date(Date.now()).toISOString() }), false, "fresh → not stale");
+  void held;
+});
+
+test("acquireLock: steals a stale (terminal-holder) lock so a dead job never blocks re-runs", () => {
+  const { jobId: dead } = store.createJob({ appName: "app-steal" });
+  store.setStatus(dead, "FAILED_INTERRUPTED"); // holder is terminal but lock file still present
+  assert.equal(store.lockHolder("app-steal"), dead, "stale lock still on disk");
+  const fresh = store.newJobId();
+  const holder = store.acquireLock("app-steal", fresh);
+  assert.equal(holder, fresh, "new job steals the stale lock");
+  assert.equal(store.lockHolder("app-steal"), fresh, "lock now points at the fresh job");
+});
+
+test("acquireLock: does NOT steal a live (non-terminal) holder — returns the incumbent", () => {
+  const { jobId: live } = store.createJob({ appName: "app-nosteal" }); // PROCESSING
+  const other = store.newJobId();
+  const holder = store.acquireLock("app-nosteal", other);
+  assert.equal(holder, live, "live lock is respected; caller gets the incumbent jobId");
+  assert.equal(store.lockHolder("app-nosteal"), live, "lock unchanged");
 });

@@ -8,14 +8,8 @@
 // missing-from-matrix detection silently vanish.
 
 import { parsePom, asArray } from "./pom_parse.js";
-import {
-  propOf,
-  dependenciesOf,
-  managedDependenciesOf,
-  pluginsOf,
-  managedPluginsOf,
-} from "./pom_chain.js";
-import { toNums, lt, bumpMinor, isRef, refName } from "../../../../lib_shared/semver.js";
+import { propOf, dependenciesOf, managedDependenciesOf, pluginsOf, managedPluginsOf } from "./pom_chain.js";
+import { lt, bumpMinor, isRef, refName } from "../../../../lib_shared/semver.js";
 
 // rehydrate(chain): rebuild each entry's parsed pom FROM ITS RAW TEXT.
 export function rehydrate(chain) {
@@ -67,9 +61,7 @@ export function findDep(chain, g, a) {
 export function findPlugin(chain, g, a) {
   for (const c of chain) {
     const all = [...pluginsOf(c.pom), ...managedPluginsOf(c.pom)];
-    const hit = all.find(
-      (p) => asStr(p.artifactId) === a && (g == null || asStr(p.groupId) === g)
-    );
+    const hit = all.find((p) => asStr(p.artifactId) === a && (g == null || asStr(p.groupId) === g));
     if (hit) return { path: c.path, plugin: hit };
   }
   return null;
@@ -103,9 +95,7 @@ function resolveInline(chain, r, ver, filePath, kind, coords) {
 export function resolveRule(chain, r) {
   const pOwner = ownerOfProp(chain, r.property);
   const depHit = r.groupId && r.artifactId ? findDep(chain, r.groupId, r.artifactId) : null;
-  const plgHit = r.pluginArtifactId
-    ? findPlugin(chain, r.pluginGroupId ?? null, r.pluginArtifactId)
-    : null;
+  const plgHit = r.pluginArtifactId ? findPlugin(chain, r.pluginGroupId ?? null, r.pluginArtifactId) : null;
   if (pOwner != null) {
     return { property: r.property, kind: "pomProperty", file: pOwner, installed: rawProp(chain, r.property) };
   }
@@ -198,27 +188,41 @@ function overrideEditsForRule(chain, r, isGating) {
   const edits = [];
   if (depInApp != null) {
     edits.push(
-      ...pinOccurrence(chain, appPath, r, versionOf(depInApp.dep), "depVersion", {
-        groupId: r.groupId,
-        artifactId: r.artifactId,
-      }, isGating)
+      ...pinOccurrence(
+        chain,
+        appPath,
+        r,
+        versionOf(depInApp.dep),
+        "depVersion",
+        {
+          groupId: r.groupId,
+          artifactId: r.artifactId,
+        },
+        isGating
+      )
     );
   }
   if (plgInApp != null) {
     edits.push(
-      ...pinOccurrence(chain, appPath, r, versionOf(plgInApp.plugin), "pluginVersion", {
-        pluginGroupId: r.pluginGroupId ?? null,
-        pluginArtifactId: r.pluginArtifactId,
-      }, isGating)
+      ...pinOccurrence(
+        chain,
+        appPath,
+        r,
+        versionOf(plgInApp.plugin),
+        "pluginVersion",
+        {
+          pluginGroupId: r.pluginGroupId ?? null,
+          pluginArtifactId: r.pluginArtifactId,
+        },
+        isGating
+      )
     );
   }
   return edits;
 }
 
 export function computePropEditsOverride(chain, matrix) {
-  const gatingEdits = Object.values(matrix.gating ?? {}).flatMap((r) =>
-    overrideEditsForRule(chain, r, true)
-  );
+  const gatingEdits = Object.values(matrix.gating ?? {}).flatMap((r) => overrideEditsForRule(chain, r, true));
   const connEdits = (matrix.connectors ?? []).flatMap((r) => overrideEditsForRule(chain, r, false));
   const seen = new Set();
   const out = [];
@@ -240,17 +244,13 @@ function isMunitPluginArtifact(a) {
 
 function pluginArgLineValues(p) {
   const top = asArray(p?.configuration?.argLines?.argLine);
-  const exe = asArray(p?.executions?.execution).flatMap((e) =>
-    asArray(e?.configuration?.argLines?.argLine)
-  );
+  const exe = asArray(p?.executions?.execution).flatMap((e) => asArray(e?.configuration?.argLines?.argLine));
   return [...top, ...exe].map((v) => asStr(v));
 }
 
 function pomHasMunitJpmsArgLine(pom, flags) {
   const all = [...pluginsOf(pom), ...managedPluginsOf(pom)];
-  const vals = all
-    .filter((p) => isMunitPluginArtifact(p.artifactId))
-    .flatMap((p) => pluginArgLineValues(p));
+  const vals = all.filter((p) => isMunitPluginArtifact(p.artifactId)).flatMap((p) => pluginArgLineValues(p));
   return vals.some((s) => (flags ?? []).some((f) => s.includes(String(f))));
 }
 
@@ -349,20 +349,91 @@ export function connectorGaps(chain, matrix) {
   return out;
 }
 
+/**
+ * connectorsInApp(chain, matrix): the LEAN per-app connector view for the default assess output.
+ *
+ * Lists only the matrix connectors the app actually references — declared with its own <version> in
+ * the app pom, OR inherited (effective) via a parent/BOM. Pure and network-free: derived entirely
+ * from the pom chain + matrix, so it's safe to attach on every assess run (unlike connectorChoices,
+ * which needs Exchange/release-notes fetches). The rich version MENU lives in resolve_versions.
+ *
+ * Each entry: { artifactId, groupId, current, matrixSet, declaredInApp, willChange }:
+ *   - current       - the effective version resolved from the chain (declared or inherited); may be null
+ *   - matrixSet     - the curated Java-17-safe pin
+ *   - declaredInApp - the app pom declares its OWN <version> for this connector (so this PR can pin it)
+ *   - willChange    - declaredInApp AND current is below the matrix pin ⇒ this assess emits an edit.
+ *                     Inherited-but-below connectors are NOT willChange here — they surface as
+ *                     connectorGaps (the parent/BOM must be bumped instead).
+ */
+export function connectorsInApp(chain, matrix) {
+  const out = [];
+  const seen = new Set();
+  for (const r of matrix?.connectors ?? []) {
+    if (!(r.groupId && r.artifactId)) continue;
+    const g = String(r.groupId);
+    const a = String(r.artifactId);
+    const key = `${g}:${a}`;
+    if (seen.has(key)) continue;
+    const declaredInApp = appDeclaresVersion(chain, g, a);
+    const current = effectiveVersion(chain, r);
+    // App neither declares nor inherits this connector → it isn't "in" the app; skip.
+    if (!declaredInApp && current == null) continue;
+    seen.add(key);
+    const willChange = declaredInApp && current != null && needsBump(String(current), r);
+    out.push({
+      artifactId: a,
+      groupId: g,
+      current: current ?? null,
+      matrixSet: r.set ?? null,
+      declaredInApp,
+      willChange,
+    });
+  }
+  return out;
+}
+
+/**
+ * appConnectorScope(chain, matrix): derive the resolve_versions scoping args for THIS app from the
+ * lean connectorsInApp[] view. Returns { only, currents } where `only` is the list of artifactIds the
+ * app actually references (declared or inherited) and `currents` maps each to its effective current
+ * version (null-safe: connectors with no resolvable current are omitted from `currents` but still
+ * appear in `only`). Pure and network-free — the resolve_versions tool passes these straight into
+ * resolveVersions() so the live menu is scoped to the app and each choice.current is populated.
+ * @returns {{only: string[], currents: Object<string,string>}}
+ */
+export function appConnectorScope(chain, matrix) {
+  const inApp = connectorsInApp(chain, matrix);
+  const only = inApp.map((c) => c.artifactId);
+  /** @type {Object<string,string>} */
+  const currents = {};
+  for (const c of inApp) if (c.current != null) currents[c.artifactId] = String(c.current);
+  return { only, currents };
+}
+
 export function connectorGapWarning(chain, matrix, appName) {
   const gaps = connectorGaps(chain, matrix);
   if (gaps.length === 0) return [];
-  const list = gaps
-    .map((g) => `${g.artifactId} ${g.from ?? "unknown"} -> ${g.to}`)
-    .join("; ");
+  const list = gaps.map((g) => `${g.artifactId} ${g.from ?? "unknown"} -> ${g.to}`).join("; ");
   return [
     `WARNING: ${appName ?? "this app"} inherits connector version(s) from a parent/BOM that are below the Java 17 target and were NOT changed by this app PR (only connectors already versioned in the app pom are pinned). Update the parent/BOM — or run the parent-pom upgrade — so these are bumped, otherwise MUnit/CI will fail on Java 17: ${list}.`,
   ];
 }
 
-// ── Repo scan flags (custom Java / lookup / truncation) ───────────────────────────────
+// ── Repo scan flags (custom Java / lookup / truncation / Java-17 content hints) ─────────
 
-export function scanFlags(tree, appPomText) {
+/**
+ * Run the matrix `manualReview` regex scans that need file CONTENT (not just paths):
+ * setAccessible(), ResourceBundle.getBundle(), powermock, DataWeave POJO, MUnit JPMS flags.
+ * Scans the app pom text plus (best-effort) every .java source via an injected readFile(path).
+ * Each distinct `warn` is emitted at most once. Fully non-fatal: a readFile miss is skipped.
+ *
+ * @param {{tree:Array<{path,type}>, truncated?:boolean}} tree
+ * @param {string} appPomText
+ * @param {object} [opts]
+ * @param {(relPath:string)=>(string|null)} [opts.readFile] read a repo-relative file (sync)
+ * @param {object} [opts.manualReview] matrix.manualReview block (only scanRegex entries are used)
+ */
+export function scanFlags(tree, appPomText, opts = {}) {
   const items = tree?.tree ?? [];
   const javaFiles = items.filter((i) => /.*\.java$/.test(i.path));
   const customJava = javaFiles.length > 0;
@@ -383,12 +454,81 @@ export function scanFlags(tree, appPomText) {
       "lookup() reference found in pom text; scan Mule XMLs to confirm DataWeave POJO lookup usage requiring getter/setter validation."
     );
   }
+
+  // Content-based manualReview scans (setAccessible / ResourceBundle / powermock / DW POJO / etc.).
+  // Concatenate the pom text with every readable .java source and test each scanRegex once.
+  const mr = opts.manualReview ?? {};
+  const readFile = typeof opts.readFile === "function" ? opts.readFile : null;
+  const regexEntries = Object.values(mr).filter((e) => e && typeof e.scanRegex === "string" && e.warn);
+  if (regexEntries.length) {
+    let corpus = String(appPomText ?? "");
+    if (readFile) {
+      for (const jf of javaFiles) {
+        try {
+          const txt = readFile(jf.path);
+          if (txt) corpus += "\n" + txt;
+        } catch {
+          /* unreadable file → skip, non-fatal */
+        }
+      }
+    }
+    const seen = new Set();
+    for (const e of regexEntries) {
+      if (seen.has(e.warn)) continue;
+      let re;
+      try {
+        re = new RegExp(e.scanRegex);
+      } catch {
+        continue; // malformed pattern in matrix → ignore
+      }
+      if (re.test(corpus)) {
+        seen.add(e.warn);
+        warnings.push(e.warn);
+      }
+    }
+  }
+
   return {
     customJavaFound: customJava,
     lookupFound: lookupInPom,
     hasApiPolicies: false,
     warnings,
   };
+}
+
+// ── CUSTOM_CONNECTOR detection + upgrade checklist ────────────────────────────────────
+
+/**
+ * True when the app pom is itself a Mule extension/connector project (packaging mule-extension,
+ * or an extensions/module parent), rather than a deployable app. Such projects follow the
+ * MuleSoft connector-upgrade path (mule-sdk-api + @JavaVersionSupport), not the app rewrite path.
+ * @param {Array<{pom:any}>} chain
+ */
+export function isCustomConnector(chain) {
+  const pom = chain?.[0]?.pom?.project;
+  if (!pom) return false;
+  const packaging = asStr(pom.packaging).toLowerCase();
+  if (packaging === "mule-extension") return true;
+  const parentArtifact = asStr(pom.parent?.artifactId).toLowerCase();
+  return parentArtifact === "mule-modules-parent" || parentArtifact === "mule-java-extension-parent";
+}
+
+/**
+ * The connector-upgrade checklist emitted as warnings when a CUSTOM_CONNECTOR is detected.
+ * These are advisory (never auto-edited) because a connector's Java-17 readiness is a code +
+ * metadata change (setters, @JavaVersionSupport, parent-POM/mule-sdk-api bumps), not a pom pin.
+ */
+export function customConnectorWarnings(appName) {
+  const who = appName ?? "this project";
+  return [
+    `NOTE: ${who} is a Mule extension/connector project (packaging mule-extension). It follows the connector-upgrade path, NOT the app rewrite path — these edits are advisory, not auto-applied:`,
+    "  · Add @JavaVersionSupport({JAVA_8, JAVA_11, JAVA_17}) on the @Extension class (Java SDK); XML SDK inherits Java 17 automatically.",
+    "  · Add/upgrade org.mule.sdk:mule-sdk-api to 0.10.1 so Java-compatibility metadata is generated.",
+    "  · Parent POM: mule-java-extension-parent (recommended, declare minMuleVersion yourself), or legacy mule-modules-parent >= 1.9.0 (auto-sets minMuleVersion 4.9.0).",
+    "  · Bump libraries for Java 17: ByteBuddy 1.14.0 (replace CGLib), Jacoco 0.8.10, SLF4J 2.x; JDBC/Groovy/JRuby to Java-17 builds.",
+    "  · API objects need setters (not just getters/constructors) so DataWeave can write without reflection; migrate PowerMock tests to current Mockito.",
+    "  · Deploy-time is the final gate: Mule rejects modules lacking Java-17 support ('Extension ... does not support Java 17. Supported versions are: [1.8, 11]').",
+  ];
 }
 
 /** first regex capture group #1 across text, or null. */
@@ -417,6 +557,7 @@ export function buildAssessmentResult({
   warnings,
   pomEditStrategy = "appOverride",
   excludeArtifacts = [],
+  parentRef = null,
 }) {
   const m = matrix;
   const chain = rehydrate(chain0);
@@ -440,7 +581,7 @@ export function buildAssessmentResult({
   const maNeeds = maMinNeeds || maJavaNeeds;
   const maToMin = maMinNeeds
     ? m.muleArtifact.minMuleVersion
-    : maCur?.minMuleVersion ?? m.muleArtifact.minMuleVersion;
+    : (maCur?.minMuleVersion ?? m.muleArtifact.minMuleVersion);
 
   // (3) CI workflow
   const ciCur = firstCapture(ciWorkflowText ?? "", /java-version:\s*['"]?([^'"\s]+)['"]?/);
@@ -483,7 +624,35 @@ export function buildAssessmentResult({
         ]
       : [];
 
-  const all = [...coreEdits, ...versionEdit];
+  // (5) Chained flow: repoint the app's OWN <parent> at a freshly-released parent-pom/BOM version so the
+  // app PR's FIRST commit already points at it — no separate amend commit, and the dry-run preview lists
+  // it. Emitted ONLY when a parentRef is supplied, the app actually has a matching <parent>, its version
+  // is a literal (not a ${...} property), and that version actually differs from the target.
+  const appParent = chain[0].pom?.project?.parent ?? null;
+  const parentRefEdit = [];
+  if (parentRef && parentRef.toVersion != null && String(parentRef.toVersion) !== "" && appParent) {
+    const wantA = parentRef.artifactId != null ? String(parentRef.artifactId).trim() : "";
+    const wantG = parentRef.groupId != null ? String(parentRef.groupId).trim() : "";
+    const haveA = String(appParent.artifactId ?? "").trim();
+    const haveG = String(appParent.groupId ?? "").trim();
+    const haveV = appParent.version != null ? String(appParent.version).trim() : "";
+    const artifactOk = wantA === "" || haveA === wantA;
+    const groupOk = wantG === "" || haveG === wantG;
+    const haveVIsRef = /^\s*\$\{.+\}\s*$/.test(haveV);
+    if (artifactOk && groupOk && !haveVIsRef && haveV !== String(parentRef.toVersion).trim()) {
+      parentRefEdit.push({
+        file: chain[0].path,
+        kind: "pomParentVersion",
+        groupId: parentRef.groupId ?? haveG ?? null,
+        artifactId: parentRef.artifactId ?? haveA ?? null,
+        from: haveV || null,
+        to: String(parentRef.toVersion),
+        change: true,
+      });
+    }
+  }
+
+  const all = [...coreEdits, ...versionEdit, ...parentRefEdit];
 
   // Shared-file warning (only non-empty under inPlace strategy).
   const appPomPath = chain[0].path ?? "";
@@ -501,10 +670,17 @@ export function buildAssessmentResult({
     missingConns.length === 0
       ? []
       : [
-          `WARNING: ${appName ?? "this app"} declares connector(s) not covered by the compatibility matrix [${missingKeys.join(", ")}]. They were NOT pinned for Java 17 — extend the matrix and re-run/reapply. A Slack alert has been raised.`,
+          `WARNING: ${appName ?? "this app"} declares connector(s) not covered by the compatibility matrix [${missingKeys.join(", ")}]. They were NOT pinned for Java 17 — extend the matrix and re-run/reapply. This will be flagged in Slack and on the PR when the upgrade job is started.`,
         ];
 
   const gapWarnings = connectorGapWarning(chain, m, appName);
+
+  // CUSTOM_CONNECTOR: if the "app" is actually a Mule extension/connector project, override the
+  // topology and surface the connector-upgrade checklist (advisory; the pom-edit path still runs
+  // for any gating/property it does declare, but the real work is code + @JavaVersionSupport).
+  const connectorProject = isCustomConnector(chain);
+  const effectiveTopology = connectorProject ? "CUSTOM_CONNECTOR" : topology;
+  const connectorChecklist = connectorProject ? customConnectorWarnings(appName) : [];
 
   return {
     appName,
@@ -518,7 +694,7 @@ export function buildAssessmentResult({
     changePlan: {
       targetRuntime: m.target.runtime,
       targetJavaVersion: m.target.javaVersion,
-      topology,
+      topology: effectiveTopology,
       headSha,
       fileEdits: all,
       filesToChange: [...new Set(all.map((e) => e.file))],
@@ -527,7 +703,16 @@ export function buildAssessmentResult({
       hasLookupFunction: lookupFound ?? false,
       missingFromMatrix: missingConns,
       connectorGaps: connectorGaps(chain, m),
+      // LEAN per-app connector view (pure, network-free) — always present. The rich version MENU
+      // (options[], firstCompatible/latest) is opt-in via resolve_versions / includeVersions.
+      connectorsInApp: connectorsInApp(chain, m),
     },
-    warnings: [...(warnings ?? []), ...sharedFileWarnings, ...missingWarnings, ...gapWarnings],
+    warnings: [
+      ...(warnings ?? []),
+      ...connectorChecklist,
+      ...sharedFileWarnings,
+      ...missingWarnings,
+      ...gapWarnings,
+    ],
   };
 }

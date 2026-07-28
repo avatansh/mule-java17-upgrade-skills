@@ -18,9 +18,7 @@ function removeLastSeg(arr) {
  * "." and ".." segments. normalizePath("a/b/pom.xml", "../pom.xml") -> "a/pom.xml".
  */
 export function normalizePath(currentPomPath, relPath) {
-  const dir = currentPomPath.includes("/")
-    ? currentPomPath.slice(0, currentPomPath.lastIndexOf("/"))
-    : "";
+  const dir = currentPomPath.includes("/") ? currentPomPath.slice(0, currentPomPath.lastIndexOf("/")) : "";
   const combined = dir === "" ? relPath : dir + "/" + relPath;
   const parts = combined.split("/").filter((p) => p !== "" && p !== ".");
   const acc = [];
@@ -77,7 +75,7 @@ export function nextParentPath(parsedPom, currentPomPath, treePaths) {
  * @param {string} rawContent app pom.xml text (already decoded)
  * @param {string} appPomPath the app pom path
  * @param {string[]} treePaths every path in the repo tree
- * @returns {{appPomText, chain:Array<{path,pom,pomText}>, nextParentPath}}
+ * @returns {{appPomText:any, chain:Array<{path:any,pom:any,pomText:any}>, nextParentPath:any}}
  */
 export function initChain(rawContent, appPomPath, treePaths) {
   const parsedPom = parsePom(rawContent);
@@ -88,7 +86,14 @@ export function initChain(rawContent, appPomPath, treePaths) {
   };
 }
 
-/** Append the next parent pom to an existing chain. */
+/**
+ * Append the next parent pom to an existing chain.
+ * @param {string} rawContent
+ * @param {string} parentPath
+ * @param {Array<{path:any,pom:any,pomText:any}>} chain
+ * @param {string[]} treePaths
+ * @returns {{appPomText?:any, chain:Array<{path:any,pom:any,pomText:any}>, nextParentPath:any}}
+ */
 export function appendParent(rawContent, parentPath, chain, treePaths) {
   const parsedPom = parsePom(rawContent);
   return {

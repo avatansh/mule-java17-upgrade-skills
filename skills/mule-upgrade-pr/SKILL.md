@@ -13,6 +13,14 @@ description: >-
 
 # mule-upgrade-pr
 
+> **⛔ Actually run this — do not simulate it.** Commits and PRs are made by this script through the
+> GitHub Git Data API (`api` mode) or `git`/`gh` (`local` mode). **Run `node pr.js …` and report its
+> JSON.** Never craft a commit or PR by calling GitHub yourself with `curl`/`gh api`, never hand-edit
+> files in place of `mule-upgrade-apply`, and never ask the user for a token in chat — set
+> `GITHUB_TOKEN` in the suite `.env`. Local mode uses `gh` when available and otherwise opens the PR
+> via that same token, so a working token is enough for both modes. On error (401, `STALE_PLAN`,
+> `PR_OPEN_FAILED`), report it verbatim and stop.
+
 Ports `system/github.xml` — `pf-atomic-commit`, `pf-open-pr`, and `pf-rollback` — into a dependency-free
 Node.js skill. It takes the staged file edits from **mule-upgrade-apply** and lands them as a single
 commit on a new branch, then opens the upgrade PR. Two interchangeable modes cover both a local clone
@@ -23,7 +31,7 @@ and a remote-only workflow.
 | Mode | How it commits | When to use |
 |------|----------------|-------------|
 | `api` (default) | GitHub Git Data API — creates a branch ref at the assessed `headSha`, one blob per file, a tree with `base_tree=headSha`, a commit with `parents=[headSha]`, moves the ref, then opens the PR. Fully atomic; never touches a working copy. | CI, no local checkout, or when you want the exact byte-level commit the Mule app produced. |
-| `local` | `git checkout -b`, writes the files, `git commit`, `git push`, `gh pr create`. | You already have the repo cloned and `gh` authenticated. |
+| `local` | `git checkout -b`, writes the files, `git commit`, `git push`, then opens the PR. PR creation tries the `gh` CLI first and **automatically falls back to the GitHub REST API** (same `GITHUB_TOKEN`/`github.token` as api mode) if `gh` can't be spawned — e.g. the common Windows `spawnSync gh ENOENT`. Returns `prNumber` so local jobs are pollable by reconcile. | You already have the repo cloned. `gh` is optional; a token covers the fallback. |
 
 Both modes enforce the **stale-plan guard**: if the repo HEAD moved since assessment
 (`changePlan.headSha`), they raise a `STALE_PLAN` conflict so a stale ChangePlan is never committed

@@ -30,6 +30,12 @@ naming:                                  # convention used when an app is NOT in
 
 anypoint:
   apiBase: "https://anypoint.mulesoft.com"
+  # Exchange Maven FACADE host — a DIFFERENT host from the platform UI (apiBase). Connector artifacts +
+  # maven-metadata.xml live here, the same host `mvn deploy` uses. Override for a dedicated/EU control plane.
+  mavenBase: "https://maven.anypoint.mulesoft.com"
+  # Exchange GraphQL endpoint used to enumerate a connector's published versions. Defaults to apiBase +
+  # "/graph/api/v1/graphql" when left blank; set explicitly for a non-default control plane.
+  graphUrl: ""
   tokenPath: "/accounts/api/v2/oauth2/token"   # Connected App client_credentials token endpoint
   tokenRefreshSeconds: "3300"                  # cache bearer ~55 min (platform TTL is 60 min)
   verify:
@@ -57,7 +63,7 @@ matrix:
   driftCheck: "true"                         # advisory: warn (never auto-apply) when bundled gating pins trail the latest published Maven versions
   exchange:                                  # Exchange asset IDENTITY (orgId is env-specific → env file)
     assetId: "java17-compatibility-matrix"
-    version: "1.0.4"                         # published on Exchange (matches bundled classpath copy incl. sockets 1.2.8); bump on new revision or use source=exchange-latest
+    version: "1.0.5"                         # published on Exchange (matches bundled classpath copy incl. sockets 1.2.8); bump on new revision or use source=exchange-latest
     classifier: "custom"                     # Exchange custom-asset classifier ("" if none)
     packaging: "yaml"                        # main file extension of the published asset
   notifyMissing: "true"                      # Slack-alert connectors the app declares but the matrix doesn't cover
@@ -89,6 +95,30 @@ upgrade:
   #   inPlace               — legacy: edit the parent/BOM pom that declares the value and
   #                           surface a shared-file Warning on the result.
   pomEditStrategy: "appOverride"
+
+chainedParentUpgrade:
+  # Interactive shared-parent chaining (see mule-upgrade-agent SKILL.md "Shared parent-pom / BOM
+  # upgrades"). The trigger is the app assess reporting connectorGaps — connectors pinned UPSTREAM in a
+  # shared parent-pom (in ~95% of cases a DIFFERENT repo than the app) and, less often (~20%), a BOM.
+  # When true and gaps exist, the agent runs: assess app → (ask for parent-pom repo) upgrade parent-pom
+  # → (ask) amend the app's open PR; a BOM step is inserted only when the parent-pom actually imports a
+  # BOM. When false, the agent upgrades ONLY the single pom the user named (no chaining). Merely having
+  # a <parent> never triggers chaining — only real upstream-managed connectors do. The flow always
+  # stops to ask the user before each downstream change, regardless of this toggle.
+  enabled: "true"
+
+cache:
+  # Cross-process disk cache (lib_shared/cache.js) — makes a fresh CLI/Vibes process reuse the
+  # previous run's expensive Anypoint reads instead of re-fetching. Files live under
+  # <MULE_UPGRADE_HOME|~/.mule-upgrade>/cache, one JSON per key. Fully non-fatal + only ok:true
+  # results are stored. Disable ad hoc with env MULE_UPGRADE_CACHE=off; force-refresh with
+  # MULE_UPGRADE_REFRESH=1.
+  enabled: "true"
+  dir: ""                        # override the cache root; blank = <home>/cache
+  tokenToDisk: "true"            # persist the Anypoint bearer (0600, owner-only) across processes
+  versionsTtlSeconds: "43200"    # per-connector Exchange listVersions (Graph) — 12h
+  matrixTtlSeconds:  "86400"     # fallback for the matrix/registry asset when <family>.refreshSeconds is unset — 24h
+  # Release-notes HTML has its own 24h cache (matrix_fetch.js RELEASE_NOTES_CACHE_TTL_MS).
 
 osv2:                                        # Object Store v2 partition TTLs (seconds)
   jobTtlSeconds:         "2592000"           # jobStore         — job records, 30d rolling

@@ -26,13 +26,12 @@ export function resolveRepoCoords({ repoUrl = null, owner = null, repo = null } 
   // A GitHub web URL may embed branch + sub-path: /<owner>/<repo>/tree|blob/<branch>/<sub-path...>
   const marker = segs[2] ?? "";
   const isTree = marker === "tree" || marker === "blob";
-  const urlBranch = isTree ? segs[3] ?? null : null;
+  const urlBranch = isTree ? (segs[3] ?? null) : null;
   const rest = isTree ? segs.slice(4) : [];
   const restStr = rest.join("/");
   const lastSeg = rest[rest.length - 1] ?? "";
   // A trailing file (has a dot) is the pom path itself; a directory implies <dir>/pom.xml.
-  const urlPomPath =
-    restStr === "" ? null : lastSeg.includes(".") ? restStr : `${restStr}/pom.xml`;
+  const urlPomPath = restStr === "" ? null : lastSeg.includes(".") ? restStr : `${restStr}/pom.xml`;
 
   const outOwner = owner != null && String(owner) !== "" ? String(owner) : urlOwner;
   const outRepo = repo != null && String(repo) !== "" ? String(repo) : urlRepo;

@@ -8,7 +8,15 @@ import { diffAgainst, scanAndNotify } from "../skills/mule-upgrade-scan/scripts/
 
 // candidate factory
 function cand(appName, reasons, extra = {}) {
-  return { appName, reasons, needsCoordinates: true, owner: null, repo: null, environments: ["Production"], ...extra };
+  return {
+    appName,
+    reasons,
+    needsCoordinates: true,
+    owner: null,
+    repo: null,
+    environments: ["Production"],
+    ...extra,
+  };
 }
 function reportOf(candidates, extra = {}) {
   return {
@@ -29,9 +37,17 @@ function harness({ initialKnown = {}, report, notifySent = true }) {
   const sent = [];
   const deps = {
     scan: async () => report,
-    notify: async (msg) => { sent.push(msg); return { sent: notifySent }; },
+    notify: async (msg) => {
+      sent.push(msg);
+      return { sent: notifySent };
+    },
     load: () => store,
-    save: (s) => { harness._saved = s; store.known = s.known; store.lastRun = s.lastRun; return true; },
+    save: (s) => {
+      harness._saved = s;
+      store.known = s.known;
+      store.lastRun = s.lastRun;
+      return true;
+    },
     now: () => "2026-07-26T00:00:00Z",
   };
   return { deps, sent, store };
@@ -40,23 +56,29 @@ function harness({ initialKnown = {}, report, notifySent = true }) {
 // ── diffAgainst ──────────────────────────────────────────────────────────────────────────────
 test("diffAgainst partitions new / changed / resolved / stillStale", () => {
   const known = {
-    "orders-api": { sig: "orders-api::Mule 4.4.0 is older than 4.5.0", reasons: ["Mule 4.4.0 is older than 4.5.0"] },
+    "orders-api": {
+      sig: "orders-api::Mule 4.4.0 is older than 4.5.0",
+      reasons: ["Mule 4.4.0 is older than 4.5.0"],
+    },
     "gone-app": { sig: "gone-app::x", reasons: ["x"] },
   };
   const candidates = [
-    cand("orders-api", ["Mule 4.4.0 is older than 4.5.0"]),           // unchanged → stillStale
-    cand("new-app", ["Java 8 is older than 17"]),                      // never seen → newlyStale
-    cand("orders-api-2", ["Java 11 is older than 17"]),                // never seen → newlyStale
+    cand("orders-api", ["Mule 4.4.0 is older than 4.5.0"]), // unchanged → stillStale
+    cand("new-app", ["Java 8 is older than 17"]), // never seen → newlyStale
+    cand("orders-api-2", ["Java 11 is older than 17"]), // never seen → newlyStale
   ];
   const d = diffAgainst(known, candidates);
   assert.deepEqual(d.newlyStale.map((c) => c.appName).sort(), ["new-app", "orders-api-2"]);
-  assert.deepEqual(d.stillStale.map((c) => c.appName), ["orders-api"]);
+  assert.deepEqual(
+    d.stillStale.map((c) => c.appName),
+    ["orders-api"]
+  );
   assert.deepEqual(d.resolved, ["gone-app"]);
   assert.equal(d.changed.length, 0);
 });
 
 test("diffAgainst detects a changed staleness reason", () => {
-  const known = { "app": { sig: "app::Java 11 is older than 17", reasons: ["Java 11 is older than 17"] } };
+  const known = { app: { sig: "app::Java 11 is older than 17", reasons: ["Java 11 is older than 17"] } };
   const candidates = [cand("app", ["Mule 4.4.0 is older than 4.5.0", "Java 8 is older than 17"])];
   const d = diffAgainst(known, candidates);
   assert.equal(d.changed.length, 1);
@@ -66,7 +88,10 @@ test("diffAgainst detects a changed staleness reason", () => {
 
 // ── scanAndNotify: first run pushes everything ─────────────────────────────────────────────────
 test("scanAndNotify: first run (empty state) notifies all stale apps and persists baseline", async () => {
-  const report = reportOf([cand("orders-api", ["Mule 4.4.0 is older than 4.5.0"]), cand("billing", ["Java 8 is older than 17"])]);
+  const report = reportOf([
+    cand("orders-api", ["Mule 4.4.0 is older than 4.5.0"]),
+    cand("billing", ["Java 8 is older than 17"]),
+  ]);
   const { deps, sent, store } = harness({ report });
   const r = await scanAndNotify({ deps });
   assert.equal(r.configured, true);
@@ -83,7 +108,11 @@ test("scanAndNotify: identical findings on a re-run do NOT re-notify", async () 
   const candidates = [cand("orders-api", ["Mule 4.4.0 is older than 4.5.0"])];
   const report = reportOf(candidates);
   const initialKnown = {
-    "orders-api": { sig: "orders-api::Mule 4.4.0 is older than 4.5.0", reasons: ["Mule 4.4.0 is older than 4.5.0"], firstSeen: "2026-07-01T00:00:00Z" },
+    "orders-api": {
+      sig: "orders-api::Mule 4.4.0 is older than 4.5.0",
+      reasons: ["Mule 4.4.0 is older than 4.5.0"],
+      firstSeen: "2026-07-01T00:00:00Z",
+    },
   };
   const { deps, sent } = harness({ initialKnown, report });
   const r = await scanAndNotify({ deps });
@@ -97,7 +126,11 @@ test("scanAndNotify: alwaysNotify pushes the full list even when nothing changed
   const candidates = [cand("orders-api", ["Mule 4.4.0 is older than 4.5.0"])];
   const report = reportOf(candidates);
   const initialKnown = {
-    "orders-api": { sig: "orders-api::Mule 4.4.0 is older than 4.5.0", reasons: ["Mule 4.4.0 is older than 4.5.0"], firstSeen: "2026-07-01T00:00:00Z" },
+    "orders-api": {
+      sig: "orders-api::Mule 4.4.0 is older than 4.5.0",
+      reasons: ["Mule 4.4.0 is older than 4.5.0"],
+      firstSeen: "2026-07-01T00:00:00Z",
+    },
   };
   const { deps, sent } = harness({ initialKnown, report });
   const r = await scanAndNotify({ deps, alwaysNotify: true });
@@ -110,7 +143,11 @@ test("scanAndNotify: alwaysNotify pushes the full list even when nothing changed
 test("scanAndNotify: an upgraded app is announced resolved and removed from state", async () => {
   const report = reportOf([]); // nothing stale anymore
   const initialKnown = {
-    "orders-api": { sig: "orders-api::Mule 4.4.0 is older than 4.5.0", reasons: ["Mule 4.4.0 is older than 4.5.0"], firstSeen: "2026-07-01T00:00:00Z" },
+    "orders-api": {
+      sig: "orders-api::Mule 4.4.0 is older than 4.5.0",
+      reasons: ["Mule 4.4.0 is older than 4.5.0"],
+      firstSeen: "2026-07-01T00:00:00Z",
+    },
   };
   const { deps, sent, store } = harness({ initialKnown, report });
   const r = await scanAndNotify({ deps });
@@ -122,7 +159,13 @@ test("scanAndNotify: an upgraded app is announced resolved and removed from stat
 
 // ── scanAndNotify: not configured → clean no-op, no notify, no clobber ─────────────────────────
 test("scanAndNotify: unconfigured platform is a clean no-op", async () => {
-  const report = { configured: false, note: "Anypoint is not configured.", candidates: [], totalApps: 0, staleApps: 0 };
+  const report = {
+    configured: false,
+    note: "Anypoint is not configured.",
+    candidates: [],
+    totalApps: 0,
+    staleApps: 0,
+  };
   const { deps, sent } = harness({ report });
   const r = await scanAndNotify({ deps });
   assert.equal(r.configured, false);

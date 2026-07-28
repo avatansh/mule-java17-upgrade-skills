@@ -14,6 +14,11 @@ test("parseRuntimeVersion splits mule + java across shapes", () => {
   assert.deepEqual(parseRuntimeVersion("4.6.0"), { muleVersion: "4.6.0", javaVersion: null });
   assert.deepEqual(parseRuntimeVersion(null), { muleVersion: null, javaVersion: null });
   assert.deepEqual(parseRuntimeVersion(""), { muleVersion: null, javaVersion: null });
+  // CloudHub 2.0 real shapes: the leading number after ":" is a PATCH, the java version follows "java".
+  assert.deepEqual(parseRuntimeVersion("4.9.19:9-java17"), { muleVersion: "4.9.19", javaVersion: 17 });
+  assert.deepEqual(parseRuntimeVersion("4.9.19:java17"), { muleVersion: "4.9.19", javaVersion: 17 });
+  // A build timestamp+patch (no java token) must NOT be mistaken for a Java version.
+  assert.deepEqual(parseRuntimeVersion("4.4.0:20250919-6"), { muleVersion: "4.4.0", javaVersion: null });
 });
 
 // ── classifyApp ──────────────────────────────────────────────────────────────────────────────
@@ -60,20 +65,56 @@ test("scanFleet: classifies, maps repos, de-dups multi-env, flags unmapped", asy
     envs: ENVS,
     byEnv: {
       Production: [
-        { name: "orders-api", muleVersion: "4.4.0", javaVersion: 8, runtimeVersion: "4.4.0:8-java", status: "RUNNING", environment: "Production" },
-        { name: "modern-api", muleVersion: "4.9.18", javaVersion: 17, runtimeVersion: "4.9.18:17", status: "RUNNING", environment: "Production" },
-        { name: "legacy-billing-prod", muleVersion: "4.3.0", javaVersion: 8, runtimeVersion: "4.3.0:8-java", status: "RUNNING", environment: "Production" },
+        {
+          name: "orders-api",
+          muleVersion: "4.4.0",
+          javaVersion: 8,
+          runtimeVersion: "4.4.0:8-java",
+          status: "RUNNING",
+          environment: "Production",
+        },
+        {
+          name: "modern-api",
+          muleVersion: "4.9.18",
+          javaVersion: 17,
+          runtimeVersion: "4.9.18:17",
+          status: "RUNNING",
+          environment: "Production",
+        },
+        {
+          name: "legacy-billing-prod",
+          muleVersion: "4.3.0",
+          javaVersion: 8,
+          runtimeVersion: "4.3.0:8-java",
+          status: "RUNNING",
+          environment: "Production",
+        },
       ],
       Staging: [
         // same stale app in a second env → must collapse to one candidate with 2 environments
-        { name: "orders-api", muleVersion: "4.4.0", javaVersion: 8, runtimeVersion: "4.4.0:8-java", status: "RUNNING", environment: "Staging" },
+        {
+          name: "orders-api",
+          muleVersion: "4.4.0",
+          javaVersion: 8,
+          runtimeVersion: "4.4.0:8-java",
+          status: "RUNNING",
+          environment: "Staging",
+        },
       ],
     },
   });
 
   // injected resolver: orders-api resolves; legacy-billing-prod does NOT (throws) → needsCoordinates
   const resolve = async ({ appName }) => {
-    if (appName === "orders-api") return { owner: "acme", repo: "orders-api", appPath: ".", orgId: "o1", defaultBranch: "main", fromRegistry: false };
+    if (appName === "orders-api")
+      return {
+        owner: "acme",
+        repo: "orders-api",
+        appPath: ".",
+        orgId: "o1",
+        defaultBranch: "main",
+        fromRegistry: false,
+      };
     throw new Error("unresolvable");
   };
 
@@ -116,7 +157,10 @@ test("scanFleet: resolveRepos:false reports stale apps without touching the reso
     byEnv: { Production: [{ name: "a", muleVersion: "4.4.0", javaVersion: 8, environment: "Production" }] },
   });
   let called = false;
-  const resolve = async () => { called = true; return {}; };
+  const resolve = async () => {
+    called = true;
+    return {};
+  };
   const report = await scanFleet({ client, resolveRepos: false, deps: { resolve } });
   assert.equal(called, false);
   assert.equal(report.staleApps, 1);

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wire ALL live integrations & test everything in Vibes</title>
+<style>
+  :root { --fg:#1b1b1f; --muted:#5a5a66; --bg:#ffffff; --code-bg:#f4f4f7; --border:#e2e2ea;
+          --accent:#0b6bcb; --accent-bg:#eaf2fc; --warn-bg:#fff6e5; --warn-border:#f0c36d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e6e6ea; --muted:#a2a2b0; --bg:#16161a; --code-bg:#22222a; --border:#33333d;
+            --accent:#5aa7f0; --accent-bg:#16283d; --warn-bg:#3a2f16; --warn-border:#7a5f1e; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:2.5rem 1.25rem 5rem; background:var(--bg); color:var(--fg);
+         font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  main { max-width:860px; margin:0 auto; }
+  h1 { font-size:2rem; line-height:1.2; margin:0 0 .25rem; }
+  h2 { font-size:1.4rem; margin:2.5rem 0 .75rem; padding-top:.5rem; border-top:1px solid var(--border); }
+  h3 { font-size:1.1rem; margin:1.75rem 0 .5rem; }
+  p, li { color:var(--fg); }
+  .lede { color:var(--muted); font-size:1.05rem; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  code { background:var(--code-bg); padding:.12em .4em; border-radius:4px;
+         font:0.86em/1.5 "SF Mono",SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace; }
+  pre { background:var(--code-bg); border:1px solid var(--border); border-radius:8px;
+        padding:1rem 1.1rem; overflow:auto; }
+  pre code { background:none; padding:0; }
+  table { border-collapse:collapse; width:100%; margin:1rem 0; font-size:.95rem; }
+  th, td { border:1px solid var(--border); padding:.5rem .7rem; text-align:left; vertical-align:top; }
+  th { background:var(--code-bg); }
+  blockquote { margin:1rem 0; padding:.6rem 1rem; background:var(--accent-bg);
+               border-left:4px solid var(--accent); border-radius:0 6px 6px 0; color:var(--fg); }
+  blockquote.warn { background:var(--warn-bg); border-left-color:var(--warn-border); }
+  .nav { font-size:.9rem; color:var(--muted); margin:.5rem 0 2rem; }
+  .nav a { margin-right:1rem; }
+  footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--border);
+           color:var(--muted); font-size:.85rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Wire ALL live integrations &amp; test everything in MuleSoft Vibes</h1>
+<p class="lede">The end-to-end runbook for connecting the suite to <strong>your real Anypoint
+Platform, GitHub, Jira, and Slack</strong>, then exercising <strong>every</strong> function from
+inside <strong>MuleSoft Vibes</strong> (Anypoint Code Builder).</p>
+
+<p class="nav">Sibling guides:
+  <a href="./SETUP-VIBES.html">SETUP-VIBES.html</a> ·
+  <a href="./SETUP-IDE.html">SETUP-IDE.html</a> ·
+  <a href="./SETUP-AGENTFORCE.html">SETUP-AGENTFORCE.html</a>
+</p>
+
+<blockquote>
+<p><strong>TL;DR</strong> — the <code>dev</code> environment already points at your real
+org/owner/site/channel, and all seven secrets ship <strong>already AES-encrypted</strong> in
+<code>config/config-secure-dev.yaml</code>. So "wiring" is mostly: <strong>put the one AES
+decryption key (<code>MULE_CONFIG_KEY</code>) into <code>.env</code> and select
+<code>MULE_UPGRADE_ENV=dev</code>.</strong> Verify from a terminal first, then plug into Vibes.</p>
+</blockquote>
+
+<h2>0. What "already wired" means</h2>
+<p><code>config/config-dev.yaml</code> (non-secret, committed) already targets <strong>your</strong>
+accounts:</p>
+<table>
+  <thead><tr><th>Integration</th><th>Key(s) in <code>config-dev.yaml</code></th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Anypoint</td><td><code>anypoint.defaultOrgId</code>, <code>anypoint.verify.enabled</code>, <code>assess.armCrossCheck</code>, <code>assess.apiPolicyCheck</code></td><td>your org UUID; verify + cross-checks <strong>on</strong></td></tr>
+    <tr><td>GitHub</td><td><code>github.defaultOwner</code></td><td><code>avatansh</code></td></tr>
+    <tr><td>Jira</td><td><code>jira.baseUrl</code>, <code>jira.host</code>, <code>jira.projectKey</code>, <code>jira.autoCreate</code></td><td><code>avatansh-sharma.atlassian.net</code>, <code>J1U</code>, autoCreate <strong>on</strong></td></tr>
+    <tr><td>Slack</td><td><code>slack.channel</code></td><td><code>#java17-upgrades</code></td></tr>
+  </tbody>
+</table>
+<p><code>config/config-secure-dev.yaml</code> (committed) holds the <strong>matching secrets,
+already encrypted</strong> as <code>![…]</code>: <code>github.token</code>,
+<code>github.webhookSecret</code>, <code>anypoint.clientId</code>, <code>anypoint.clientSecret</code>,
+<code>slack.webhookUrl</code>, <code>jira.email</code>, <code>jira.apiToken</code>.</p>
+<p><strong>All four clients resolve credentials the same way: plaintext env var first, then the
+decrypted YAML.</strong> Two ways to supply each secret:</p>
+<ol>
+  <li><strong>Supply the AES key</strong> (<code>MULE_CONFIG_KEY</code>) → every encrypted secret
+  decrypts at runtime. One value wires all four. <em>(Preferred.)</em></li>
+  <li><strong>Supply plaintext env vars</strong> (<code>GITHUB_TOKEN</code>,
+  <code>SLACK_WEBHOOK_URL</code>, <code>JIRA_EMAIL</code>, <code>JIRA_API_TOKEN</code>,
+  <code>ANYPOINT_CLIENT_ID</code>, <code>ANYPOINT_CLIENT_SECRET</code>) → these
+  <strong>override</strong> the YAML, so you don't need the key at all.</li>
+</ol>
+
+<h2>1. Create your <code>.env</code> (the only wiring step)</h2>
+<pre><code>cd /path/to/mule-java17-upgrade-skills
+cp .env.example .env</code></pre>
+<p><strong>Option 1 — one key wires everything:</strong></p>
+<pre><code>MULE_CONFIG_KEY=&lt;the 16/24/32-char AES key that encrypted config-secure-dev.yaml&gt;
+MULE_UPGRADE_ENV=dev</code></pre>
+<p><strong>Option 2 — no key, paste plaintext creds instead</strong> (each overrides the YAML):</p>
+<pre><code>MULE_UPGRADE_ENV=dev
+GITHUB_TOKEN=ghp_xxx                       # repo scope
+ANYPOINT_CLIENT_ID=xxx
+ANYPOINT_CLIENT_SECRET=xxx
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx
+JIRA_EMAIL=you@example.com
+JIRA_API_TOKEN=xxx</code></pre>
+<blockquote class="warn">
+<p><strong>You must hold the correct AES key for Option 1.</strong> Without it the <code>![…]</code>
+values cannot be decrypted (<em>"cannot decrypt secure property"</em>). If you don't have the key,
+use Option 2. <strong>Never commit <code>.env</code> or the real key</strong> — <code>.env</code> is
+git-ignored and <code>.env.example</code> keeps <code>MULE_CONFIG_KEY=</code> empty on purpose.</p>
+</blockquote>
+<p><code>lib_shared/env.js</code> auto-loads <code>.env</code> at the top of every script, CLI, and
+the server — no shell exports needed.</p>
+
+<hr>
+
+<h2>1a. How the key &amp; env are supplied automatically (set once, never prompted)</h2>
+<p>A real user in Vibes (or at a prompt) is <strong>never asked to type the key or pick a config
+file</strong>. The mechanism is entirely automatic once the one-line <code>.env</code> above exists:</p>
+
+<p><strong>1. The <code>.env</code> is found no matter where the skill runs.</strong>
+<code>lib_shared/env.js</code> locates <code>.env</code> by walking <strong>up from its own file
+location</strong> (<code>import.meta.url</code>), not from the current working directory. So whether
+Vibes invokes a script from the workspace root, a sub-folder, or the ACB sandbox, the <em>same</em>
+suite-root <code>.env</code> is the one that loads. It's idempotent (loads once) and <strong>never
+overrides a variable already set in the real environment</strong> — so CI/container injection still
+wins over the file.</p>
+
+<blockquote>
+<p><strong>This is why Vibes skills must be SYMLINKED, not copied</strong> (§3, Option A). A
+symlinked skill's <code>../../lib_shared/env.js</code> resolves back into the suite, so it finds the
+suite's single <code>.env</code>. A <em>copied</em> skill would look for a <code>.env</code> that
+isn't there and silently find no key.</p>
+</blockquote>
+
+<p><strong>2. The environment is a MANDATORY input (no silent default).</strong> Faithful to the
+Mule app's required <code>-Denv</code>/<code>mule.env</code>, the active environment must be supplied
+on every run — there is <strong>no</strong> default. Supply it <strong>either</strong> by setting
+<code>MULE_UPGRADE_ENV</code> in <code>.env</code> (set once — the common case) <strong>or</strong>
+by passing <code>--env &lt;dev|local|prod&gt;</code> at each command; the <code>--env</code> flag
+wins when both are present. With <code>dev</code>, the loader reads <code>config.yaml</code> →
+<code>config-dev.yaml</code> → <code>config-secure-dev.yaml</code>; switch to <code>prod</code> and
+it transparently loads the <code>-prod</code> pair instead. If <strong>neither</strong> is supplied,
+every entrypoint — the skills, the CLIs, and the server at boot — <strong>fails fast</strong> with
+<code>environment is required: pass --env &lt;dev|local|prod&gt; or set MULE_UPGRADE_ENV</code>, and
+an unknown env (e.g. <code>staging</code>) is rejected too. Once resolved it's pinned for the whole
+run so every config read uses the same env (and the same per-env key).</p>
+
+<p><strong>3. The decryption key is auto-resolved per env.</strong> <code>lib_shared/config.js</code>
+resolves the AES key with this precedence (first non-empty wins):</p>
+<table>
+  <thead><tr><th>Order</th><th>Source</th><th>When to use</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>explicit <code>opts.key</code></td><td>programmatic / tests only</td></tr>
+    <tr><td>2</td><td><code>MULE_CONFIG_KEY_&lt;ENV&gt;</code> (e.g. <code>MULE_CONFIG_KEY_PROD</code>)</td><td><strong>only if</strong> an env was encrypted with a <em>different</em> key — the active <code>MULE_UPGRADE_ENV</code> auto-selects the matching one</td></tr>
+    <tr><td>3</td><td><code>MULE_CONFIG_KEY</code></td><td>the single shared key — <strong>the common case here</strong></td></tr>
+  </tbody>
+</table>
+<p>Because all three envs in this suite were encrypted with the <strong>same</strong> key, setting
+<code>MULE_CONFIG_KEY</code> once covers dev, local, and prod. The per-env
+<code>MULE_CONFIG_KEY_&lt;ENV&gt;</code> slots exist only for the day someone re-encrypts one
+environment under a distinct key — then dropping that one var in <code>.env</code> is all that
+changes; <code>MULE_UPGRADE_ENV</code> picks it up automatically.</p>
+
+<p><strong>4. Every integration reads the same resolved config.</strong> All four clients resolve
+credentials identically — <strong>plaintext env var first, then the decrypted YAML value, then a
+default</strong> — so the one key (or an optional plaintext override) wires Anypoint, GitHub, Jira,
+and Slack with no per-skill configuration.</p>
+
+<blockquote>
+<p><strong>Net effect:</strong> set <code>MULE_CONFIG_KEY</code> + <code>MULE_UPGRADE_ENV</code>
+<strong>once</strong> in the suite <code>.env</code>. Every skill, CLI, MCP tool, and the server
+thereafter picks the correct files and key on its own — the user is never prompted for the
+<em>key</em>, in Vibes or at a terminal, while the <em>environment</em> is always an explicit,
+required input (from <code>.env</code> or <code>--env</code>).</p>
+</blockquote>
+
+<blockquote class="warn">
+<p><strong>Two different <code>--env</code> meanings — don't confuse them.</strong> On
+<code>upgrade start</code>, <code>assess</code>, and <code>parent-pom</code>,
+<code>--env &lt;dev|local|prod&gt;</code> <strong>is</strong> the config selector (equivalent to
+setting <code>MULE_UPGRADE_ENV</code>). On <code>scan</code>/<code>scan_notify</code>,
+<code>--env</code> instead names the <strong>Anypoint environment(s)</strong> to scan (e.g.
+<code>--env Production,Staging</code>); those two commands take the <em>config</em> env from
+<code>MULE_UPGRADE_ENV</code> only. Setting <code>MULE_UPGRADE_ENV</code> in <code>.env</code>
+satisfies the config requirement for every command.</p>
+</blockquote>
+
+<h2>2. Verify each integration from a terminal FIRST</h2>
+<p>Do this <strong>before</strong> touching Vibes — it isolates a credential problem from a
+Vibes-integration problem. Every call is non-fatal and env-gated.</p>
+
+<h3>2.1 Prove the suite is healthy (no secrets, no network)</h3>
+<pre><code>npm ci &amp;&amp; node --test          # 290 tests must pass</code></pre>
+
+<h3>2.2 GitHub — real PR against your repo</h3>
+<pre><code>node skills/mule-upgrade/scripts/upgrade.js start \
+  --app orders-api --mode api --owner avatansh --repo-name &lt;a-test-repo&gt; --env dev</code></pre>
+<p>A <code>401/403</code> means the token is missing/rotated or lacks <code>repo</code> scope.
+Success → a real PR and a job at <code>PR_OPEN</code>. (<code>local</code> mode instead uses
+<code>git</code> + an authenticated <code>gh</code> against a clone you own.)</p>
+
+<h3>2.3 Anypoint — read your Runtime Manager fleet</h3>
+<pre><code>node skills/mule-upgrade-scan/scripts/scan.js --env dev</code></pre>
+<p>If Anypoint creds resolve, you get a fleet table; if not, rows report <code>unverified</code>
+(never a crash). <code>armCrossCheck</code>/<code>apiPolicyCheck</code> are <strong>on</strong> in
+dev, so <code>assess</code> reads Runtime Manager + API Manager too.</p>
+
+<h3>2.4 Slack — post to your channel (dry-run first, then live)</h3>
+<pre><code>node skills/mule-upgrade-scan/scripts/scan_notify.js --dry-run   # compute, do NOT send
+node skills/mule-upgrade-scan/scripts/scan_notify.js            # send to #java17-upgrades</code></pre>
+
+<h3>2.5 Jira — auto-create / comment (autoCreate is ON in dev)</h3>
+<p>Jira fires as part of the orchestrator: on a real <code>upgrade … start</code>, with
+<code>jira.autoCreate=true</code> and creds resolved, a ticket is created in project <strong>J1U</strong>
+and a PR-opened comment is posted. Missing creds → "no Jira creds" skip.</p>
+<blockquote>
+<p><strong>State lives</strong> under <code>~/.mule-upgrade/</code> (override with
+<code>MULE_UPGRADE_HOME</code>). Inspect any run with <code>cat ~/.mule-upgrade/jobs/*.json</code>.
+For throwaway testing, set <code>MULE_UPGRADE_HOME=./.local-jobstore</code> in <code>.env</code>.</p>
+</blockquote>
+
+<h3>2.6 Test EVERY skill E2E from the terminal (exact commands)</h3>
+<p>Steps 2.2–2.5 prove the four <strong>connections</strong>. This section runs <strong>every
+skill's CLI</strong> end-to-end so you've exercised the whole suite before wiring Vibes. Run them
+<strong>in order</strong> — a few reuse the <code>jobId</code> printed by an earlier step. Set
+<code>SUITE</code>, <code>REPO</code>, and (for api mode) <code>OWNER</code>/<code>REPONAME</code>
+once:</p>
+<pre><code>cd /path/to/mule-java17-upgrade-skills
+REPO=/path/to/a-mule-4.6-to-4.8-java8or11-clone     # a real target app you can open a PR against
+OWNER=avatansh                                       # your GitHub owner (api mode)
+REPONAME=&lt;a-test-repo&gt;                               # a repo you can push branches to (api mode)</code></pre>
+
+<p><strong>Skill 1 — <code>mule-upgrade-assess</code> (assess_app).</strong> Read-only; writes
+nothing. <code>--no-fetch</code> keeps it fully offline; drop it to also hit the live connector
+matrix + (in dev) Anypoint ARM/API-Manager cross-checks:</p>
+<pre><code># offline, deterministic:
+node skills/mule-upgrade-assess/scripts/assess.js --repo "$REPO" --no-fetch --out plan.json
+# live (matrix fetch + Anypoint cross-check, since dev has armCrossCheck/apiPolicyCheck on):
+node skills/mule-upgrade-assess/scripts/assess.js --repo "$REPO" --out plan.json
+#   optional: --app-path sub/dir  --app-name my-app  --head-sha &lt;sha&gt;  --strategy appOverride|inPlace</code></pre>
+<p>Expect the <code>AssessmentResult</code> JSON (also saved to <code>plan.json</code>) + a human
+summary on stderr.</p>
+
+<p><strong>Skill 2 — <code>mule-upgrade</code> orchestrator (start_upgrade).</strong> The full
+pipeline; this is what fires <strong>GitHub + Jira + Slack</strong> together. Pick the mode you can
+support:</p>
+<pre><code># api mode → Git Data API commit + PR (uses github.token / GITHUB_TOKEN):
+node skills/mule-upgrade/scripts/upgrade.js start \
+  --app orders-api --mode api --owner "$OWNER" --repo-name "$REPONAME" --env dev
+
+# local mode → git + gh against a clone you own:
+node skills/mule-upgrade/scripts/upgrade.js start \
+  --app orders-api --mode local --repo "$REPO" --env dev</code></pre>
+<p>Expect a job at <code>PR_OPEN</code>, a real PR, a <strong>J1U</strong> Jira ticket + comment, and
+a Slack post to <code>#java17-upgrades</code>. <strong>Copy the <code>jobId</code></strong> — later
+steps need it:</p>
+<pre><code>JOB=&lt;the job-… id printed above&gt;</code></pre>
+
+<p><strong>Skill 5a — <code>mule-upgrade-job</code> status (get_job_status).</strong></p>
+<pre><code>node skills/mule-upgrade-job/scripts/job.js status --job "$JOB" --jira-base-url https://avatansh-sharma.atlassian.net
+node skills/mule-upgrade-job/scripts/job.js get  --job "$JOB"     # raw record
+node skills/mule-upgrade-job/scripts/job.js list                 # all jobs</code></pre>
+
+<p><strong>Skill 6b — <code>mule-upgrade</code> poll tail (reconcile).</strong> Advances
+<code>PR_OPEN → DEPLOYING → DEPLOYED</code> using <strong>GitHub</strong> (<code>gh pr view</code>/<code>checks</code>)
++ <strong>Anypoint</strong> deploy-verify. <code>--stale-seconds 0</code> treats every job as
+pollable now:</p>
+<pre><code>node skills/mule-upgrade/scripts/upgrade.js poll --stale-seconds 0
+# continuous: node skills/mule-upgrade/scripts/upgrade.js poll --watch --interval 30</code></pre>
+
+<p><strong>Skill 5b — <code>mule-upgrade-job</code> reconcile sweep.</strong> Same engine,
+standalone; stale early-stage jobs flip to <code>FAILED_INTERRUPTED</code> and release their lock:</p>
+<pre><code>node skills/mule-upgrade-job/scripts/job.js reconcile --stale-seconds 0</code></pre>
+
+<p><strong>Skill 4 — <code>mule-upgrade-parent-pom</code> (upgrade_parent_pom).</strong> Bumps the
+shared parent/BOM pom and opens its own PR (or reports <code>NO_CHANGE</code>):</p>
+<pre><code># api mode via repo URL (branch/subpath preserved if present):
+node skills/mule-upgrade-parent-pom/scripts/parent_pom_cli.js \
+  --repo-url https://github.com/$OWNER/&lt;parent-pom-repo&gt; --mode api --env dev
+# or explicit owner/repo, local mode against a clone:
+node skills/mule-upgrade-parent-pom/scripts/parent_pom_cli.js \
+  --owner "$OWNER" --repo &lt;parent-pom-repo&gt; --mode local --repo-root "$REPO" --env dev
+#   optional: --pom-path pom.xml  --branch main  --jira &lt;KEY&gt;  --no-fetch</code></pre>
+
+<p><strong>Skill 3 — <code>mule-upgrade-pr</code> rollback (rollback).</strong> Opens a revert PR
+restoring the pre-upgrade tree (api mode). Needs the upgrade commit sha + branch from the job record
+(<code>job.js get</code>):</p>
+<pre><code>node skills/mule-upgrade-pr/scripts/pr.js rollback --mode api \
+  --coords '{"owner":"'"$OWNER"'","repo":"&lt;repo&gt;","defaultBranch":"main"}' \
+  --commit-sha &lt;upgradeCommitSha&gt; --branch &lt;upgradeBranch&gt; --app orders-api --job "$JOB"</code></pre>
+<blockquote>
+<p>Simpler: drive rollback through the orchestrator/MCP tool (step 7 of the Vibes table), which reads
+the coords/sha/branch from the job record for you. The raw CLI above is for direct testing.</p>
+</blockquote>
+
+<p><strong>Skill 5c — <code>mule-upgrade-job</code> reapply + delete (reapply_job / delete_job).</strong>
+Do these <strong>last</strong> — <code>delete</code> removes the record:</p>
+<pre><code>node skills/mule-upgrade-job/scripts/job.js reapply --job "$JOB"   # reseed a new jobId from coords
+node skills/mule-upgrade-job/scripts/job.js delete  --job "$JOB"   # remove record + clear index + release lock</code></pre>
+
+<p><strong>Skill 7 — <code>mule-upgrade-scan</code> (scan_fleet + scan_notify).</strong> Already run
+in 2.3/2.4; together they are the fleet audit + proactive Slack push:</p>
+<pre><code>node skills/mule-upgrade-scan/scripts/scan.js --env dev              # fleet table (Anypoint)
+node skills/mule-upgrade-scan/scripts/scan.js --env dev --json       # machine-readable
+node skills/mule-upgrade-scan/scripts/scan_notify.js --dry-run       # digest, no send
+node skills/mule-upgrade-scan/scripts/scan_notify.js                 # send to #java17-upgrades</code></pre>
+
+<blockquote>
+<p><strong>Apply skill note:</strong> <code>mule-upgrade-apply</code> is not a standalone connection
+test — it's the byte-level rewriter the orchestrator calls between assess and commit. It's covered by
+<code>node --test</code> (step 2.1) and exercised live inside Skill 2. To see its output in
+isolation, feed <code>plan.json</code> from Skill 1 to
+<code>node skills/mule-upgrade-apply/scripts/apply_edits.js</code> against a scratch copy of the
+repo.</p>
+</blockquote>
+
+<p>Once <strong>all</strong> of the above behave — real PR, J1U ticket, Slack posts, poll advancing
+the job, rollback/reapply/delete working — you've proven the suite E2E and can wire Vibes (§3) with
+confidence, then repeat the §4 prompts there.</p>
+
+<h2>3. Plug the wired suite into Vibes</h2>
+<p>Both options inherit the same <code>.env</code> you just verified, so all four integrations stay
+live.</p>
+
+<h3>Option A — Install as Vibes Skills (recommended, no server)</h3>
+<p>Symlink the 7 skill folders into <code>.a4drules/skills/</code> (symlink, <strong>not</strong>
+copy, so <code>../../lib_shared</code>, <code>config/</code>, <code>server/</code> still resolve):</p>
+<pre><code>SUITE=/path/to/mule-java17-upgrade-skills
+mkdir -p .a4drules/skills
+for s in mule-upgrade mule-upgrade-assess mule-upgrade-apply mule-upgrade-pr \
+         mule-upgrade-parent-pom mule-upgrade-job mule-upgrade-scan; do
+  ln -s "$SUITE/skills/$s" ".a4drules/skills/$s"
+done</code></pre>
+<p>On Windows: <code>mklink /D</code> (CMD as admin) or <code>New-Item -ItemType SymbolicLink</code>.
+Reload the ACB window; the 8 skills appear under <strong>Workspace</strong> scope. See
+<a href="./SETUP-VIBES.html">SETUP-VIBES.html</a> Option A.</p>
+
+<h3>Option B — Register the MCP server (first-class tools + webhooks)</h3>
+<pre><code>cd /path/to/mule-java17-upgrade-skills
+MCP_BEARER_TOKEN=&lt;long-random-string&gt; node server/server.js   # → http://0.0.0.0:8080/mcp</code></pre>
+<p>In Vibes → <strong>MCP Servers → Remote Servers → Add</strong> with URL
+<code>http://localhost:8080/mcp</code> and header <code>Authorization: Bearer &lt;MCP_BEARER_TOKEN&gt;</code>.
+The server reads the <strong>same <code>.env</code></strong>. All 11 tools appear.</p>
+
+<h2>4. Test EVERY function from inside Vibes</h2>
+<table>
+  <thead><tr><th>#</th><th>Say to Vibes</th><th>Skill / tool</th><th>Live integration</th><th>Expect</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>"Assess <code>&lt;repo&gt;</code> for the Java 17 upgrade"</td><td><code>mule-upgrade-assess</code> / <code>assess_app</code></td><td>Anypoint (ARM + API Mgr), matrix fetch</td><td>ChangePlan JSON + summary</td></tr>
+    <tr><td>2</td><td>"Upgrade orders-api to Java 17 and open a PR"</td><td><code>mule-upgrade</code> / <code>start_upgrade</code></td><td><strong>GitHub</strong> + <strong>Jira</strong> + <strong>Slack</strong></td><td><code>PR_OPEN</code>, real PR, J1U ticket, Slack post</td></tr>
+    <tr><td>3</td><td>"What's the status of job <code>job-…</code>?"</td><td><code>mule-upgrade-job</code> / <code>get_job_status</code></td><td>— (local job store)</td><td>status + <code>nextPollSeconds</code></td></tr>
+    <tr><td>4</td><td>"Poll the merge/deploy tail for <code>job-…</code>"</td><td><code>mule-upgrade</code> (<code>poll</code>) / <code>reconcile</code></td><td><strong>GitHub</strong> + <strong>Anypoint</strong></td><td>PR_OPEN → DEPLOYING → DEPLOYED / MUNIT_FAILED / DEP_GUARD_FAILED</td></tr>
+    <tr><td>5</td><td>"Reconcile stale jobs"</td><td><code>mule-upgrade-job</code> / <code>reconcile</code></td><td>GitHub + Anypoint</td><td>stale early-stage → <code>FAILED_INTERRUPTED</code>, lock released</td></tr>
+    <tr><td>6</td><td>"Upgrade the shared parent/BOM pom in <code>&lt;repo&gt;</code>"</td><td><code>mule-upgrade-parent-pom</code> / <code>upgrade_parent_pom</code></td><td><strong>GitHub</strong></td><td>parent/BOM bump PR (or <code>NO_CHANGE</code>)</td></tr>
+    <tr><td>7</td><td>"Roll back the PR for job <code>job-…</code>"</td><td><code>mule-upgrade-job</code> / <code>rollback</code></td><td><strong>GitHub</strong> + <strong>Slack</strong></td><td><code>Revert:</code> PR + Slack note</td></tr>
+    <tr><td>8</td><td>"Reapply job <code>job-…</code>"</td><td><code>mule-upgrade-job</code> / <code>reapply_job</code></td><td>—</td><td>new jobId reseeded from coords</td></tr>
+    <tr><td>9</td><td>"Delete job <code>job-…</code>"</td><td><code>mule-upgrade-job</code> / <code>delete_job</code></td><td>—</td><td>record removed, index cleared, lock released</td></tr>
+    <tr><td>10</td><td>"Scan the fleet for old Mule/Java and alert me on Slack"</td><td><code>mule-upgrade-scan</code> / <code>scan_fleet</code> + <code>scan_notify</code></td><td><strong>Anypoint</strong> + <strong>Slack</strong></td><td>fleet table + Slack digest</td></tr>
+  </tbody>
+</table>
+<p><strong>Recommended full-sweep order:</strong> 1 → 2 → 3 → 4 → 10 → 7 → 9. That exercises all four
+integrations and leaves a clean job store.</p>
+
+<h2>5. Confirm each integration actually fired</h2>
+<ul>
+  <li><strong>GitHub</strong> → the PR exists; the job record shows <code>prUrl</code>/<code>branchName</code> (<code>cat ~/.mule-upgrade/jobs/*.json</code>).</li>
+  <li><strong>Jira</strong> → a <strong>J1U</strong> ticket exists with the "PR opened" comment.</li>
+  <li><strong>Slack</strong> → <code>#java17-upgrades</code> shows the PR-ready message + fleet digest.</li>
+  <li><strong>Anypoint</strong> → the poll tail moved the job past <code>PR_OPEN</code> via real deploy-verify, and <code>scan_fleet</code> returned live deployments.</li>
+</ul>
+
+<h2>6. Troubleshooting the live wiring</h2>
+<table>
+  <thead><tr><th>Symptom</th><th>Cause &amp; fix</th></tr></thead>
+  <tbody>
+    <tr><td><em>"cannot decrypt secure property"</em> / <em>"MULE_CONFIG_KEY must be 16/24/32 characters"</em></td><td>Wrong/missing AES key. Fix <code>MULE_CONFIG_KEY</code>, or use plaintext env vars (Option 2).</td></tr>
+    <tr><td>GitHub <code>401/403</code></td><td><code>github.token</code> rotated or lacks <code>repo</code> scope. Set a fresh plaintext <code>GITHUB_TOKEN</code>, or <code>gh auth login</code> for local mode.</td></tr>
+    <tr><td>Anypoint rows all <code>unverified</code></td><td>Anypoint creds/org not resolving, or the Connected App lacks Runtime/API Manager scope.</td></tr>
+    <tr><td>Slack "no SLACK_WEBHOOK_URL"</td><td>Webhook not resolving — check the key decrypts, or set <code>SLACK_WEBHOOK_URL</code> plaintext.</td></tr>
+    <tr><td>Jira "no Jira creds" / no ticket</td><td><code>jira.email</code>/<code>jira.apiToken</code> not resolving, or <code>jira.autoCreate</code> off.</td></tr>
+    <tr><td>Skills don't appear in Vibes</td><td>Confirm <code>.a4drules/skills/&lt;skill&gt;/SKILL.md</code> and reload ACB; symlink (don't copy).</td></tr>
+    <tr><td>MCP server 401</td><td>Service URL must end in <code>/mcp</code> and the bearer header must equal <code>MCP_BEARER_TOKEN</code>.</td></tr>
+  </tbody>
+</table>
+<blockquote class="warn">
+<p>Any <em>"Token exchange timed out"</em> against the Anypoint <strong>DX</strong> server is a
+<strong>separate</strong> tool (VPN-dependent internal gateway) and unrelated to this suite — you do
+<strong>not</strong> need the Salesforce <code>sf</code>/<code>sfdx</code> CLI for any of the above.</p>
+</blockquote>
+
+<footer>
+  <strong>References</strong><br>
+  <a href="./SETUP-VIBES.html">SETUP-VIBES.html</a> ·
+  <a href="./SETUP-IDE.html">SETUP-IDE.html</a> ·
+  <a href="./SETUP-AGENTFORCE.html">SETUP-AGENTFORCE.html</a>
+</footer>
+
+</main>
+</body>
+</html>

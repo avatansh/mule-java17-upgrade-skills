@@ -6,11 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  resolveCoordinates,
-  discoverDefaultBranch,
-  _resetBranchCache,
-} from "../lib_shared/coordinates.js";
+import { resolveCoordinates, discoverDefaultBranch, _resetBranchCache } from "../lib_shared/coordinates.js";
 
 // A stub config reader: `cfg(dotted, fallback)` reads from a plain object of dotted keys.
 function cfgFrom(map) {
@@ -28,7 +24,15 @@ const CONVENTION = {
 
 test("tier 1: registry entry wins over convention", async () => {
   _resetBranchCache();
-  const registry = { billing: { owner: "acme-corp", repo: "Mule-Apps", appPath: "billing-eapi", orgId: "org-1", defaultBranch: "develop" } };
+  const registry = {
+    billing: {
+      owner: "acme-corp",
+      repo: "Mule-Apps",
+      appPath: "billing-eapi",
+      orgId: "org-1",
+      defaultBranch: "develop",
+    },
+  };
   const c = await resolveCoordinates({
     appName: "billing",
     registry,
@@ -92,7 +96,11 @@ test("registry entry precedence is per-field (registry owner + convention appPat
 
 test("naming toggles off: repoEqualsAppName=false & appPathAtRoot=false → null when unspecified", async () => {
   _resetBranchCache();
-  const cfg = cfgFrom({ ...CONVENTION, "naming.repoEqualsAppName": "false", "naming.appPathAtRoot": "false" });
+  const cfg = cfgFrom({
+    ...CONVENTION,
+    "naming.repoEqualsAppName": "false",
+    "naming.appPathAtRoot": "false",
+  });
   // repo cannot resolve → VALIDATION
   await assert.rejects(
     () => resolveCoordinates({ appName: "orders", registry: {}, deps: { cfg } }),
@@ -138,7 +146,7 @@ test("appName is required", async () => {
 test("branch discovery: live getRepo default_branch wins over config default", async () => {
   _resetBranchCache();
   let calls = 0;
-  const getRepo = async (o, r) => {
+  const getRepo = async () => {
     calls++;
     return { default_branch: "trunk" };
   };

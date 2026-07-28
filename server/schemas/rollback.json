@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "rollback",
+  "title": "rollback",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobId"],
+  "properties": {
+    "jobId": {
+      "type": "string",
+      "description": "The job whose upgrade commit should be reverted."
+    },
+    "upgradeCommitSha": {
+      "type": "string",
+      "description": "Override the commit to revert (defaults to the job record's commitSha)."
+    }
+  }
+}

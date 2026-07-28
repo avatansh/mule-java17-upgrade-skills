@@ -57,20 +57,25 @@ config `http.host`, else `0.0.0.0`.
   is recorded via `jobstore.markOnce`; a repeated delivery short-circuits to the last-known
   job status without re-applying the transition.
 
-## The 8 tools
+## The 12 tools
 
-Six are parity with the Mule MCP tools; two (`reconcile`, `rollback`) are added:
+Six are parity with the Mule MCP tools; the rest (`reconcile`, `rollback`, `scan_fleet`,
+`scan_notify`, `resolve_versions`, `check_drift`) are added:
 
 | Tool | Does |
 |------|------|
-| `assess_app` | Assess a repo/app → ChangePlan (no writes) |
-| `start_upgrade` | Full pipeline: assess → apply → commit → PR → job PR_OPEN |
+| `assess_app` | Assess a repo/app → LEAN ChangePlan (incl. `connectorsInApp[]`) + verbatim deployed-state check (no writes). Version menu / drift are opt-in (`includeVersions` / `includeDrift`) |
+| `start_upgrade` | Full pipeline: assess → apply → commit → PR → job PR_OPEN (accepts `versionStrategy` + `connectorSelections` + `deployedApiName`) |
 | `get_job_status` | Job record + status message + `nextPollSeconds` |
 | `reapply_job` | Re-seed coordinates under a fresh jobId |
 | `delete_job` | Remove record, clear branch index, release lock |
 | `upgrade_parent_pom` | Parent/BOM pom minor-bump + connector pinning → PR |
 | `reconcile` | Sweep stale jobs (poll PR/CI, verify deploy, release locks) |
 | `rollback` | Revert a job's PR (revert branch + revert PR) |
+| `scan_fleet` | Audit the Anypoint fleet for apps still on old Mule/Java → candidate list |
+| `scan_notify` | Fleet scan + de-duped Slack alert when new stale apps appear |
+| `resolve_versions` | App-SCOPED per-connector version menu (current + matrix pin + first-compatible + latest-in-major + latest), live-enriched, non-fatal |
+| `check_drift` | Advisory audit of whether the bundled matrix is stale (gating pins + connector staleness vs live data); never writes the matrix |
 
 Every tool's `inputSchema` is enforced by the **schema-contract guard** (`server/lib/schema.js`)
 *before* the handler runs. On MCP a violation is a JSON-RPC `-32602` with a `problems` list;

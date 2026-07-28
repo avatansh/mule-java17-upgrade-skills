@@ -23,7 +23,7 @@
 
 import { AnypointClient } from "../../mule-upgrade/scripts/lib/anypoint.js";
 import { resolveCoordinates } from "../../../lib_shared/coordinates.js";
-import { get } from "../../../lib_shared/config.js";
+import { get, requireEnv } from "../../../lib_shared/config.js";
 import { lt } from "../../../lib_shared/semver.js";
 
 function cfg(dotted, fallback) {
@@ -67,7 +67,9 @@ export function classifyApp(app, { staleMuleBelow, targetJava }) {
  * @param {AnypointClient} [opts.client]        injectable (tests)
  * @param {string[]}       [opts.environments]  restrict to these env NAMES (else all, or config list)
  * @param {object}         [opts.deps]          {resolve?} injectable coordinate resolver (tests)
- * @param {boolean}        [opts.resolveRepos=true]  map stale app names to repos
+ * @param {boolean}        [opts.resolveRepos]  map stale app names to repos
+ * @param {string}         [opts.staleMuleBelow]
+ * @param {number}         [opts.targetJava]
  * @returns {Promise<object>} report
  */
 export async function scanFleet(opts = {}) {
@@ -92,15 +94,19 @@ export async function scanFleet(opts = {}) {
   // ── resolve which environments to scan ─────────────────────────────────────────────────────
   const allEnvs = await client.listEnvironments();
   const restrictTo = new Set(
-    (opts.environments && opts.environments.length ? opts.environments : toList(cfg("scan.environments", ""))).map((s) =>
-      s.toUpperCase()
-    )
+    (opts.environments && opts.environments.length
+      ? opts.environments
+      : toList(cfg("scan.environments", ""))
+    ).map((s) => s.toUpperCase())
   );
-  const envs = restrictTo.size ? allEnvs.filter((e) => restrictTo.has(String(e.name).toUpperCase())) : allEnvs;
+  const envs = restrictTo.size
+    ? allEnvs.filter((e) => restrictTo.has(String(e.name).toUpperCase()))
+    : allEnvs;
   const warnings = [];
   if (restrictTo.size && envs.length < restrictTo.size) {
     const found = new Set(envs.map((e) => e.name.toUpperCase()));
-    for (const want of restrictTo) if (!found.has(want)) warnings.push(`Requested environment "${want}" not found in the org.`);
+    for (const want of restrictTo)
+      if (!found.has(want)) warnings.push(`Requested environment "${want}" not found in the org.`);
   }
 
   // ── enumerate deployments per environment ──────────────────────────────────────────────────
@@ -123,7 +129,8 @@ export async function scanFleet(opts = {}) {
   for (const app of stale) {
     if (seen.has(app.name)) {
       const existing = candidates.find((c) => c.appName === app.name);
-      if (existing && !existing.environments.includes(app.environment)) existing.environments.push(app.environment);
+      if (existing && !existing.environments.includes(app.environment))
+        existing.environments.push(app.environment);
       continue;
     }
     seen.add(app.name);
@@ -186,14 +193,22 @@ export function formatReport(report) {
   );
   lines.push(report.coverageNote);
   for (const c of report.candidates) {
-    const where = c.needsCoordinates ? "⚠ needs owner/repo" : `${c.owner}/${c.repo}${c.appPath && c.appPath !== "." ? " @" + c.appPath : ""}`;
+    const where = c.needsCoordinates
+      ? "⚠ needs owner/repo"
+      : `${c.owner}/${c.repo}${c.appPath && c.appPath !== "." ? " @" + c.appPath : ""}`;
     lines.push(`  • ${c.appName} — ${c.reasons.join("; ")} [${c.environments.join(", ")}] → ${where}`);
   }
   for (const w of report.warnings) lines.push(`  ! ${w}`);
   return lines.join("\n");
 }
 
-/** Slack-friendly text for a set of candidate objects (used by the proactive watch). */
+/**
+ * Slack-friendly text for a set of candidate objects (used by the proactive watch).
+ * @param {any} report
+ * @param {object} [opts]
+ * @param {any} [opts.candidates]
+ * @param {string} [opts.heading]
+ */
 export function fleetScanSlackText(report, { candidates = report.candidates, heading } = {}) {
   const head =
     heading ??
@@ -212,6 +227,15 @@ export function fleetScanSlackText(report, { candidates = report.candidates, hea
 const isMain = process.argv[1] && process.argv[1].endsWith("scan.js");
 if (isMain) {
   const args = process.argv.slice(2);
+  try {
+    // Config env (which config-<env>.yaml pair to load) is mandatory — mirrors Mule's -Denv.
+    // NOTE: --env here is the Anypoint ENVIRONMENT LIST to scan, a different axis; the config
+    // selector comes from MULE_UPGRADE_ENV.
+    requireEnv(process.env.MULE_UPGRADE_ENV, { flag: "MULE_UPGRADE_ENV" });
+  } catch (e) {
+    process.stderr.write(e.message + "\n");
+    process.exit(2);
+  }
   const jsonOut = args.includes("--json");
   const envIdx = args.indexOf("--env");
   const environments = envIdx >= 0 && args[envIdx + 1] ? args[envIdx + 1].split(",") : undefined;

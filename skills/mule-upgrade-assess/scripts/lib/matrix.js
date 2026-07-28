@@ -14,10 +14,27 @@ export function bundledMatrixPath() {
   return path.resolve(__dirname, "..", "..", "references", "compatibility-matrix.yaml");
 }
 
-/** Load + parse the bundled matrix YAML into an object. */
+// The bundled matrix never changes during a process's lifetime, yet loadBundledMatrix() is called on
+// every resolveMatrix/resolveVersions/drift path — each one re-reading the file and re-parsing YAML.
+// Cache the PARSED object once and hand every caller an independent deep copy (structuredClone), so a
+// caller that mutates its matrix (applyVersionStrategy/mergeConnectors return fresh objects, but this
+// keeps the invariant even for ad-hoc in-place edits) can never corrupt the shared template. The
+// matrix-update skill, which rewrites the YAML file, calls _resetMatrixCache() after a write so a
+// long-lived process re-reads the new contents.
+let _cachedMatrix = null;
+
+/** Load + parse the bundled matrix YAML into an object (memoized; returns a fresh deep copy each call). */
 export function loadBundledMatrix() {
-  const text = fs.readFileSync(bundledMatrixPath(), "utf8");
-  return yaml.load(text);
+  if (_cachedMatrix === null) {
+    const text = fs.readFileSync(bundledMatrixPath(), "utf8");
+    _cachedMatrix = yaml.load(text);
+  }
+  return structuredClone(_cachedMatrix);
+}
+
+/** Drop the memoized matrix so the next loadBundledMatrix() re-reads the YAML (used after a write / in tests). */
+export function _resetMatrixCache() {
+  _cachedMatrix = null;
 }
 
 /**

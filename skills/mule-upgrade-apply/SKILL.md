@@ -44,8 +44,11 @@ node scripts/apply_edits.js --change-plan plan.json --repo /path/to/clone
 
 ```js
 import { applyEdits, applyChangePlan } from "./scripts/apply_edits.js";
-const after = applyEdits(rawPomText, editsForThatFile);          // one file
-const staged = applyChangePlan(changePlan, repoRoot);            // whole plan → [{path,content}]
+const after = applyEdits(rawPomText, editsForThatFile);          // one file (sync)
+// Whole plan → [{path,content}]. `applyChangePlan` is async and awaits its reader.
+// Local clone: default fs reader (pass repoRoot). API mode (no clone): pass a GitHub reader.
+const staged = await applyChangePlan(changePlan, repoRoot);                 // local clone
+const stagedApi = await applyChangePlan(changePlan, undefined, ghReadFile); // api mode
 ```
 
 ## Notes / improvements over the Mule app

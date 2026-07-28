@@ -1,0 +1,436 @@
+# connector-notes-map.yaml — POM artifactId → release-notes URL (see 'description').
+# Regenerate: node .agents/artifacts/build_notes_map.mjs && node .agents/artifacts/assemble_notes_map.mjs
+# Curated (matrix) slugs are hand-verified; auto entries are best-effort enrichment.
+schemaVersion: '1.0'
+description: >-
+  Maps a connector's POM artifactId to its MuleSoft release-notes URL, so the assessor fetches the correct per-connector
+  OpenJDK/Mule-runtime compatibility table instead of guessing a slug. 'curated' entries are the matrix connectors with
+  hand-verified slugs (authoritative); 'auto' entries are resolved from the docs index joined with an exact
+  Exchange-Graph artifactId match.
+generated: one-time from docs release-notes index + Exchange GraphQL (see .agents/artifacts/build_notes_map.mjs)
+connectors:
+  - artifactId: mule-http-connector
+    groupId: org.mule.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/connector-http
+    source: curated
+  - artifactId: mule-db-connector
+    groupId: org.mule.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/connector-db
+    source: curated
+  - artifactId: mule-sockets-connector
+    groupId: org.mule.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/connector-sockets
+    source: curated
+  - artifactId: mule-objectstore-connector
+    groupId: org.mule.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/object-store-connector-release-notes-mule-4
+    source: curated
+  - artifactId: mule-json-module
+    groupId: org.mule.modules
+    url: https://docs.mulesoft.com/release-notes/connector/json-module-release-notes
+    source: curated
+  - artifactId: mule-oauth-module
+    groupId: org.mule.modules
+    url: https://docs.mulesoft.com/release-notes/connector/oauth-module-release-notes
+    source: curated
+  - artifactId: mule-tracing-module
+    groupId: org.mule.modules
+    url: https://docs.mulesoft.com/release-notes/connector/tracing-module-release-notes
+    source: curated
+  - artifactId: mule-validation-module
+    groupId: org.mule.modules
+    url: https://docs.mulesoft.com/release-notes/mule-runtime/module-validation
+    source: curated
+  - artifactId: mule-xml-module
+    groupId: org.mule.modules
+    url: https://docs.mulesoft.com/release-notes/mule-runtime/module-xml
+    source: curated
+  - artifactId: mule-secure-configuration-property-module
+    groupId: com.mulesoft.modules
+    url: https://docs.mulesoft.com/release-notes/mule-runtime/secure-properties
+    source: curated
+  - artifactId: mule-apikit-module
+    groupId: org.mule.modules
+    url: https://docs.mulesoft.com/release-notes/apikit/apikit-release-notes
+    note: per-version notes; no single compatibility table (matrix-only fallback)
+    source: curated
+  - artifactId: mule4-slack-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/slack-connector-release-notes-mule-4
+    source: curated
+  - artifactId: mule4-gmail-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/gmail-connector-release-notes-mule-4
+    source: curated
+  - artifactId: mule-twilio-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/twilio-connector-release-notes-mule-4
+    source: curated
+  - artifactId: mule-salesforce-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/salesforce-connector-release-notes-mule-4
+    source: curated
+  - artifactId: amazon-kinesis-data-streams-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/amazon-kinesis-connector-release-notes-mule-4
+    source: auto
+  - artifactId: anypoint-mq-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/anypoint-mq-connector-release-notes-mule-4
+    source: auto
+  - artifactId: azure-service-bus-management-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/azure-service-bus-mgmt-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-aggregators-module
+    groupId: org.mule.modules
+    url: https://docs.mulesoft.com/release-notes/connector/aggregators-module-release-notes
+    source: auto
+  - artifactId: mule-amazon-dynamodb-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/amazon-dynamodb-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-amazon-ec2-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/amazon-ec2-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-amazon-rds-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/amazon-rds-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-amazon-s3-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/amazon-s3-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-amazon-sns-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/amazon-sns-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-amazon-sqs-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/amazon-sqs-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-as2-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/as2-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-azure-data-lake-storage-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/azure-data-lake-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-azure-service-bus-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/azure-service-bus-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-box-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/box-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-caqh-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/caqh-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-cloudhub-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/cloudhub-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-cryptography-module
+    groupId: com.mulesoft.modules
+    url: https://docs.mulesoft.com/release-notes/connector/cryptography-module-release-notes
+    source: auto
+  - artifactId: mule-grpc-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/grpc-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-hdfs-connector
+    groupId: org.mule.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/hdfs-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-hl7-mllp-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/hl7-mllp-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-ibm-ctg-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/ibm-ctg-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-kafka-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/kafka-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-ldap-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/ldap-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-marketo-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/marketo-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-mcp-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/mcp-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-microsoft-dotnet-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/microsoft-dotnet-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-microsoft-dynamics-crm-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/ms-dynamics-crm-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-microsoft-dynamics-gp-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/microsoft-dynamics-gp-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-microsoft-dynamics-nav-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/ms-dynamics-nav-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-microsoft-service-bus-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/ms-service-bus-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-mongodb-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/mongodb-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-neo4j-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/neo4j-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-netsuite-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/netsuite-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-netsuite-openair-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/netsuite-openair-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-oauth2-provider-module
+    groupId: com.mulesoft.modules
+    url: https://docs.mulesoft.com/release-notes/connector/oauth2-provider-release-notes
+    source: auto
+  - artifactId: mule-oracle-ebs-122-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/oracle-ebs-122-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-oracle-ebs-connector
+    groupId: org.mule.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/oracle-ebs-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-peoplesoft-connector
+    groupId: org.mule.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/peoplesoft-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-redis-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/redis-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-roostify-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/roostify-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-rosettanet-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/rosettanet-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-salesforce-composite-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/salesforce-composite-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-sap-concur-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/sap-concur-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-sap-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/sap-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-sap-successfactors-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/sap-successfactors-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-servicenow-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/servicenow-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-sharepoint-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/sharepoint-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-siebel-connector
+    groupId: org.mule.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/siebel-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-slack-connector
+    groupId: org.mule.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/slack-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-spring-module
+    groupId: org.mule.modules
+    url: https://docs.mulesoft.com/release-notes/connector/spring-module-release-notes
+    source: auto
+  - artifactId: mule-websockets-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/websockets-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-workday-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/workday-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule-wss-module
+    groupId: com.mulesoft.modules
+    url: https://docs.mulesoft.com/release-notes/connector/wss-module-release-notes-mule-4
+    source: auto
+  - artifactId: mule-zuora-aqua-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/zuora-aqua-release-notes-mule-4
+    source: auto
+  - artifactId: mule-zuora-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/zuora-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-a2a-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/a2a-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-agentforce-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/agentforce-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-amazon-bedrock-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/amazon-bedrock-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-amazon-lambda-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/amazon-lambda-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-amazon-redshift-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/amazon-redshift-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-asana-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/asana-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-azure-cosmos-db-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/azure-cosmos-db-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-confluent-schema-registry-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/confluent-schema-registry-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-docusign-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/docusign-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-dropbox-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/dropbox-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-einstein-ai-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/einstein-ai-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-google-bigquery-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/google-bigquery-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-google-calendar-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/google-calendar-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-google-drive-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/google-drive-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-google-pubsub-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/google-pubsub-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-google-sheets-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/google-sheets-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-informatica-b360-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/informatica-b360-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-intercom-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/intercom-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-jira-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/jira-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-mailchimp-marketing-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/mailchimp-marketing-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-microsoft-excel-online-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/microsoft-excel-online-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-microsoft-onedrive-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/microsoft-onedrive-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-microsoft-teams-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/microsoft-teams-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-mqtt3-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/mqtt3-connector-release-notes
+    source: auto
+  - artifactId: mule4-netsuite-restlet-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/netsuite-restlet-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-quickbooks-online-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/quickbooks-online-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-salesforce-pubsub-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/salesforce-pubsub-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-shopify-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/shopify-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-smartsheet-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/smartsheet-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-snowflake-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/snowflake-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-stripe-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/stripe-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-tableau-specialist-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/tableau-specialist-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-trello-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/trello-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-xero-accounting-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/xero-accounting-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-zendesk-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/zendesk-connector-release-notes-mule-4
+    source: auto
+  - artifactId: mule4-zoom-connector
+    groupId: com.mulesoft.connectors
+    url: https://docs.mulesoft.com/release-notes/connector/zoom-connector-release-notes-mule-4
+    source: auto

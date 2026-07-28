@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "scan_fleet",
+  "title": "scan_fleet",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "environments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Restrict the scan to these environment names (e.g. [\"Production\"]). Omit to scan all environments."
+    },
+    "staleMuleBelow": {
+      "type": "string",
+      "description": "Mule versions strictly below this are flagged (default \"4.5.0\")."
+    },
+    "targetJava": {
+      "type": "number",
+      "description": "Java majors below this are flagged (default 17)."
+    },
+    "resolveRepos": {
+      "type": "boolean",
+      "description": "Map stale app names to GitHub repos (default true)."
+    }
+  }
+}

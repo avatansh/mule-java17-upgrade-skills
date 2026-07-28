@@ -1,0 +1,461 @@
+{
+  "gating": {
+    "checked": true,
+    "results": [
+      {
+        "key": "muleRuntime",
+        "label": "Mule runtime (LTS patch)",
+        "pinned": "4.9.18",
+        "latest": "4.9.19",
+        "drift": true
+      },
+      {
+        "key": "muleMavenPlugin",
+        "label": "mule-maven-plugin",
+        "pinned": "4.10.0",
+        "latest": "4.10.1",
+        "drift": true
+      },
+      {
+        "key": "munit",
+        "label": "munit-maven-plugin",
+        "pinned": "3.6.3",
+        "latest": "3.7.3",
+        "drift": true
+      },
+      {
+        "key": "munitExtPlugin",
+        "label": "munit-extensions-maven-plugin",
+        "pinned": "1.5.0",
+        "latest": "1.7.0",
+        "drift": true
+      }
+    ],
+    "warnings": [
+      "Matrix drift: Mule runtime (LTS patch) pins 4.9.18, latest published is 4.9.19 (on the 4.9.x line). Consider bumping the bundled matrix.",
+      "Matrix drift: mule-maven-plugin pins 4.10.0, latest published is 4.10.1. Consider bumping the bundled matrix.",
+      "Matrix drift: munit-maven-plugin pins 3.6.3, latest published is 3.7.3. Consider bumping the bundled matrix.",
+      "Matrix drift: munit-extensions-maven-plugin pins 1.5.0, latest published is 1.7.0. Consider bumping the bundled matrix."
+    ],
+    "driftCount": 4
+  },
+  "connectors": {
+    "checked": true,
+    "results": [
+      {
+        "artifactId": "mule-apikit-module",
+        "groupId": "org.mule.modules",
+        "pinned": "1.11.8",
+        "latestInMajor": "1.12.2",
+        "latest": "1.12.2",
+        "drift": true
+      },
+      {
+        "artifactId": "mule-http-connector",
+        "groupId": "org.mule.connectors",
+        "pinned": "1.11.3",
+        "latestInMajor": "1.11.3",
+        "latest": "1.11.3",
+        "drift": false
+      },
+      {
+        "artifactId": "mule-sockets-connector",
+        "groupId": "org.mule.connectors",
+        "pinned": "1.2.8",
+        "latestInMajor": "1.2.9",
+        "latest": "1.2.9",
+        "drift": true
+      },
+      {
+        "artifactId": "mule-objectstore-connector",
+        "groupId": "org.mule.connectors",
+        "pinned": "1.3.0",
+        "latestInMajor": "1.3.1",
+        "latest": "1.3.1",
+        "drift": true
+      },
+      {
+        "artifactId": "mule-secure-configuration-property-module",
+        "groupId": "com.mulesoft.modules",
+        "pinned": "1.2.7",
+        "latestInMajor": "1.3.1",
+        "latest": "1.3.1",
+        "drift": true
+      },
+      {
+        "artifactId": "mule-db-connector",
+        "groupId": "org.mule.connectors",
+        "pinned": "1.14.6",
+        "latestInMajor": "1.16.2",
+        "latest": "1.16.2",
+        "drift": true
+      },
+      {
+        "artifactId": "mule-validation-module",
+        "groupId": "org.mule.modules",
+        "pinned": "2.0.4",
+        "latestInMajor": "2.0.9",
+        "latest": "2.0.9",
+        "drift": true
+      },
+      {
+        "artifactId": "mule-json-module",
+        "groupId": "org.mule.modules",
+        "pinned": "2.5.2",
+        "latestInMajor": "2.5.7",
+        "latest": "2.5.7",
+        "drift": true
+      },
+      {
+        "artifactId": "mule-xml-module",
+        "groupId": "org.mule.modules",
+        "pinned": "1.4.2",
+        "latestInMajor": "1.4.5",
+        "latest": "1.4.5",
+        "drift": true
+      },
+      {
+        "artifactId": "mule-oauth-module",
+        "groupId": "org.mule.modules",
+        "pinned": "1.1.24",
+        "latestInMajor": "1.1.27",
+        "latest": "1.1.27",
+        "drift": true
+      },
+      {
+        "artifactId": "mule-tracing-module",
+        "groupId": "org.mule.modules",
+        "pinned": "1.0.3",
+        "latestInMajor": "1.2.1",
+        "latest": "1.2.1",
+        "drift": true
+      },
+      {
+        "artifactId": "mule-twilio-connector",
+        "groupId": "com.mulesoft.connectors",
+        "pinned": "4.2.9",
+        "latestInMajor": "4.2.9",
+        "latest": "4.2.9",
+        "drift": false
+      },
+      {
+        "artifactId": "mule4-gmail-connector",
+        "groupId": "com.mulesoft.connectors",
+        "pinned": "1.1.2",
+        "latestInMajor": "1.1.2",
+        "latest": "1.1.2",
+        "drift": false
+      },
+      {
+        "artifactId": "mule4-slack-connector",
+        "groupId": "com.mulesoft.connectors",
+        "pinned": "1.0.17",
+        "latestInMajor": "1.0.19",
+        "latest": "2.0.1",
+        "drift": true
+      },
+      {
+        "artifactId": "mule-salesforce-connector",
+        "groupId": "com.mulesoft.connectors",
+        "pinned": "10.19.2",
+        "latestInMajor": "10.22.9",
+        "latest": "12.0.0",
+        "drift": true
+      }
+    ],
+    "warnings": [
+      "Connector drift: mule-apikit-module pins 1.11.8, latest in-major is 1.12.2. Advisory only — the curated pin stays the Java-17-safe floor.",
+      "Connector drift: mule-sockets-connector pins 1.2.8, latest in-major is 1.2.9. Advisory only — the curated pin stays the Java-17-safe floor.",
+      "Connector drift: mule-objectstore-connector pins 1.3.0, latest in-major is 1.3.1. Advisory only — the curated pin stays the Java-17-safe floor.",
+      "Connector drift: mule-secure-configuration-property-module pins 1.2.7, latest in-major is 1.3.1. Advisory only — the curated pin stays the Java-17-safe floor.",
+      "Connector drift: mule-db-connector pins 1.14.6, latest in-major is 1.16.2. Advisory only — the curated pin stays the Java-17-safe floor.",
+      "Connector drift: mule-validation-module pins 2.0.4, latest in-major is 2.0.9. Advisory only — the curated pin stays the Java-17-safe floor.",
+      "Connector drift: mule-json-module pins 2.5.2, latest in-major is 2.5.7. Advisory only — the curated pin stays the Java-17-safe floor.",
+      "Connector drift: mule-xml-module pins 1.4.2, latest in-major is 1.4.5. Advisory only — the curated pin stays the Java-17-safe floor.",
+      "Connector drift: mule-oauth-module pins 1.1.24, latest in-major is 1.1.27. Advisory only — the curated pin stays the Java-17-safe floor.",
+      "Connector drift: mule-tracing-module pins 1.0.3, latest in-major is 1.2.1. Advisory only — the curated pin stays the Java-17-safe floor.",
+      "Connector drift: mule4-slack-connector pins 1.0.17, latest in-major is 1.0.19 (2.0.1 exists in a newer major — verify separately). Advisory only — the curated pin stays the Java-17-safe floor.",
+      "Connector drift: mule-salesforce-connector pins 10.19.2, latest in-major is 10.22.9 (12.0.0 exists in a newer major — verify separately). Advisory only — the curated pin stays the Java-17-safe floor."
+    ],
+    "driftCount": 12
+  },
+  "candidate": {
+    "matrix": {
+      "schemaVersion": "1.2",
+      "target": {
+        "runtime": "4.9.18",
+        "javaVersion": "17"
+      },
+      "gating": {
+        "muleRuntime": {
+          "property": "app.runtime",
+          "min": "4.6.0",
+          "set": "4.9.18"
+        },
+        "muleRuntimeSemver": {
+          "property": "app.runtime.semver",
+          "min": "4.6.0",
+          "set": "4.9.18"
+        },
+        "javaVersion": {
+          "property": "java.version",
+          "in": [
+            "1.8",
+            "8",
+            "11"
+          ],
+          "set": "17"
+        },
+        "javaCompilerSource": {
+          "property": "maven.compiler.source",
+          "in": [
+            "1.8",
+            "8",
+            "11"
+          ],
+          "set": "17"
+        },
+        "javaCompilerTarget": {
+          "property": "maven.compiler.target",
+          "in": [
+            "1.8",
+            "8",
+            "11"
+          ],
+          "set": "17"
+        },
+        "muleMavenPlugin": {
+          "property": "mule.maven.plugin.version",
+          "min": "4.1.1",
+          "set": "4.10.0",
+          "pluginGroupId": "org.mule.tools.maven",
+          "pluginArtifactId": "mule-maven-plugin"
+        },
+        "munit": {
+          "property": "munit.version",
+          "min": "3.6.3",
+          "set": "3.6.3",
+          "groupId": "com.mulesoft.munit",
+          "artifactId": "munit-runner",
+          "pluginGroupId": "com.mulesoft.munit.tools",
+          "pluginArtifactId": "munit-maven-plugin"
+        },
+        "munitExtPlugin": {
+          "property": "munit.extensions.maven.plugin.version",
+          "min": "1.2.0",
+          "set": "1.5.0",
+          "pluginGroupId": "com.mulesoft.munit.tools",
+          "pluginArtifactId": "munit-extensions-maven-plugin"
+        },
+        "weave": {
+          "property": "weave.version",
+          "min": "1.2.0",
+          "set": "1.5.0",
+          "groupId": "org.mule.weave",
+          "artifactId": "assertions"
+        }
+      },
+      "connectors": [
+        {
+          "property": "apikit.version",
+          "set": "1.12.2",
+          "groupId": "org.mule.modules",
+          "artifactId": "mule-apikit-module"
+        },
+        {
+          "property": "http.connector.version",
+          "set": "1.11.3",
+          "groupId": "org.mule.connectors",
+          "artifactId": "mule-http-connector"
+        },
+        {
+          "property": "sockets.connector.version",
+          "set": "1.2.9",
+          "groupId": "org.mule.connectors",
+          "artifactId": "mule-sockets-connector"
+        },
+        {
+          "property": "objectstore.connector.version",
+          "set": "1.3.1",
+          "groupId": "org.mule.connectors",
+          "artifactId": "mule-objectstore-connector"
+        },
+        {
+          "property": "secure.conf.prop.module.version",
+          "set": "1.3.1",
+          "groupId": "com.mulesoft.modules",
+          "artifactId": "mule-secure-configuration-property-module"
+        },
+        {
+          "property": "db.connector.version",
+          "set": "1.16.2",
+          "groupId": "org.mule.connectors",
+          "artifactId": "mule-db-connector"
+        },
+        {
+          "property": "validation.module.version",
+          "set": "2.0.9",
+          "groupId": "org.mule.modules",
+          "artifactId": "mule-validation-module"
+        },
+        {
+          "property": "json.module.version",
+          "set": "2.5.7",
+          "groupId": "org.mule.modules",
+          "artifactId": "mule-json-module"
+        },
+        {
+          "property": "xml.module.version",
+          "set": "1.4.5",
+          "groupId": "org.mule.modules",
+          "artifactId": "mule-xml-module"
+        },
+        {
+          "property": "oauth.module.version",
+          "set": "1.1.27",
+          "groupId": "org.mule.modules",
+          "artifactId": "mule-oauth-module"
+        },
+        {
+          "property": "tracing.module.version",
+          "set": "1.2.1",
+          "groupId": "org.mule.modules",
+          "artifactId": "mule-tracing-module"
+        },
+        {
+          "property": "twilio.connector.version",
+          "set": "4.2.9",
+          "groupId": "com.mulesoft.connectors",
+          "artifactId": "mule-twilio-connector"
+        },
+        {
+          "property": "gmail.connector.version",
+          "set": "1.1.2",
+          "groupId": "com.mulesoft.connectors",
+          "artifactId": "mule4-gmail-connector"
+        },
+        {
+          "property": "slack.connector.version",
+          "set": "1.0.19",
+          "groupId": "com.mulesoft.connectors",
+          "artifactId": "mule4-slack-connector"
+        },
+        {
+          "property": "salesforce.connector.version",
+          "set": "10.22.9",
+          "groupId": "com.mulesoft.connectors",
+          "artifactId": "mule-salesforce-connector"
+        }
+      ],
+      "removeJvmFlags": [
+        "-XX:-UseBiasedLocking",
+        "-M-XX:-UseBiasedLocking"
+      ],
+      "removeMunitJpmsFlags": [
+        "--add-opens",
+        "--add-exports",
+        "--add-modules"
+      ],
+      "manualReview": {
+        "customJavaCode": {
+          "scanGlobs": [
+            "src/main/java/**/*.java"
+          ],
+          "warn": "Custom Java - reflection/SecurityManager restricted on 17"
+        },
+        "javaPojoInDw": {
+          "scanRegex": "as Object \\{ class:",
+          "warn": "DataWeave Java POJO needs getters AND setters on 17"
+        },
+        "apiPolicies": {
+          "source": "apiManager",
+          "warn": "App has API Manager policies - re-validate after upgrade"
+        },
+        "munitJpmsFlags": {
+          "scanRegex": "add-(opens|exports|modules)",
+          "warn": "Remove add-opens/add-exports argLines from the MUnit plugin - rejected by the Mule 4.9 embedded container on Java 17"
+        },
+        "setAccessible": {
+          "scanRegex": "setAccessible\\s*\\(",
+          "warn": "Reflective setAccessible() found - Java 17 strong encapsulation blocks setAccessible on JDK internals; refactor or you will hit InaccessibleObjectException at runtime."
+        },
+        "resourceBundle": {
+          "scanRegex": "ResourceBundle\\.getBundle",
+          "warn": "ResourceBundle.getBundle() found - JPMS changes resource/bundle loading on Java 17; verify bundles resolve (consider ResourceBundleProvider) or move them onto the classpath."
+        },
+        "powermock": {
+          "scanRegex": "(?:org\\.powermock|powermock-)",
+          "warn": "PowerMock detected - it cannot mock JVM classes under Java 17; migrate the affected tests to a current Mockito (inline mock maker) before upgrading."
+        }
+      },
+      "muleArtifact": {
+        "minMuleVersion": "4.9.0",
+        "javaSpecificationVersions": [
+          "17"
+        ]
+      }
+    },
+    "proposed": [
+      {
+        "artifactId": "mule-apikit-module",
+        "from": "1.11.8",
+        "to": "1.12.2"
+      },
+      {
+        "artifactId": "mule-sockets-connector",
+        "from": "1.2.8",
+        "to": "1.2.9"
+      },
+      {
+        "artifactId": "mule-objectstore-connector",
+        "from": "1.3.0",
+        "to": "1.3.1"
+      },
+      {
+        "artifactId": "mule-secure-configuration-property-module",
+        "from": "1.2.7",
+        "to": "1.3.1"
+      },
+      {
+        "artifactId": "mule-db-connector",
+        "from": "1.14.6",
+        "to": "1.16.2"
+      },
+      {
+        "artifactId": "mule-validation-module",
+        "from": "2.0.4",
+        "to": "2.0.9"
+      },
+      {
+        "artifactId": "mule-json-module",
+        "from": "2.5.2",
+        "to": "2.5.7"
+      },
+      {
+        "artifactId": "mule-xml-module",
+        "from": "1.4.2",
+        "to": "1.4.5"
+      },
+      {
+        "artifactId": "mule-oauth-module",
+        "from": "1.1.24",
+        "to": "1.1.27"
+      },
+      {
+        "artifactId": "mule-tracing-module",
+        "from": "1.0.3",
+        "to": "1.2.1"
+      },
+      {
+        "artifactId": "mule4-slack-connector",
+        "from": "1.0.17",
+        "to": "1.0.19"
+      },
+      {
+        "artifactId": "mule-salesforce-connector",
+        "from": "10.19.2",
+        "to": "10.22.9"
+      }
+    ]
+  }
+}

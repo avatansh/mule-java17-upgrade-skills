@@ -18,7 +18,24 @@ import { get } from "../../lib_shared/config.js";
 import { TOOLS_BY_NAME, toolCatalog } from "./tools.js";
 import { validateArgs } from "./schema.js";
 
+// The protocol revision this server implements. On `initialize` we ECHO BACK the client's requested
+// protocolVersion when we can speak it (per the MCP spec's version-negotiation handshake), else we
+// answer with our own — letting the client decide whether to proceed or disconnect.
 const PROTOCOL_VERSION = "2024-11-05";
+// Revisions this server is compatible with (newest first). A client asking for any of these gets it
+// echoed back verbatim; anything else falls back to PROTOCOL_VERSION.
+const SUPPORTED_PROTOCOL_VERSIONS = new Set(["2025-06-18", "2025-03-26", "2024-11-05"]);
+
+/**
+ * negotiateProtocolVersion(requested): echo a client-requested revision we support, else our default.
+ * @param {unknown} requested  params.protocolVersion from the initialize request
+ * @returns {string}
+ */
+function negotiateProtocolVersion(requested) {
+  return typeof requested === "string" && SUPPORTED_PROTOCOL_VERSIONS.has(requested)
+    ? requested
+    : PROTOCOL_VERSION;
+}
 
 function cfg(dotted, fallback) {
   try {
@@ -49,7 +66,7 @@ export async function handleRpc(message) {
   switch (method) {
     case "initialize":
       return rpcResult(id, {
-        protocolVersion: PROTOCOL_VERSION,
+        protocolVersion: negotiateProtocolVersion(params?.protocolVersion),
         capabilities: { tools: { listChanged: false } },
         serverInfo: {
           name: cfg("mcp.serverName", "mule-java17-upgrade-skills"),

@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "check_drift",
+  "title": "check_drift",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "includeConnectors": {
+      "type": "boolean",
+      "description": "Also audit each connector pin against its latest-in-major from Exchange Graph (the connector-staleness half). Default true. Set false for a gating-only drift check."
+    },
+    "candidate": {
+      "type": "boolean",
+      "description": "Also return a PROPOSED candidate matrix whose drifting connector pins are bumped to their latest-in-major. A review artifact only — never persisted; the curated matrix stays authoritative. Default false."
+    },
+    "noFetch": {
+      "type": "boolean",
+      "description": "Skip ALL network. The gating drift check degrades to 'unchecked' and connector staleness to 'unknown'. Default false."
+    }
+  }
+}

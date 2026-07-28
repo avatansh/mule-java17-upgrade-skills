@@ -9,8 +9,26 @@
 //           POST /rest/api/3/issue                 (pf-jira-create-issue) — auto-create ticket
 //
 // Auth: JIRA_BASE_URL + JIRA_EMAIL + JIRA_API_TOKEN (basic). All optional — absent → skipped.
+//
+// Credentials resolve from ENV first (SLACK_WEBHOOK_URL / JIRA_* — plaintext, so a developer can
+// override without the key), then the layered config (`slack.webhookUrl` / `slack.channel` /
+// `jira.baseUrl` / `jira.email` / `jira.apiToken` / `jira.projectKey` / `jira.issueType` /
+// `jira.autoCreate`, decrypted from the secure YAML via MULE_CONFIG_KEY). Absent everywhere →
+// the notification is cleanly skipped, never a hard failure.
+
+import { get } from "../../../../lib_shared/config.js";
 
 const env = process.env;
+
+// Read a config value, swallowing any decrypt/lookup error (missing key etc.) → fallback.
+function cfg(dotted, fallback) {
+  try {
+    const v = get(dotted, undefined);
+    return v === undefined || v === null || v === "" ? fallback : v;
+  } catch {
+    return fallback;
+  }
+}
 
 async function postJson(fetchImpl, url, headers, body) {
   const res = await fetchImpl(url, {
@@ -28,7 +46,14 @@ async function postJson(fetchImpl, url, headers, body) {
 }
 
 /** slackNotify(text): post a message to SLACK_WEBHOOK_URL. Non-fatal + self-guarding. */
-export async function slackNotify(text, { fetchImpl = globalThis.fetch, webhookUrl = env.SLACK_WEBHOOK_URL, channel = env.SLACK_CHANNEL } = {}) {
+export async function slackNotify(
+  text,
+  {
+    fetchImpl = globalThis.fetch,
+    webhookUrl = env.SLACK_WEBHOOK_URL ?? cfg("slack.webhookUrl", ""),
+    channel = env.SLACK_CHANNEL ?? cfg("slack.channel", ""),
+  } = {}
+) {
   if (!webhookUrl) return { sent: false, skipped: "no SLACK_WEBHOOK_URL" };
   try {
     await postJson(fetchImpl, webhookUrl, {}, channel ? { channel, text } : { text });
@@ -43,7 +68,12 @@ export async function jiraComment(
   jiraTicketId,
   text,
   linkUrl = null,
-  { fetchImpl = globalThis.fetch, baseUrl = env.JIRA_BASE_URL, email = env.JIRA_EMAIL, token = env.JIRA_API_TOKEN } = {}
+  {
+    fetchImpl = globalThis.fetch,
+    baseUrl = env.JIRA_BASE_URL ?? cfg("jira.baseUrl", ""),
+    email = env.JIRA_EMAIL ?? cfg("jira.email", ""),
+    token = env.JIRA_API_TOKEN ?? cfg("jira.apiToken", ""),
+  } = {}
 ) {
   if (!jiraTicketId) return { sent: false, skipped: "no jiraTicketId" };
   if (!baseUrl || !email || !token) return { sent: false, skipped: "no Jira creds" };
@@ -56,7 +86,12 @@ export async function jiraComment(
   const body = { body: { type: "doc", version: 1, content: [{ type: "paragraph", content }] } };
   const auth = "Basic " + Buffer.from(`${email}:${token}`).toString("base64");
   try {
-    await postJson(fetchImpl, `${baseUrl}/rest/api/3/issue/${jiraTicketId}/comment`, { Authorization: auth }, body);
+    await postJson(
+      fetchImpl,
+      `${baseUrl}/rest/api/3/issue/${jiraTicketId}/comment`,
+      { Authorization: auth },
+      body
+    );
     return { sent: true };
   } catch (e) {
     return { sent: false, error: e.message };
@@ -71,16 +106,17 @@ export async function jiraCreateIssue(
   { appName, jobId },
   {
     fetchImpl = globalThis.fetch,
-    baseUrl = env.JIRA_BASE_URL,
-    email = env.JIRA_EMAIL,
-    token = env.JIRA_API_TOKEN,
-    projectKey = env.JIRA_PROJECT_KEY,
-    issueType = env.JIRA_ISSUE_TYPE || "Task",
-    autoCreate = (env.JIRA_AUTO_CREATE || "false") === "true",
+    baseUrl = env.JIRA_BASE_URL ?? cfg("jira.baseUrl", ""),
+    email = env.JIRA_EMAIL ?? cfg("jira.email", ""),
+    token = env.JIRA_API_TOKEN ?? cfg("jira.apiToken", ""),
+    projectKey = env.JIRA_PROJECT_KEY ?? cfg("jira.projectKey", ""),
+    issueType = env.JIRA_ISSUE_TYPE ?? cfg("jira.issueType", "Task"),
+    autoCreate = (env.JIRA_AUTO_CREATE ?? String(cfg("jira.autoCreate", "false"))) === "true",
   } = {}
 ) {
   if (!autoCreate) return { created: false, skipped: "autoCreate off" };
-  if (!baseUrl || !email || !token || !projectKey) return { created: false, skipped: "no Jira creds/projectKey" };
+  if (!baseUrl || !email || !token || !projectKey)
+    return { created: false, skipped: "no Jira creds/projectKey" };
   const body = {
     fields: {
       project: { key: projectKey },
@@ -124,9 +160,26 @@ export function prOpenedSlackText({ appName, prUrl, jobId, jiraTicketId, jiraBas
   return t;
 }
 
-export function failureSlackText({ appName, jobId, status, error, jiraTicketId, jiraBaseUrl = "", revertPrUrl }) {
-  let t =
-    `:x: *Java 17 upgrade FAILED* — ${appName}\nJob ${jobId} • status ${status}\nError: ${error}`;
+/**
+ * @param {object} opts
+ * @param {any} opts.appName
+ * @param {any} opts.jobId
+ * @param {any} opts.status
+ * @param {any} opts.error
+ * @param {any} opts.jiraTicketId
+ * @param {string} [opts.jiraBaseUrl]
+ * @param {any} [opts.revertPrUrl]
+ */
+export function failureSlackText({
+  appName,
+  jobId,
+  status,
+  error,
+  jiraTicketId,
+  jiraBaseUrl = "",
+  revertPrUrl,
+}) {
+  let t = `:x: *Java 17 upgrade FAILED* — ${appName}\nJob ${jobId} • status ${status}\nError: ${error}`;
   if (jiraTicketId) t += `\nJira: <${jiraBaseUrl}/browse/${jiraTicketId}|${jiraTicketId}>`;
   if (revertPrUrl) t += `\n:leftwards_arrow_with_hook: Rollback PR: ${revertPrUrl}`;
   return t;

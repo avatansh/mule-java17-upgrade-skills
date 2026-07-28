@@ -181,7 +181,7 @@ node skills/mule-upgrade/scripts/upgrade.js poll --stale-seconds 0</code></pre>
 <p><strong>Step 1 — install &amp; prove the suite is healthy.</strong></p>
 <pre><code>cd mule-java17-upgrade-skills
 npm ci
-node --test          # the full suite (191 tests) must pass — this needs no secrets and no network</code></pre>
+node --test          # the full suite (290 tests) must pass — this needs no secrets and no network</code></pre>
 
 <p><strong>Step 2 — minimal <code>.env</code> (offline profile).</strong> For pure local testing you don't even need the AES key — plaintext env vars override the encrypted YAML, and you can simply omit the ones you aren't testing:</p>
 <pre><code>MULE_UPGRADE_ENV=dev

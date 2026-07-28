@@ -8,7 +8,16 @@ import os from "node:os";
 import path from "node:path";
 
 import { encryptSecure, decryptSecure, isSecureValue, secureCipherText } from "../lib_shared/secure_props.js";
-import { loadConfig, get, has, _resetConfigCache } from "../lib_shared/config.js";
+import {
+  loadConfig,
+  get,
+  has,
+  _resetConfigCache,
+  resolveEnv,
+  requireEnv,
+  resolveKey,
+  KNOWN_ENVS,
+} from "../lib_shared/config.js";
 
 const KEY = "0123456789abcdef0123456789abcdef"; // 32 chars → AES-256 (a test key, not a real secret)
 
@@ -36,11 +45,88 @@ test("secure_props: isSecureValue / secureCipherText detect ![...]", () => {
 });
 
 test("secure_props: missing key throws VALIDATION", () => {
-  assert.throws(() => decryptSecure("whatever", ""), (e) => e.code === "VALIDATION");
+  assert.throws(
+    () => decryptSecure("whatever", ""),
+    (e) => e.code === "VALIDATION"
+  );
 });
 
 test("secure_props: wrong key length throws VALIDATION", () => {
-  assert.throws(() => decryptSecure(encryptSecure("x", KEY), "short"), (e) => e.code === "VALIDATION");
+  assert.throws(
+    () => decryptSecure(encryptSecure("x", KEY), "short"),
+    (e) => e.code === "VALIDATION"
+  );
+});
+
+// ── mandatory environment selector (Mule -Denv parity) ───────────────────────────────────────
+test("resolveEnv: explicit string wins; boolean/empty ignored; falls back to MULE_UPGRADE_ENV", () => {
+  const prev = process.env.MULE_UPGRADE_ENV;
+  try {
+    process.env.MULE_UPGRADE_ENV = "prod";
+    assert.equal(resolveEnv("dev"), "dev"); // explicit wins
+    assert.equal(resolveEnv(true), "prod"); // valueless flag → treated as absent → env
+    assert.equal(resolveEnv(""), "prod"); // empty → env
+    assert.equal(resolveEnv(undefined), "prod");
+    delete process.env.MULE_UPGRADE_ENV;
+    assert.equal(resolveEnv(undefined), null); // neither supplied → null
+  } finally {
+    if (prev === undefined) delete process.env.MULE_UPGRADE_ENV;
+    else process.env.MULE_UPGRADE_ENV = prev;
+  }
+});
+
+test("requireEnv: throws VALIDATION when no env supplied (no silent default)", () => {
+  const prev = process.env.MULE_UPGRADE_ENV;
+  delete process.env.MULE_UPGRADE_ENV;
+  try {
+    assert.throws(
+      () => requireEnv(undefined),
+      (e) => e.code === "VALIDATION" && /environment is required/.test(e.message)
+    );
+  } finally {
+    if (prev === undefined) delete process.env.MULE_UPGRADE_ENV;
+    else process.env.MULE_UPGRADE_ENV = prev;
+  }
+});
+
+test("requireEnv: rejects an unknown env, accepts a known one and pins MULE_UPGRADE_ENV", () => {
+  const prev = process.env.MULE_UPGRADE_ENV;
+  delete process.env.MULE_UPGRADE_ENV;
+  try {
+    assert.throws(
+      () => requireEnv("staging"),
+      (e) => e.code === "VALIDATION" && /unknown environment/.test(e.message)
+    );
+    for (const env of KNOWN_ENVS) {
+      assert.equal(requireEnv(env), env);
+      assert.equal(process.env.MULE_UPGRADE_ENV, env); // pinned for downstream reads
+    }
+    // validate:false lets an ad-hoc env through (used by tests / non-shipped envs)
+    delete process.env.MULE_UPGRADE_ENV;
+    assert.equal(requireEnv("qa", { validate: false }), "qa");
+  } finally {
+    if (prev === undefined) delete process.env.MULE_UPGRADE_ENV;
+    else process.env.MULE_UPGRADE_ENV = prev;
+  }
+});
+
+test("resolveKey: per-env key wins over generic; generic is the fallback", () => {
+  const prevGen = process.env.MULE_CONFIG_KEY;
+  const prevProd = process.env.MULE_CONFIG_KEY_PROD;
+  try {
+    process.env.MULE_CONFIG_KEY = "generic-key";
+    delete process.env.MULE_CONFIG_KEY_PROD;
+    assert.equal(resolveKey("prod"), "generic-key"); // no per-env → generic
+    process.env.MULE_CONFIG_KEY_PROD = "prod-key";
+    assert.equal(resolveKey("prod"), "prod-key"); // per-env wins
+    assert.equal(resolveKey("dev"), "generic-key"); // other env still generic
+    assert.equal(resolveKey("prod", "explicit"), "explicit"); // opts.key beats all
+  } finally {
+    if (prevGen === undefined) delete process.env.MULE_CONFIG_KEY;
+    else process.env.MULE_CONFIG_KEY = prevGen;
+    if (prevProd === undefined) delete process.env.MULE_CONFIG_KEY_PROD;
+    else process.env.MULE_CONFIG_KEY_PROD = prevProd;
+  }
 });
 
 // ── config layering + decrypt ───────────────────────────────────────────────────────────────
@@ -49,11 +135,11 @@ function writeTempConfig() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cfg-"));
   fs.writeFileSync(
     path.join(dir, "config.yaml"),
-    "github:\n  apiBase: \"https://api.github.com\"\n  defaultBranch: \"develop\"\nnaming:\n  repoEqualsAppName: \"true\"\n"
+    'github:\n  apiBase: "https://api.github.com"\n  defaultBranch: "develop"\nnaming:\n  repoEqualsAppName: "true"\n'
   );
   fs.writeFileSync(
     path.join(dir, "config-dev.yaml"),
-    "github:\n  defaultOwner: \"acme\"\n  defaultBranch: \"main\"\n" // overrides constant develop→main
+    'github:\n  defaultOwner: "acme"\n  defaultBranch: "main"\n' // overrides constant develop→main
   );
   const token = encryptSecure("ghp_test_token", KEY);
   fs.writeFileSync(path.join(dir, "config-secure-dev.yaml"), `github:\n  token: "![${token}]"\n`);
@@ -92,7 +178,10 @@ test("config: without key, secret stays as ![...] until read (deferred throw)", 
     const cfg = loadConfig({ env: "dev", key: "", force: true });
     assert.equal(isSecureValue(cfg.github.token), true); // not decrypted, but non-fatal to load
     // reading the secret without a key throws VALIDATION
-    assert.throws(() => get("github.token", undefined, { env: "dev", key: "" }), (e) => e.code === "VALIDATION");
+    assert.throws(
+      () => get("github.token", undefined, { env: "dev", key: "" }),
+      (e) => e.code === "VALIDATION"
+    );
     // a non-secret value is still readable with no key
     assert.equal(get("github.defaultOwner", null, { env: "dev", key: "" }), "acme");
   } finally {

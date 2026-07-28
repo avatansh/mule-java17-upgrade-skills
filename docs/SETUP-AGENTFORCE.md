@@ -1,6 +1,6 @@
 # Setup — Hosted MCP server for Agentforce (remote)
 
-Run the upgrade suite as a **hosted server** that exposes the 10 tools over MCP JSON-RPC + a
+Run the upgrade suite as a **hosted server** that exposes the 12 tools over MCP JSON-RPC + a
 REST facade, so a remote agent — **Agentforce** or any MCP client — can drive upgrades over the
 network. This guide stands up the server, secures it, wires the CI/CD webhook callback, and
 connects Agentforce.
@@ -21,9 +21,15 @@ One Node `http.Server` (`server/server.js`) with four surfaces on a single port:
 | CI/CD webhooks | `POST /webhook`, `POST /webhook/cd-result` | **HMAC** |
 | Health | `GET /health` | open |
 
-The 10 tools: `assess_app`, `start_upgrade`, `get_job_status`, `reapply_job`, `delete_job`,
-`upgrade_parent_pom`, `reconcile`, `rollback`, `scan_fleet`, `scan_notify`. Every call is validated
-against the tool's JSON Schema (the **schema-contract guard**) before the handler runs.
+The 12 tools: `assess_app`, `start_upgrade`, `get_job_status`, `reapply_job`, `delete_job`,
+`upgrade_parent_pom`, `reconcile`, `rollback`, `scan_fleet`, `scan_notify`, `resolve_versions`, `check_drift`. Every
+call is validated against the tool's JSON Schema (the **schema-contract guard**) before the handler runs.
+
+**Confirm-before-write.** For a human-in-the-loop agent, call `start_upgrade` with `dryRun: true`
+first: it assesses and returns the full plan (`PLAN_PREVIEW` — file edits, connector choices,
+warnings, deployed-state) while acquiring **no lock**, creating **no job**, and opening **no PR**.
+Show the preview, get an explicit yes, then re-call with the identical arguments and `dryRun: false`
+to execute. See `AGENTS.md` at the repo root for the full guardrails and intent→tool routing.
 
 ---
 
@@ -57,7 +63,7 @@ Before exposing anything, prove the server runs on your own machine. Every downs
 bare local server is fully testable:
 
 ```bash
-npm ci && node --test                 # 191 tests — no secrets, no network
+npm ci && node --test                 # 310 tests — no secrets, no network
 
 # minimal .env for a locked-down LOCAL test (see §3); keep test jobs isolated:
 #   MCP_BEARER_TOKEN=local-test-token
@@ -67,14 +73,14 @@ npm ci && node --test                 # 191 tests — no secrets, no network
 node server/server.js                  # → listening on http://0.0.0.0:8080
 ```
 
-In a second terminal, drive the 10 tools over the loopback interface — no TLS, no tunnel:
+In a second terminal, drive the 12 tools over the loopback interface — no TLS, no tunnel:
 
 ```bash
 TOKEN=local-test-token
 curl -s localhost:8080/health
 curl -sX POST localhost:8080/mcp -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'                    # expect 10 tools
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'                    # expect 12 tools
 
 # call a read-only tool end-to-end against a throwaway clone (assess writes nothing).
 # assess_app requires appName; pass repo for local-clone mode:
@@ -161,7 +167,7 @@ Agentforce consumes this as an **external MCP endpoint**:
 2. In Agentforce, register a new **MCP server / external tool provider** pointing at
    `https://<host>/mcp`.
 3. Set the auth header **`Authorization: Bearer <MCP_BEARER_TOKEN>`**.
-4. Agentforce calls `initialize` then `tools/list`; the 10 tools appear with their input schemas.
+4. Agentforce calls `initialize` then `tools/list`; the 12 tools appear with their input schemas.
    Invoking a tool sends `tools/call`; results come back as MCP content (JSON), with schema
    violations surfaced as JSON-RPC `-32602` and domain failures as `isError:true` tool results.
 

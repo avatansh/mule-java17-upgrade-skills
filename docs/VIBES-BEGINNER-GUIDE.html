@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beginner's Guide — Java 17 Upgrade Agent in MuleSoft Vibes (setup + test EVERY skill)</title>
+<style>
+  :root {
+    --ink: #1b2733; --muted: #5b6b7b; --line: #e3e8ee; --bg: #ffffff;
+    --panel: #f6f8fa; --accent: #0b6bcb; --accent-soft: #eaf2fb;
+    --code-bg: #0f172a; --code-ink: #e6edf3; --warn-bg: #fff8e6; --warn-line: #f0c34e;
+    --ok-bg: #e9f7ee; --ok-line: #52b788; --tip-bg: #eef4ff; --tip-line: #6a8fd8;
+    --mono: "SFMono-Regular", ui-monospace, "Cascadia Code", Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.65; font-size: 16px; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 44px 26px 100px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 .3em; letter-spacing: -.02em; }
+  h2 { font-size: 1.4rem; margin: 2.4em 0 .7em; padding-bottom: .35em; border-bottom: 2px solid var(--line); letter-spacing: -.01em; }
+  h3 { font-size: 1.1rem; margin: 1.6em 0 .5em; }
+  h4 { font-size: 1rem; margin: 1.2em 0 .3em; }
+  p { margin: .75em 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: .87em; background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: .12em .4em; }
+  pre { background: var(--code-bg); color: var(--code-ink); border-radius: 10px; padding: 15px 17px; overflow-x: auto; margin: 1em 0; font-size: .85rem; line-height: 1.55; }
+  pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 1.1em 0; font-size: .92rem; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--panel); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  td code, th code { background: var(--accent-soft); border-color: #cfe1f6; }
+  ul, ol { margin: .7em 0; padding-left: 1.5em; }
+  li { margin: .3em 0; }
+  hr { border: none; border-top: 1px solid var(--line); margin: 2.4em 0; }
+  .subtitle { color: var(--muted); font-size: 1.05rem; margin-top: .2em; }
+  .callout { margin: 1.1em 0; padding: 12px 16px 12px 18px; border-radius: 0 8px 8px 0; }
+  .callout p:first-child { margin-top: 0; } .callout p:last-child { margin-bottom: 0; }
+  .warn { background: var(--warn-bg); border-left: 4px solid var(--warn-line); color: #664d03; }
+  .ok   { background: var(--ok-bg);   border-left: 4px solid var(--ok-line);   color: #1b5e37; }
+  .tip  { background: var(--tip-bg);  border-left: 4px solid var(--tip-line);  color: #26406e; }
+  .warn code, .ok code, .tip code { background: rgba(255,255,255,.6); }
+  .step { display: flex; gap: 14px; align-items: baseline; margin: 2.2em 0 .4em; }
+  .badge { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; }
+  .step h2 { margin: 0; border: none; padding: 0; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 1.1em 0; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 13px 15px; background: var(--panel); }
+  .card b { display: block; margin-bottom: 3px; }
+  .card span { color: var(--muted); font-size: .9rem; }
+  .chat { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin: 1.2em 0; }
+  .chat .row { padding: 11px 16px; border-bottom: 1px solid var(--line); }
+  .chat .row:last-child { border-bottom: none; }
+  .chat .you { background: #fff; } .chat .bot { background: var(--accent-soft); }
+  .chat .who { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
+  .toc { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 20px; }
+  .toc ol { margin: .3em 0; }
+  .pill { display: inline-block; background: var(--accent-soft); border: 1px solid #cfe1f6; color: var(--accent); font-size: .8rem; padding: 3px 10px; border-radius: 999px; }
+  .skill { border: 1px solid var(--line); border-radius: 12px; margin: 1.4em 0; overflow: hidden; }
+  .skill > .head { background: var(--panel); padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .skill > .head .n { font-weight: 700; font-size: 1.02rem; }
+  .skill > .head .n code { background: var(--accent-soft); border-color: #cfe1f6; }
+  .skill > .body { padding: 4px 16px 14px; }
+  .tag { display:inline-block; font-size:.72rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase; padding:2px 8px; border-radius:999px; }
+  .tag.ro { background:#e9f7ee; color:#1b5e37; } .tag.wr { background:#fdeceb; color:#8a2a22; } .tag.star { background:#fff4d6; color:#7a5b00; }
+  .try { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 8px 14px; border-radius: 0 8px 8px 0; margin: .8em 0; }
+  .try .lbl { font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:700; }
+  dl.kv { margin:.6em 0; } dl.kv dt { font-weight:700; margin-top:.5em; } dl.kv dd { margin:.1em 0 .1em 0; color:var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<span class="pill">Beginner's guide · no prior knowledge assumed</span>
+<h1>Upgrade Mule apps to Java&nbsp;17 with the Vibes Agent</h1>
+<p class="subtitle">Set up this toolkit from a blank machine, <strong>prove it works from the terminal first</strong>, then load it into <strong>MuleSoft Vibes</strong> and <strong>test every single skill by chatting</strong>. Every term is explained; every command is copy-ready.</p>
+
+<div class="callout tip">
+<p><strong>What you'll end up with:</strong> a chat assistant inside your MuleSoft editor. You say “help me upgrade a Mule app to Java 17,” and it walks you through it — asks a few questions, shows exactly what it plans to change, waits for your “yes,” then opens a pull request and tracks the deployment. <strong>Nothing is changed without your approval.</strong></p>
+</div>
+
+<div class="callout ok">
+<p><strong>The plan in one line:</strong> install &amp; self-check (Steps 1–3) → configure the one <code>.env</code> (Step 4) → verify every integration + every skill from the terminal (Steps 5–6) → link all skills into Vibes and reload (Steps 7–8) → <strong>test every skill by chatting</strong> (Step 9) → confirm it worked (Step 10). Doing the terminal pass first separates “is the toolkit healthy?” from “is Vibes wired?” — so if something breaks later you already know which half to look at.</p>
+</div>
+
+<h2 style="border:none;padding:0;margin-top:1.6em">On this page</h2>
+<div class="toc">
+<ol>
+<li><a href="#what">What this is, in plain English</a></li>
+<li><a href="#included">What's included — the 9 skills &amp; the 12 MCP tools</a></li>
+<li><a href="#need">What you need before you start</a></li>
+<li><a href="#s1">Step 1 — Install Node.js</a></li>
+<li><a href="#s2">Step 2 — Open a terminal in the toolkit folder</a></li>
+<li><a href="#s3">Step 3 — Install and self-check</a></li>
+<li><a href="#s4">Step 4 — Create your <code>.env</code> settings file</a></li>
+<li><a href="#s5">Step 5 — Verify config &amp; the four integrations (terminal)</a></li>
+<li><a href="#s6">Step 6 — Prove <em>every</em> skill from the terminal (in order)</a></li>
+<li><a href="#s7">Step 7 — Link all skills into Vibes</a></li>
+<li><a href="#s8">Step 8 — Reload Vibes and confirm it sees them</a></li>
+<li><a href="#s9">Step 9 — Test EVERY skill in Vibes by chatting</a></li>
+<li><a href="#s10">Step 10 — Check it really worked</a></li>
+<li><a href="#serveropt">Alternative — run it as an MCP server</a></li>
+<li><a href="#trouble">Troubleshooting</a></li>
+<li><a href="#glossary">Glossary — every term explained</a></li>
+</ol>
+</div>
+
+<h2 id="what">1. What this is, in plain English</h2>
+<p>Old MuleSoft applications run on older versions of Java (8 or 11). Support for those is ending, so every app must move to <strong>Java 17</strong> on the Mule runtime <strong>4.9.18 LTS</strong>. Doing that by hand — walking the pom files, bumping connector versions, editing <code>mule-artifact.json</code> and CI workflows, testing, raising a pull request, tracking the deploy — is slow and error-prone.</p>
+<p>This toolkit automates it. It comes in two shapes that share the <em>same engine</em> underneath:</p>
+<div class="cards">
+<div class="card"><b>Skills</b><span>Small helpers the Vibes assistant runs for you. This is what this guide sets up.</span></div>
+<div class="card"><b>An MCP server</b><span>An optional always-on service exposing the same abilities as network “tools” (used for Agentforce, or when Vibes sandboxes scripts). Covered as an alternative in Step 6/the server section.</span></div>
+</div>
+<p>The star of the show is the <strong>interactive agent</strong> (a skill named <code>mule-upgrade-agent</code>). Instead of you memorising commands, it holds a conversation and follows a fixed, safe sequence:</p>
+<ol>
+<li><b>Source</b> — read the app from a folder on your computer (<em>local</em>), or straight from GitHub (<em>api</em>).</li>
+<li><b>Location</b> — the folder path, or the GitHub owner/repo (+ optional branch and sub-folder for a module inside a monorepo).</li>
+<li><b>Environment</b> — which config/credentials set to use (dev / test / prod). <strong>Required — it never guesses.</strong></li>
+<li><b>Deployed check</b> — optionally look up what's <em>actually running</em> on Anypoint right now (by exact deployed name).</li>
+<li><b>Assess</b> — figure out what needs to change and list any <b>incompatible connectors</b>. This is <em>lean and fast</em>: it shows what will change on the safe default with no slow network lookups.</li>
+<li><b>Version menu</b> — <em>only if you ask</em>, it pulls a live per-connector menu (scoped to just your app's connectors).</li>
+<li><b>Strategy</b> — you pick how to version them (safe default, latest, etc.).</li>
+<li><b>Dry run</b> — show the exact plan. <b>Nothing is written yet.</b></li>
+<li><b>Confirm</b> — it waits for your clear “yes.”</li>
+<li><b>Execute</b> — apply the changes and open a pull request.</li>
+<li><b>Track</b> — follow the merge → tests → deployment and offer to roll back if a deploy fails.</li>
+</ol>
+<div class="callout ok"><p><strong>Safety promise:</strong> the agent never changes code, never opens a PR, and never touches Anypoint until it has shown you a preview and you've explicitly approved it. This is enforced by a “dry-run gate” in the engine, not just by good manners.</p></div>
+
+<h2 id="included">2. What's included — the 9 skills &amp; the 12 MCP tools</h2>
+<p>You link <strong>9 skills</strong> into Vibes. They share one engine and one <code>.env</code>. Vibes picks the right one automatically from what you ask — you normally just talk to <code>mule-upgrade-agent</code> and it calls the others.</p>
+<table>
+<thead><tr><th>Skill (you link this)</th><th>What it does</th><th>Writes?</th></tr></thead>
+<tbody>
+<tr><td><code>mule-upgrade-agent</code> <span class="tag star">start here</span></td><td>The interactive chat conductor — drives the whole 11-step flow and calls the other skills. The <em>only</em> one a human normally talks to.</td><td>Only after your “yes”</td></tr>
+<tr><td><code>mule-upgrade</code></td><td>The orchestrator — runs assess → apply → commit → PR as one non-interactive job, then polls the deploy tail. Normally driven by the agent.</td><td>Yes (opens a PR)</td></tr>
+<tr><td><code>mule-upgrade-assess</code></td><td>Reads the app and builds the exact change plan (lean by default). On request also resolves the app-scoped connector version menu and audits whether the matrix itself is stale.</td><td>No (read-only)</td></tr>
+<tr><td><code>mule-upgrade-apply</code></td><td>Applies the byte-level file edits. Used <em>internally</em> by the orchestrator (rarely called directly).</td><td>Only with <code>--write</code></td></tr>
+<tr><td><code>mule-upgrade-pr</code></td><td>Commits the changes and opens the pull request; can also open a <em>rollback</em> (revert) PR.</td><td>Yes (PR / revert PR)</td></tr>
+<tr><td><code>mule-upgrade-parent-pom</code></td><td>Upgrades a shared <em>parent</em>/BOM pom (usually in its own repo) and drives the chained parent → BOM → app flow.</td><td>Yes (PR); <code>--detect-only</code> is read-only</td></tr>
+<tr><td><code>mule-upgrade-job</code></td><td>Tracks a job's lifecycle — status, list, reapply, delete, and reconcile (advance the deploy tail).</td><td>Local job store only</td></tr>
+<tr><td><code>mule-upgrade-scan</code></td><td>Scans your Anypoint fleet for apps still on old Mule/Java; can post a de-duped Slack alert.</td><td>No (read + optional Slack)</td></tr>
+<tr><td><code>mule-upgrade-matrix-update</code></td><td>Maintenance: turns “matrix is stale” advisories into a reviewed bump of the bundled compatibility matrix. Dry-run by default; writes only on <code>--apply</code>.</td><td>Only with <code>--apply</code> (edits the rules file)</td></tr>
+</tbody>
+</table>
+<p>A 10th folder, <code>mule-upgrade-mcp</code>, is <em>not</em> linked — it only describes the optional server (see the alternative near the end).</p>
+
+<h3>Full parity: the same abilities as 12 MCP tools</h3>
+<p>If you run the <strong>server</strong> instead (for Agentforce, or if Vibes blocks skill scripts), the identical functionality is exposed as <strong>12 MCP tools</strong>, so you never lose a feature by choosing one path over the other:</p>
+<table>
+<thead><tr><th>MCP tool</th><th>Same as skill</th></tr></thead>
+<tbody>
+<tr><td><code>assess_app</code></td><td>mule-upgrade-assess (lean change plan)</td></tr>
+<tr><td><code>resolve_versions</code></td><td>mule-upgrade-assess (app-scoped connector version menu, live)</td></tr>
+<tr><td><code>check_drift</code></td><td>mule-upgrade-assess (advisory: is the matrix itself stale?)</td></tr>
+<tr><td><code>start_upgrade</code></td><td>mule-upgrade (assess → apply → PR); <code>dryRun</code> is the preview gate</td></tr>
+<tr><td><code>get_job_status</code>, <code>reapply_job</code>, <code>delete_job</code>, <code>reconcile</code></td><td>mule-upgrade-job</td></tr>
+<tr><td><code>rollback</code></td><td>mule-upgrade-pr</td></tr>
+<tr><td><code>upgrade_parent_pom</code></td><td>mule-upgrade-parent-pom</td></tr>
+<tr><td><code>scan_fleet</code>, <code>scan_notify</code></td><td>mule-upgrade-scan</td></tr>
+</tbody>
+</table>
+<div class="callout tip"><p>Three things to know: <code>apply</code> runs <em>inside</em> <code>start_upgrade</code> (no separate tool); the <em>conversational</em> role of <code>mule-upgrade-agent</code> is played by the host LLM (Vibes/Agentforce) calling the tools; and <code>mule-upgrade-matrix-update</code> is a <em>skills-only maintenance</em> action, so it has no MCP tool. Everything else is one-to-one.</p></div>
+
+<h2 id="need">3. What you need before you start</h2>
+<div class="cards">
+<div class="card"><b>A Windows PC</b><span>This guide uses Windows PowerShell. Mac/Linux work too — the commands are nearly identical.</span></div>
+<div class="card"><b>Node.js 18+</b><span>The engine that runs the toolkit (the team develops on v24; the current LTS is ideal). Step 1 installs it.</span></div>
+<div class="card"><b>Anypoint Code Builder with Vibes</b><span>MuleSoft's editor with the Vibes AI assistant enabled. This is the “host” for the agent.</span></div>
+<div class="card"><b>The toolkit folder</b><span>Already on your machine at <code>C:\Workspaces\7.25\mule-java17-upgrade-skills</code> (the “suite root”).</span></div>
+<div class="card"><b>A decryption key</b><span>One password (the <em>AES key</em>) that unlocks the saved credentials. Ask whoever set up the repo. (There's a no-key option too.)</span></div>
+<div class="card"><b>GitHub access</b><span>A GitHub token (for “from GitHub” mode) or <code>git</code>+<code>gh</code> signed in (for “from a local folder” mode).</span></div>
+</div>
+<div class="callout tip"><p>Don't have the AES key? Skip it and paste plain credentials instead — see the note in Step 4. For a first test you can even run with <em>no</em> credentials: the agent will still assess an app and just skip the GitHub/Anypoint/Slack/Jira steps with a clear message.</p></div>
+
+<hr>
+
+<div class="step" id="s1"><span class="badge">1</span><h2>Step 1 — Install Node.js</h2></div>
+<p>Node.js is the program that runs this toolkit. Open <strong>PowerShell</strong> (press the Windows key, type “PowerShell”, hit Enter) and check whether you already have it:</p>
+<pre><code>node -v</code></pre>
+<p>If it prints <code>v18.x</code> or higher, you're set. If it says the command isn't found, or shows an older number, download the <strong>LTS</strong> installer from <a href="https://nodejs.org">nodejs.org</a>, run it (Next through the defaults), then <strong>close and reopen PowerShell</strong> and check again.</p>
+
+<div class="step" id="s2"><span class="badge">2</span><h2>Step 2 — Open a terminal in the toolkit folder</h2></div>
+<p>Everything is run from inside the toolkit folder (the “suite root”). In PowerShell, go there:</p>
+<pre><code>cd C:\Workspaces\7.25\mule-java17-upgrade-skills</code></pre>
+<p>You should now see that path at the start of your prompt. Leave this window open — you'll use it through Step 6.</p>
+<div class="callout tip"><p>Use <strong>PowerShell</strong>, not the old <code>cmd.exe</code>. Some commands pass a small piece of JSON; <code>cmd.exe</code> mangles the quotes (you'd see <code>Unexpected token … is not valid JSON</code>). PowerShell handles it correctly — and this guide prefers the <em>discrete-flag</em> form that avoids JSON entirely.</p></div>
+
+<div class="step" id="s3"><span class="badge">3</span><h2>Step 3 — Install and self-check</h2></div>
+<p>Download the toolkit's one dependency, then run its built-in tests to prove the copy on your machine is healthy:</p>
+<pre><code>npm ci
+npm test</code></pre>
+<p><code>npm ci</code> downloads what's needed (<code>js-yaml</code>, about a minute). <code>npm test</code> runs the whole suite (a few hundred <code>node --test</code> cases) and should end with <strong><code>fail 0</code></strong>. This needs no key, no internet credentials, and changes nothing — it just confirms the code is intact.</p>
+<div class="callout warn"><p>If <code>npm test</code> reports failures, stop here and fix the install before going further (usually a wrong Node version — recheck Step 1). Don't wire Vibes onto a broken copy.</p></div>
+
+<div class="step" id="s4"><span class="badge">4</span><h2>Step 4 — Create your <code>.env</code> settings file</h2></div>
+<p><code>.env</code> is a small text file at the suite root holding two things: the <strong>decryption key</strong> and <strong>which environment</strong> to use. You create it once and never type these again — every script, CLI, and the server auto-load it (they walk <em>up</em> from their own location to find the suite-root <code>.env</code>, which is why symlinking skills matters later).</p>
+<p>Make a copy of the provided template:</p>
+<pre><code>Copy-Item .env.example .env</code></pre>
+<p>Open the new <code>.env</code> (in VS Code or Notepad) and set these two lines:</p>
+<pre><code>MULE_CONFIG_KEY=&lt;paste the AES key here&gt;
+MULE_UPGRADE_ENV=dev</code></pre>
+<ul>
+<li><code>MULE_CONFIG_KEY</code> — the key that unlocks the saved credentials (a 16, 24, or 32-character string). Paste it with no quotes and no spaces. In the <code>dev</code> environment this one key wires <strong>all four integrations</strong> at once (Anypoint + GitHub + Jira + Slack), because their secrets ship pre-encrypted in <code>config/config-secure-dev.yaml</code>.</li>
+<li><code>MULE_UPGRADE_ENV</code> — which environment's settings to load. Use <code>dev</code> unless told otherwise. This is <strong>required</strong> — the toolkit fails fast rather than guess.</li>
+</ul>
+
+<h3>Verify it works (30 seconds)</h3>
+<p>From the suite root, run this one-liner. It never prints the secret — only a length and a yes/no:</p>
+<pre><code>node -e "import('./lib_shared/config.js').then(c=>{const e=c.requireEnv(process.env.MULE_UPGRADE_ENV,{flag:'MULE_UPGRADE_ENV'});console.log('env =',e,'| key length =',(process.env.MULE_CONFIG_KEY||'').length,'| github.token resolves =',c.has('github.token'));})"</code></pre>
+<p>You want to see something like <code>env = dev | key length = 32 | github.token resolves = true</code>. The <code>true</code> means the key successfully unlocked a credential — you're wired.</p>
+<div class="callout tip"><p><strong>No AES key?</strong> Leave <code>MULE_CONFIG_KEY</code> empty and instead add plain-text lines — each <em>overrides</em> the encrypted YAML value: <code>GITHUB_TOKEN=ghp_xxx</code> (and, if you have them, <code>ANYPOINT_CLIENT_ID</code>, <code>ANYPOINT_CLIENT_SECRET</code>, <code>SLACK_WEBHOOK_URL</code>, <code>JIRA_EMAIL</code>, <code>JIRA_API_TOKEN</code>). You can mix (key for some, plaintext for others).</p></div>
+<div class="callout warn"><p>The saved credentials use MuleSoft's <code>![…]</code> secure-property format (an IV-prefixed AES value). Keep the <code>![</code> and <code>]</code> — removing them turns the value into unusable plain text. The AES key in <code>.env</code> must be the <em>same</em> key those values were encrypted with, or they decrypt to garbage. Never share or commit <code>.env</code> or the real key (it's already Git-ignored). Make sure the file is named exactly <code>.env</code> — Notepad may secretly save it as <code>.env.txt</code> (use “Save as type: All Files”).</p></div>
+
+<div class="step" id="s5"><span class="badge">5</span><h2>Step 5 — Verify config &amp; the four integrations (terminal)</h2></div>
+<p>Before touching Vibes, prove the credentials resolve and each live integration works from PowerShell. Every call here is <strong>non-fatal and env-gated</strong> — a missing/rotated secret prints a clear “skipped / unverified,” never a crash. <strong>Replace the sample repo/app names with your own.</strong></p>
+
+<h3>5a — Config + matrix wiring (start here)</h3>
+<pre><code># Assess an app straight from GitHub (no download). --quiet emits JSON only:
+node skills/mule-upgrade-assess/scripts/assess.js --source github `
+  --owner acme --repo-name orders-api --branch main --env dev --quiet</code></pre>
+<p>In the JSON, check two things:</p>
+<ul>
+<li><code>matrixSource</code> is <code>exchange:&lt;version&gt;</code> — the compatibility matrix was pulled <em>live</em> from Anypoint Exchange (not the bundled fallback). Good. If it says <code>bundled</code>, your Anypoint credentials aren't decrypting (see Troubleshooting) — the assessment is still correct, just offline.</li>
+<li>No giant HTML/YAML blob in <code>warnings</code> (that means an Anypoint call returned a login page — a token problem).</li>
+</ul>
+
+<h3>5b — GitHub (a real PR against a test repo)</h3>
+<pre><code>node skills/mule-upgrade/scripts/upgrade.js start `
+  --app orders-api --mode api --owner acme --repo-name orders-api --branch main --env dev</code></pre>
+<p>Success → a real PR and a job at <code>PR_OPEN</code> (note the <code>job-…</code> id). A <code>401/403</code> means the GitHub token is missing/rotated or lacks <code>repo</code> scope. <span class="pill">makes a real PR</span></p>
+
+<h3>5c — Anypoint (read your Runtime Manager fleet)</h3>
+<pre><code>node skills/mule-upgrade-scan/scripts/scan.js --env dev</code></pre>
+<p>If Anypoint creds resolve you get a fleet table; if not, rows report <code>unverified</code> (never a crash). Here <code>--env</code> is the <strong>Anypoint environment name(s)</strong> to scan (e.g. <code>Production,Staging</code>) — the <em>config</em> env comes from <code>MULE_UPGRADE_ENV</code>.</p>
+
+<h3>5d — Slack (dry-run first, then live)</h3>
+<pre><code>node skills/mule-upgrade-scan/scripts/scan_notify.js --dry-run   # compute digest, send nothing
+node skills/mule-upgrade-scan/scripts/scan_notify.js            # send to slack.webhookUrl (#java17-upgrades)</code></pre>
+
+<h3>5e — Jira (fires inside the orchestrator)</h3>
+<p>With <code>jira.autoCreate=true</code> and creds resolved, Step 5b already created a ticket in project <strong>J1U</strong> and posted a “PR opened” comment. Check your Jira project after 5b. Missing creds → a clean “no Jira creds” skip.</p>
+<div class="callout ok"><p>If 5a shows <code>matrixSource: exchange:…</code>, 5b prints <code>PR_OPEN</code> with a link, and the scan returns live rows — all four integrations are wired. Now exercise <em>each skill</em> (Step 6), then wire Vibes.</p></div>
+
+<div class="step" id="s6"><span class="badge">6</span><h2>Step 6 — Prove <em>every</em> skill from the terminal (in order)</h2></div>
+<p>This runs <strong>every skill's CLI</strong> end-to-end so the whole suite is exercised before Vibes. Run them <strong>in order</strong> — a few reuse the <code>job-…</code> id from an earlier step. Set your values once:</p>
+<pre><code>$REPO   = "C:\path\to\a-mule-4.6-to-4.8-java8or11-clone"  # a real target you can PR against (local mode)
+$OWNER  = "acme"                                          # your GitHub owner (api mode)
+$REPONAME = "orders-api"                                  # a repo you can push branches to (api mode)</code></pre>
+
+<h4>Skill 1 — <code>mule-upgrade-assess</code> (read-only)</h4>
+<pre><code># offline &amp; deterministic (bundled matrix, no network):
+node skills/mule-upgrade-assess/scripts/assess.js --repo "$REPO" --no-fetch --quiet --out plan.json
+# live (matrix fetch + Anypoint cross-checks in dev):
+node skills/mule-upgrade-assess/scripts/assess.js --repo "$REPO" --env dev --quiet --out plan.json
+# the connector version MENU (opt-in, slower — live Exchange + release-notes):
+node skills/mule-upgrade-assess/scripts/assess.js --repo "$REPO" --env dev --versions --quiet
+# is the matrix ITSELF stale? (advisory audit — the check_drift capability):
+node skills/mule-upgrade-assess/scripts/lib/matrix_drift.js --connectors</code></pre>
+<p>Expect an <code>AssessmentResult</code> JSON (also saved to <code>plan.json</code>): current runtime/Java → target, <code>changePlan.fileEdits[]</code>, <code>connectorsInApp[]</code>, and any <code>connectorGaps</code>/<code>missingFromMatrix</code>.</p>
+
+<h4>Skill 2 — <code>mule-upgrade</code> orchestrator (opens a PR)</h4>
+<pre><code># ALWAYS dry-run first — writes nothing, prints PLAN_PREVIEW:
+node skills/mule-upgrade/scripts/upgrade.js start `
+  --app orders-api --env dev --mode api --owner "$OWNER" --repo-name "$REPONAME" --branch main --dry-run
+
+# then execute (identical args, minus --dry-run, plus a strategy):
+node skills/mule-upgrade/scripts/upgrade.js start `
+  --app orders-api --env dev --mode api --owner "$OWNER" --repo-name "$REPONAME" --branch main --version-strategy min</code></pre>
+<p>Expect <code>PR_OPEN</code> with a PR link + <code>job-…</code> id (and, if wired, a J1U ticket + Slack post). Copy the id:</p>
+<pre><code>$JOB = "job-XXXXXXXX"   # from the output above</code></pre>
+
+<h4>Skill 3 — <code>mule-upgrade-apply</code> (the internal rewriter)</h4>
+<p>Apply is what the orchestrator runs between assess and commit — Step 2 already exercised it live, and <code>npm test</code> covers it. To see it in isolation, feed <code>plan.json</code> from Skill 1 to a <em>scratch copy</em> of the repo:</p>
+<pre><code>node skills/mule-upgrade-apply/scripts/apply_edits.js --change-plan plan.json --repo "$REPO"    # preview staged blobs
+# add --write to actually edit files in the clone</code></pre>
+
+<h4>Skill 4 — <code>mule-upgrade-job</code> (status / list / reconcile / reapply / delete)</h4>
+<pre><code>node skills/mule-upgrade-job/scripts/job.js status --job $JOB --refresh   # auto-refreshes live PR/CI/deploy
+node skills/mule-upgrade-job/scripts/job.js get    --job $JOB             # raw record
+node skills/mule-upgrade-job/scripts/job.js list                          # all jobs
+node skills/mule-upgrade-job/scripts/job.js reconcile --stale-seconds 0   # sweep (standalone)
+# admin (do these LAST — delete removes the record):
+node skills/mule-upgrade-job/scripts/job.js reapply --job $JOB
+node skills/mule-upgrade-job/scripts/job.js delete  --job $JOB</code></pre>
+
+<h4>Skill 5 — <code>mule-upgrade</code> poll tail</h4>
+<pre><code>node skills/mule-upgrade/scripts/upgrade.js poll --stale-seconds 0   # advance PR_OPEN → DEPLOYING → DEPLOYED
+# continuous (dev convenience): node skills/mule-upgrade/scripts/upgrade.js poll --watch --interval 30</code></pre>
+
+<h4>Skill 6 — <code>mule-upgrade-parent-pom</code> (shared parent/BOM)</h4>
+<pre><code># read-only: what does this pom inherit? (recommend BOM-first if it imports one)
+node skills/mule-upgrade-parent-pom/scripts/parent_pom_cli.js `
+  --repo-url https://github.com/$OWNER/mule-parent --env dev --detect-only
+# upgrade it (pins connectors + minor-bumps its own version + opens a PR, or NO_CHANGE):
+node skills/mule-upgrade-parent-pom/scripts/parent_pom_cli.js `
+  --repo-url https://github.com/$OWNER/mule-parent --env dev --mode api</code></pre>
+
+<h4>Skill 7 — <code>mule-upgrade-pr</code> rollback (revert PR)</h4>
+<pre><code># simplest path: roll back through the orchestrator/tool by job (it reads sha+branch from the record).
+# raw CLI (needs coords + the upgrade commit sha + branch from `job.js get`):
+node skills/mule-upgrade-pr/scripts/pr.js rollback --mode api `
+  --coords '{"owner":"acme","repo":"orders-api","defaultBranch":"main"}' `
+  --commit-sha &lt;upgradeCommitSha&gt; --branch &lt;upgradeBranch&gt; --app orders-api --job $JOB</code></pre>
+
+<h4>Skill 8 — <code>mule-upgrade-scan</code> (fleet audit + proactive Slack)</h4>
+<pre><code>node skills/mule-upgrade-scan/scripts/scan.js --env dev --json           # machine-readable fleet audit
+node skills/mule-upgrade-scan/scripts/scan_notify.js --dry-run           # digest, no send
+node skills/mule-upgrade-scan/scripts/scan_notify.js --always-notify     # full digest every run</code></pre>
+
+<h4>Skill 9 — <code>mule-upgrade-matrix-update</code> (maintenance)</h4>
+<pre><code>node skills/mule-upgrade-matrix-update/scripts/matrix_update_cli.js          # review proposed bumps (writes nothing)
+node skills/mule-upgrade-matrix-update/scripts/matrix_update_cli.js --json   # machine-readable proposals
+node skills/mule-upgrade-matrix-update/scripts/matrix_update_cli.js --apply  # adopt (the ONLY writer) then re-run npm test</code></pre>
+<div class="callout ok"><p>When all nine behave — assess reads correctly, dry-run prints <code>PLAN_PREVIEW</code>, the real run prints <code>PR_OPEN</code>, status/poll advance the job, parent-pom + rollback + scan + matrix-update all respond — the toolkit is proven end-to-end. Now, and only now, wire Vibes.</p></div>
+
+<div class="step" id="s7"><span class="badge">7</span><h2>Step 7 — Link all skills into Vibes</h2></div>
+<p>Vibes looks for skills in a folder called <code>.a4drules/skills</code> inside whatever project you have open. We point it at the toolkit's skills. The <strong>correct way is to “symlink”</strong> (create a shortcut), not copy — a copy would break because each skill reaches back into the suite for shared code (<code>../../lib_shared</code>) and your one <code>.env</code>.</p>
+
+<h3>7a — Turn on symlink permission (one time)</h3>
+<p>On Windows, creating a symlink needs either <strong>Developer Mode</strong> on (Settings → Privacy &amp; security → For developers → Developer Mode) <em>or</em> a PowerShell window opened <strong>as Administrator</strong>. Do one of those, then continue.</p>
+
+<h3>7b — Create the shortcuts for all 9 skills</h3>
+<p>Open the <strong>Anypoint Code Builder workspace folder</strong> in PowerShell (the project you'll be working in), then run:</p>
+<pre><code>$SUITE = "C:\Workspaces\7.25\mule-java17-upgrade-skills"
+New-Item -ItemType Directory -Force -Path .a4drules\skills | Out-Null
+foreach ($s in "mule-upgrade-agent","mule-upgrade","mule-upgrade-assess","mule-upgrade-apply","mule-upgrade-pr","mule-upgrade-parent-pom","mule-upgrade-job","mule-upgrade-scan","mule-upgrade-matrix-update") {
+  New-Item -ItemType SymbolicLink -Path ".a4drules\skills\$s" -Target "$SUITE\skills\$s" -Force
+}</code></pre>
+<p>That links all 9 skills, including the star <code>mule-upgrade-agent</code>. You do <strong>not</strong> link <code>mule-upgrade-mcp</code> — that only describes the server. The <code>-Force</code> flag makes it safe to re-run whenever the skills change.</p>
+<div class="callout tip"><p><strong>Global scope (optional).</strong> To make the skills available in <em>every</em> ACB workspace, link them into Vibes' global skills storage instead of a single workspace's <code>.a4drules/skills</code>. Workspace scope (above) is best for a project-pinned upgrade and is committable so the whole team gets them.</p></div>
+
+<div class="step" id="s8"><span class="badge">8</span><h2>Step 8 — Reload Vibes and confirm it sees them</h2></div>
+<ol>
+<li><strong>Reload the Anypoint Code Builder window</strong> so Vibes re-scans for skills: <code>Ctrl+Shift+P</code> → “Reload Window” → Enter (or restart ACB).</li>
+<li>Open the Vibes <strong>Skills</strong> panel. You should see all <strong>9 skills</strong> under “Workspace,” including <code>mule-upgrade-agent</code>.</li>
+<li>That's it — Vibes activates the right skill (via its <code>use_skill</code> tool) based on what you ask.</li>
+</ol>
+<div class="callout warn"><p><strong>Whenever the toolkit is updated</strong>, re-run the link command in Step 7b (safe with <code>-Force</code>) and <strong>reload the window again</strong> so Vibes picks up the newest skills. If a skill behaves like an old version, an un-reloaded window is the usual cause.</p></div>
+
+<div class="step" id="s9"><span class="badge">9</span><h2>Step 9 — Test EVERY skill in Vibes by chatting</h2></div>
+<p>This is the real test. Below is a <strong>per-skill runbook</strong>: for each skill, the exact thing to <em>say</em>, what it runs under the hood, what to expect, and how to verify. Do them roughly top to bottom — Skills 2/3 produce a <code>job-…</code> id that later skills reuse. A green tag <span class="tag ro">read-only</span> means it changes nothing; a red tag <span class="tag wr">writes</span> means it can open a PR or edit files (always after a preview + your yes).</p>
+
+<div class="callout tip"><p><strong>How Vibes decides which skill to use:</strong> each skill's <code>SKILL.md</code> has trigger phrases. You don't name skills — you describe intent, and Vibes routes. For a guided upgrade it will pick <code>mule-upgrade-agent</code>; for “what's the status of job …” it picks <code>mule-upgrade-job</code>; and so on.</p></div>
+
+<!-- SKILL 1 -->
+<div class="skill">
+<div class="head"><span class="n">Skill 1 · <code>mule-upgrade-agent</code></span> <span class="tag star">start here</span> <span class="tag wr">writes (after your yes)</span></div>
+<div class="body">
+<p>The full guided upgrade. This is the one you'll use most — it drives the other skills for you.</p>
+<div class="try"><span class="lbl">Say to Vibes</span><p>“<strong>Help me upgrade a Mule app to Java 17.</strong>”</p></div>
+<p>Then answer its questions. A realistic exchange:</p>
+<div class="chat">
+<div class="row you"><div class="who">You</div>Help me upgrade a Mule app to Java 17.</div>
+<div class="row bot"><div class="who">Agent</div>Should I read the app from a <b>local folder</b> on this machine, or straight from <b>GitHub</b>?</div>
+<div class="row you"><div class="who">You</div>From GitHub — <code>github.com/acme/orders-api</code>, environment <code>dev</code>.</div>
+<div class="row bot"><div class="who">Agent</div>Optional: want me to check what's <b>actually deployed</b> on Anypoint? If so, give the exact deployed name.</div>
+<div class="row you"><div class="who">You</div>Yes — <code>orders-api</code>.</div>
+<div class="row bot"><div class="who">Agent</div>Assessed. <b>orders-api</b> is on 4.6.0 / Java 8 → target 4.9.18 / Java 17. Deployed: 4.6.1, STARTED. 3 incompatible connectors, 12 file edits. How do you want to version the connectors — <b>min</b> (safe) · first-compatible · in-major · latest · manual?</div>
+<div class="row you"><div class="who">You</div>Min.</div>
+<div class="row bot"><div class="who">Agent</div>Here's the full plan (a <b>dry run</b> — nothing written): the exact edits, the pins, the warnings. Open the PR?</div>
+<div class="row you"><div class="who">You</div>Yes, go ahead.</div>
+<div class="row bot"><div class="who">Agent</div>Done — PR opened. Job <code>job-…</code>, PR <code>…/pull/42</code>. I'll track merge → tests → deploy and offer rollback if a deploy fails.</div>
+</div>
+<dl class="kv">
+<dt>Runs</dt><dd><code>assess_app</code> → (optional) <code>resolve_versions</code> → <code>start_upgrade {dryRun:true}</code> → <code>start_upgrade {dryRun:false}</code> → <code>get_job_status</code></dd>
+<dt>Expect</dt><dd>A conversation that ends in <code>PR_OPEN</code> with a PR link + job id. <strong>It always dry-runs and waits for your yes first.</strong></dd>
+<dt>Verify</dt><dd>The PR exists on GitHub; ask “what's the status of the job?” and it reports the stage.</dd>
+</dl>
+</div>
+</div>
+
+<!-- SKILL 2 -->
+<div class="skill">
+<div class="head"><span class="n">Skill 2 · <code>mule-upgrade</code> (orchestrator)</span> <span class="tag wr">writes</span></div>
+<div class="body">
+<p>The non-interactive, one-shot pipeline — normally the agent calls it, but you can invoke it directly when you already have every input and want no prompts.</p>
+<div class="try"><span class="lbl">Say to Vibes</span><p>“<strong>Run the upgrade pipeline for orders-api non-interactively — api mode, owner acme, repo orders-api, branch main, env dev. Dry-run first, then execute with strategy min.</strong>”</p></div>
+<dl class="kv">
+<dt>Runs</dt><dd><code>upgrade.js start … --dry-run</code> then the same without <code>--dry-run</code> (tool: <code>start_upgrade</code>).</dd>
+<dt>Expect</dt><dd><code>PLAN_PREVIEW</code> then <code>PR_OPEN {jobId, prUrl, …}</code> — or <code>ALREADY_UPGRADED</code> / <code>CONFLICT</code> if a job is already in flight.</dd>
+<dt>Verify</dt><dd>Note the <code>job-…</code> id — Skills 4, 5, 7 reuse it.</dd>
+</dl>
+</div>
+</div>
+
+<!-- SKILL 3 -->
+<div class="skill">
+<div class="head"><span class="n">Skill 3 · <code>mule-upgrade-assess</code></span> <span class="tag ro">read-only</span></div>
+<div class="body">
+<p>Three related read-only capabilities live here. Test all three.</p>
+<div class="try"><span class="lbl">Say (a) — the change plan</span><p>“<strong>Assess github.com/acme/orders-api for the Java 17 upgrade (env dev). What needs to change?</strong>”</p></div>
+<div class="try"><span class="lbl">Say (b) — the version menu</span><p>“<strong>Show me the connector version options for orders-api — min vs first-compatible vs in-major vs latest.</strong>”</p></div>
+<div class="try"><span class="lbl">Say (c) — is the matrix stale?</span><p>“<strong>Is our compatibility matrix itself behind the latest published versions?</strong>”</p></div>
+<dl class="kv">
+<dt>Runs</dt><dd>(a) <code>assess_app</code> · (b) <code>resolve_versions</code> · (c) <code>check_drift</code>.</dd>
+<dt>Expect</dt><dd>(a) a prose summary: “on 4.6.0/Java 8 → 4.9.18/Java 17, 12 edits across 2 files,” plus any <code>connectorGaps</code>. (b) a per-connector menu with each version option. (c) an advisory list of pins trailing the latest LTS-line release — <em>never</em> an edit.</dd>
+<dt>Verify</dt><dd>Nothing is written; no branch, no PR, no job.</dd>
+</dl>
+</div>
+</div>
+
+<!-- SKILL 4 -->
+<div class="skill">
+<div class="head"><span class="n">Skill 4 · <code>mule-upgrade-apply</code></span> <span class="tag ro">internal</span></div>
+<div class="body">
+<p>The byte-level rewriter. It runs <em>inside</em> Skills 1/2 between assess and commit, so you rarely call it alone. To see it directly:</p>
+<div class="try"><span class="lbl">Say to Vibes</span><p>“<strong>Apply the change plan from the last assessment to a scratch copy of the repo and show me the edited files (don't touch the real clone).</strong>”</p></div>
+<dl class="kv">
+<dt>Runs</dt><dd><code>apply_edits.js --change-plan plan.json --repo &lt;scratch&gt;</code> (preview) / <code>--write</code> (in place).</dd>
+<dt>Expect</dt><dd>Staged file contents (<code>pom.xml</code>, <code>mule-artifact.json</code>, CI workflow) with only the targeted values changed — comments/order/indentation preserved.</dd>
+<dt>Verify</dt><dd>Diff the scratch copy: the connector versions, properties, and <code>javaSpecificationVersions</code> changed and nothing else.</dd>
+</dl>
+</div>
+</div>
+
+<!-- SKILL 5 -->
+<div class="skill">
+<div class="head"><span class="n">Skill 5 · <code>mule-upgrade-job</code></span> <span class="tag ro">local job store</span></div>
+<div class="body">
+<p>Everything about tracking a job. Test each verb.</p>
+<div class="try"><span class="lbl">Say — status</span><p>“<strong>What's the status of job job-…?</strong>” (auto-refreshes live PR/CI/deploy)</p></div>
+<div class="try"><span class="lbl">Say — list</span><p>“<strong>List all upgrade jobs.</strong>”</p></div>
+<div class="try"><span class="lbl">Say — reconcile</span><p>“<strong>Reconcile stale upgrade jobs now.</strong>”</p></div>
+<div class="try"><span class="lbl">Say — reapply / delete</span><p>“<strong>Reapply job job-….</strong>” &nbsp;·&nbsp; “<strong>Delete job job-….</strong>” (do delete last)</p></div>
+<dl class="kv">
+<dt>Runs</dt><dd><code>get_job_status</code> · <code>job.js list</code> · <code>reconcile</code> · <code>reapply_job</code> · <code>delete_job</code>.</dd>
+<dt>Expect</dt><dd>status shows the stage + a <code>checks[]</code> sub-status (e.g. <code>test: passed</code>) + <code>nextPollSeconds</code>. A PR merged manually moves it to <code>DEPLOYING</code>; a PR closed-without-merge moves it to <code>CLOSED</code>. reapply reseeds a new job id; delete removes the record + releases the lock.</dd>
+<dt>Verify</dt><dd><code>get</code> the job and confirm the fields; a passing MUnit stays <code>PR_OPEN</code> (“MUnit passed” sub-stage) until the PR is merged.</dd>
+</dl>
+</div>
+</div>
+
+<!-- SKILL 6 -->
+<div class="skill">
+<div class="head"><span class="n">Skill 6 · <code>mule-upgrade-parent-pom</code></span> <span class="tag wr">writes</span></div>
+<div class="body">
+<p>For apps whose connectors are pinned by a <em>shared</em> parent/BOM pom (usually in another repo). Test the read-only detect first, then the upgrade.</p>
+<div class="try"><span class="lbl">Say — detect (read-only)</span><p>“<strong>What does the parent pom at github.com/acme/mule-parent inherit? Don't change anything.</strong>”</p></div>
+<div class="try"><span class="lbl">Say — upgrade</span><p>“<strong>Upgrade the shared parent/BOM pom at github.com/acme/mule-parent for Java 17 (env dev).</strong>”</p></div>
+<dl class="kv">
+<dt>Runs</dt><dd><code>upgrade_parent_pom {detectOnly:true}</code> then <code>upgrade_parent_pom</code>.</dd>
+<dt>Expect</dt><dd>detect → <code>DETECTED</code> with its inheritance + edit preview (it will recommend upgrading a BOM first if it imports one). upgrade → <code>PR_OPEN</code> (pins connectors + minor-bumps its own version in one PR) or <code>NO_CHANGE</code> if already at the matrix. It's a <em>tracked job</em> — pollable like an app.</dd>
+<dt>Verify</dt><dd><code>get_job_status</code> shows <code>kind: parentPomUpgrade</code>. For a full app→parent→BOM chain, the agent (Skill 1) drives it and asks at each step.</dd>
+</dl>
+</div>
+</div>
+
+<!-- SKILL 7 -->
+<div class="skill">
+<div class="head"><span class="n">Skill 7 · <code>mule-upgrade-pr</code> (rollback)</span> <span class="tag wr">writes</span></div>
+<div class="body">
+<p>Opens a <em>revert</em> PR that restores the exact pre-upgrade file state. You don't need any coords — just the job.</p>
+<div class="try"><span class="lbl">Say to Vibes</span><p>“<strong>Roll back job job-….</strong>”</p></div>
+<dl class="kv">
+<dt>Runs</dt><dd><code>rollback</code> (looks up the commit sha + branch from the job record for you).</dd>
+<dt>Expect</dt><dd>A <code>Revert: Java 17 upgrade &lt;app&gt;</code> PR with <code>{revertBranch, revertCommitSha, prUrl}</code> — and a Slack note if wired.</dd>
+<dt>Verify</dt><dd>The revert PR exists and its tree matches the pre-upgrade state.</dd>
+</dl>
+</div>
+</div>
+
+<!-- SKILL 8 -->
+<div class="skill">
+<div class="head"><span class="n">Skill 8 · <code>mule-upgrade-scan</code></span> <span class="tag ro">read + optional Slack</span></div>
+<div class="body">
+<p>Turns the toolkit from reactive to proactive — find what's stale, and get alerted on change.</p>
+<div class="try"><span class="lbl">Say — audit</span><p>“<strong>Scan the fleet for apps still on old Mule/Java.</strong>”</p></div>
+<div class="try"><span class="lbl">Say — proactive</span><p>“<strong>Watch the fleet and alert me on Slack when new apps fall behind.</strong>”</p></div>
+<dl class="kv">
+<dt>Runs</dt><dd><code>scan_fleet</code> then <code>scan_notify</code>.</dd>
+<dt>Expect</dt><dd>A count + candidate list (each with the reason it was flagged and its GitHub repo, where known). <code>scan_notify</code> only posts to Slack when the stale set <em>changes</em> (de-duped) — so a timer won't re-spam.</dd>
+<dt>Verify</dt><dd>Hand a resolved candidate straight to Skill 1/2 to upgrade it. Note: v1 scans CloudHub 2.0 / RTF only (see Risks in the technical doc).</dd>
+</dl>
+</div>
+</div>
+
+<!-- SKILL 9 -->
+<div class="skill">
+<div class="head"><span class="n">Skill 9 · <code>mule-upgrade-matrix-update</code></span> <span class="tag wr">writes rules file on --apply</span></div>
+<div class="body">
+<p>Maintenance: adopt “the matrix is stale” advisories into the bundled compatibility matrix. Dry-run by default; only <code>--apply</code> writes.</p>
+<div class="try"><span class="lbl">Say — review</span><p>“<strong>Update the compatibility matrix — show me what would change first.</strong>”</p></div>
+<div class="try"><span class="lbl">Say — adopt</span><p>“<strong>Those look right — adopt the matrix bumps.</strong>”</p></div>
+<dl class="kv">
+<dt>Runs</dt><dd><code>matrix_update_cli.js</code> (review) then <code>--apply</code>.</dd>
+<dt>Expect</dt><dd>A <code>from → to</code> proposal list (gating pins move on their LTS line; connectors move latest-in-major, never across a breaking major). After apply, re-run <code>npm test</code> and commit the matrix change.</dd>
+<dt>Verify</dt><dd>Only <code>references/compatibility-matrix.yaml</code> changed; comments preserved; lines that already moved are skipped, not clobbered.</dd>
+</dl>
+</div>
+</div>
+
+<div class="callout ok"><p>Once all nine respond correctly by chat — the agent walks a full upgrade, assess/versions/drift report, apply previews cleanly, job status/reconcile advance, parent-pom + rollback open PRs, scan lists candidates, and matrix-update proposes bumps — <strong>your Vibes setup is fully working end-to-end.</strong> 🎉</p></div>
+
+<div class="step" id="s10"><span class="badge">10</span><h2>Step 10 — Check it really worked</h2></div>
+<ul>
+<li><b>GitHub</b> — the repo has a new <em>pull request</em> with the Java 17 changes (and a <em>revert</em> PR from Skill 7).</li>
+<li><b>Status</b> — ask “what's the status of the job?” It reports the stage (PR open → deploying → deployed) and how often to check again.</li>
+<li><b>Jira</b> (if wired) — a J1U ticket was created with a comment linking the PR.</li>
+<li><b>Slack</b> (if wired) — a PR-ready message (and the fleet digest from Skill 8) in <code>#java17-upgrades</code>.</li>
+<li><b>Anypoint</b> — the poll tail moved the job past <code>PR_OPEN</code> using a real deploy verify, and the scan returned live deployments.</li>
+<li><b>Job store</b> — inspect any run at <code>~/.mule-upgrade/jobs/*.json</code> (override with <code>MULE_UPGRADE_HOME</code>).</li>
+</ul>
+
+<h2 id="serveropt">Alternative — run it as an MCP server</h2>
+<p>If your Vibes setup blocks skills from running scripts, or you want the tools available over the network (e.g. for Agentforce) or event-driven CI/CD via the HMAC webhook, run the server instead of linking skills:</p>
+<pre><code>cd C:\Workspaces\7.25\mule-java17-upgrade-skills
+$env:MCP_BEARER_TOKEN = "make-up-a-long-random-string"
+node server/server.js       # listens on http://localhost:8080  (MCP JSON-RPC at POST /mcp)</code></pre>
+<p>Then in Vibes: <strong>MCP Servers → Remote Servers → Add</strong>, URL <code>http://localhost:8080/mcp</code>, header <code>Authorization: Bearer &lt;your token&gt;</code>. Reload — all <strong>12 tools</strong> appear in the <em>Installed</em> tab with per-tool enable/auto-approve/timeout controls. It reads the <em>same</em> <code>.env</code>, so the same secrets decrypt. See <a href="./SETUP-VIBES.html">SETUP-VIBES</a> and <a href="./SETUP-AGENTFORCE.html">SETUP-AGENTFORCE</a> for details, and the technical deep-dive for the auth/webhook model.</p>
+
+<h2 id="trouble">Troubleshooting</h2>
+<table>
+<thead><tr><th>You see…</th><th>What it means &amp; the fix</th></tr></thead>
+<tbody>
+<tr><td><code>matrixSource: bundled</code> (expected <code>exchange:…</code>)</td><td>The live matrix couldn't be fetched — usually the Anypoint credentials aren't decrypting (wrong AES key, or the <code>![…]</code> wrapper was stripped). Assessment still works off the bundled matrix; fix the creds to go live.</td></tr>
+<tr><td>A big HTML / “document separator” blob in the warnings</td><td>An Anypoint call returned a login page instead of data — the client sent an empty/invalid token. Re-check that <code>anypoint.clientId</code>/<code>clientSecret</code> decrypt correctly.</td></tr>
+<tr><td><code>Unexpected token … is not valid JSON</code> on <code>--coords</code></td><td>You're in <code>cmd.exe</code>. Use <strong>PowerShell</strong> (single-quoted JSON passes literally), or drop <code>--coords</code> and use the discrete flags <code>--owner</code>/<code>--repo-name</code>/<code>--branch</code>.</td></tr>
+<tr><td>A duplicated warning list in the Vibes chat</td><td>The assess ran without <code>--quiet</code> and both the JSON and the human summary got relayed. The agent uses <code>--quiet</code>; if you call assess directly, add it.</td></tr>
+<tr><td>Skills don't appear in Vibes</td><td>You copied instead of symlinked, or they're in the wrong place. They must be at <code>.a4drules/skills/&lt;name&gt;/SKILL.md</code>. Re-do Step 7 with symlinks and reload the window (Step 8).</td></tr>
+<tr><td><code>Cannot find module '../../lib_shared/…'</code></td><td>Same cause — a copied skill can't find the shared code. Symlink so it reaches back into the suite.</td></tr>
+<tr><td>A skill behaves like an old version</td><td>The window wasn't reloaded after an update. Re-run Step 7b (<code>-Force</code>) and reload (Step 8).</td></tr>
+<tr><td><code>environment is required</code></td><td>No environment set. Put <code>MULE_UPGRADE_ENV=dev</code> in <code>.env</code>, or add <code>--env dev</code>. Check the file is <code>.env</code>, not <code>.env.txt</code>.</td></tr>
+<tr><td><code>cannot decrypt secure property</code> / “must be 16/24/32 characters”</td><td>Wrong or empty AES key. Fix <code>MULE_CONFIG_KEY</code>, or use the plaintext-credentials option (Step 4 tip).</td></tr>
+<tr><td>GitHub <code>401</code> / <code>403</code></td><td>The token is missing or lacks permission. Add a valid <code>GITHUB_TOKEN</code> (needs <code>repo</code> scope), or <code>gh auth login</code> for local mode.</td></tr>
+<tr><td><code>spawnSync gh ENOENT</code> (local mode)</td><td>The <code>gh</code> CLI couldn't be spawned on Windows. The branch still pushed; PR creation automatically falls back to the GitHub REST API using your token — so a working token is enough even without <code>gh</code>.</td></tr>
+<tr><td><code>CONFLICT</code> / <code>UPGRADE_IN_PROGRESS</code></td><td>Another job holds the lock for that exact app/pom. It means “already done / in flight,” not “retry.” Surface the existing <code>jobId</code>/<code>prUrl</code> and stop.</td></tr>
+<tr><td>Anypoint rows say “unverified” / deployed check skipped</td><td>Anypoint credentials aren't set, or the deployed app name didn't match. Non-fatal — assessment still works; supply creds + the exact deployed name to enable it.</td></tr>
+<tr><td>MCP server returns <code>401</code></td><td>(Server option) The URL must end in <code>/mcp</code> and the <code>Authorization: Bearer</code> header must match <code>MCP_BEARER_TOKEN</code>.</td></tr>
+<tr><td>The agent starts changing things without asking</td><td>It shouldn't — the design forbids it. Make sure you're talking to <code>mule-upgrade-agent</code>; it always dry-runs and asks before writing.</td></tr>
+</tbody>
+</table>
+
+<h2 id="glossary">Glossary — every term explained</h2>
+<table>
+<tbody>
+<tr><td><b>Java 17 / Mule 4.9.18 LTS</b></td><td>The newer versions every app must move to. Support for Java 8/11 is ending.</td></tr>
+<tr><td><b>Skill</b></td><td>A small helper with instructions the Vibes assistant runs on your behalf. This toolkit is a set of skills.</td></tr>
+<tr><td><b>The agent</b></td><td>The <code>mule-upgrade-agent</code> skill — the chat conductor that walks you through the whole upgrade.</td></tr>
+<tr><td><b>Orchestrator</b></td><td>The <code>mule-upgrade</code> skill — the non-interactive pipeline (assess → apply → commit → PR → track) the agent drives.</td></tr>
+<tr><td><b>MCP server / MCP tool</b></td><td>An optional always-on service offering the same abilities as network “tools” (used to connect Agentforce). Each ability is one “tool.” Not needed for the skills path.</td></tr>
+<tr><td><b>Connector</b></td><td>A plug-in that lets a Mule app talk to something (HTTP, a database, Salesforce, Slack…). Old versions won't run on Java 17, so they get bumped.</td></tr>
+<tr><td><b>Compatibility matrix</b></td><td>The toolkit's curated list of which versions are safe for Java 17. Pulled live from Anypoint Exchange when creds are set, else a bundled copy. The trusted source for “what version should this be.”</td></tr>
+<tr><td><b>Connector gap</b></td><td>A connector below the Java-17 pin whose version is controlled <em>upstream</em> (in a shared parent/BOM), so the app's own pom can't fix it. Needs the parent-pom skill.</td></tr>
+<tr><td><b>Matrix drift (<code>check_drift</code>)</b></td><td>An advisory audit of whether the matrix itself has fallen behind newer published versions. It only reports; <code>mule-upgrade-matrix-update</code> is what adopts the bumps.</td></tr>
+<tr><td><b>Assess</b></td><td>Reading the app and figuring out what needs to change — without changing anything.</td></tr>
+<tr><td><b>Dry run / PLAN_PREVIEW</b></td><td>A full preview of the plan that writes nothing. Always shown before any real change.</td></tr>
+<tr><td><b>Version strategy</b></td><td>How to pick each connector's new version: <code>min</code> (safe default), <code>first-compatible</code>, <code>in-major</code>, <code>latest</code>, or <code>manual</code>.</td></tr>
+<tr><td><b>Parent POM / BOM</b></td><td>A shared build file many apps inherit versions from. If your app uses one, <code>mule-upgrade-parent-pom</code> upgrades it in its own repo.</td></tr>
+<tr><td><b>Pull request (PR)</b></td><td>A proposed change on GitHub that a human reviews and merges. The agent opens one; it never merges on its own.</td></tr>
+<tr><td><b>Job</b></td><td>One tracked upgrade. It moves through stages: PR open → deploying → deployed (or a failure stage).</td></tr>
+<tr><td><b>Reconcile</b></td><td>A sweep that advances stale jobs by polling GitHub + Anypoint (skills can't host a webhook listener, so they poll).</td></tr>
+<tr><td><b>Anypoint / Runtime Manager (ARM)</b></td><td>MuleSoft's cloud where apps are deployed. The agent can read what's currently running there (runtime/Java, not connector versions).</td></tr>
+<tr><td><b>Environment (dev / test / prod)</b></td><td>Which config + credentials to use. You must choose one — the toolkit won't guess.</td></tr>
+<tr><td><b>.env</b></td><td>Your private settings file at the suite root, holding the decryption key and chosen environment. Never shared.</td></tr>
+<tr><td><b>AES key (<code>MULE_CONFIG_KEY</code>)</b></td><td>The one password that unlocks the saved (encrypted) credentials.</td></tr>
+<tr><td><b>Symlink</b></td><td>A shortcut that points to the real folder. We use it so Vibes sees the skills while they stay inside the toolkit (and can reach the shared code + <code>.env</code>).</td></tr>
+<tr><td><b>Rollback</b></td><td>Undo — the agent can open a revert pull request if a deployment fails.</td></tr>
+</tbody>
+</table>
+
+<hr>
+<p class="subtitle">Related in this folder: <a href="./TECHNICAL-DEEP-DIVE.html">TECHNICAL-DEEP-DIVE</a> (full architecture + design rationale + diagrams — read this to become an expert) · <a href="./GETTING-STARTED.html">GETTING-STARTED</a> · <a href="./SETUP-VIBES.html">SETUP-VIBES</a> · <a href="./WIRE-LIVE-INTEGRATIONS.html">WIRE-LIVE-INTEGRATIONS</a>.</p>
+
+</div>
+</body>
+</html>

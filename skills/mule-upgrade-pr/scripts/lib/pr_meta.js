@@ -15,9 +15,7 @@ export function branchBase(appName, targetRuntime, targetJavaVersion) {
  * @param {string} jobId
  */
 export function pickBranchName(base, existingRefs = [], jobId = "job") {
-  const taken = new Set(
-    (existingRefs ?? []).map((r) => String(r).replace(/^refs\/heads\//, ""))
-  );
+  const taken = new Set((existingRefs ?? []).map((r) => String(r).replace(/^refs\/heads\//, "")));
   const candidates = [base, ...Array.from({ length: 50 }, (_, i) => `${base}-${i + 1}`)];
   const free = candidates.find((c) => !taken.has(c));
   return free ?? `${base}-${jobId}`;
@@ -32,7 +30,16 @@ export function prTitle(appName, targetRuntime, targetJavaVersion) {
  * prBody: the upgrade PR description (mirrors pf-open-pr), including optional Jira link and
  * assessment warnings surfaced as a bullet list.
  */
-export function prBody({ appName, targetRuntime, targetJavaVersion, commitSha, jobId, jiraTicketId, jiraBaseUrl = "", warnings = [] }) {
+export function prBody({
+  appName,
+  targetRuntime,
+  targetJavaVersion,
+  commitSha,
+  jobId,
+  jiraTicketId,
+  jiraBaseUrl = "",
+  warnings = [],
+}) {
   let body =
     `Automated Java 17 upgrade for **${appName}**.\n\n` +
     `- Target runtime: ${targetRuntime}\n` +

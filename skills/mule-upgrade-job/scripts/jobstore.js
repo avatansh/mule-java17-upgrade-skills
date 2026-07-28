@@ -107,11 +107,18 @@ export function putJob(rec) {
 }
 
 /**
- * createJob(opts): acquire the app lock single-flight, then persist a PROCESSING record.
+ * createJob(opts): acquire the single-flight lock, then persist a PROCESSING record.
  * Mirrors post-jobs.xml: os:retrieve lock (throws if held → 409 CONFLICT) → os:store lock=jobId
  * → os:store job record.
+ *
+ * The lock is claimed on `lockKey` when supplied, else `appName`. This lets a MONOREPO run several
+ * independent module upgrades at once: an app upgrade locks on the app name, while a parent/BOM
+ * upgrade locks on `<repo>::<pomPath>` (e.g. `mule-apps::bom/pom.xml` vs `mule-apps::parent-pom/pom.xml`),
+ * so a BOM PR, a parent-pom PR, and the app PR can all be open on the same repo concurrently — while
+ * two upgrades of the SAME pom still single-flight. The chosen key is persisted as `record.lockKey`
+ * so every release path (reconcile, ci_ingest, deleteJob) frees the exact key that was claimed.
  * @returns {{jobId, record}}
- * @throws {Error} code "CONFLICT" with .existingJobId when the app is already locked.
+ * @throws {Error} code "CONFLICT" with .existingJobId when the key is already locked.
  */
 export function createJob({
   appName,
@@ -121,12 +128,14 @@ export function createJob({
   coords = null,
   changePlan = null,
   jobId = newJobId(),
+  lockKey = null,
 }) {
   if (!appName) throw new Error("createJob: appName is required");
-  const existing = acquireLock(appName, jobId);
+  const key = lockKey || appName;
+  const existing = acquireLock(key, jobId);
   if (existing !== jobId) {
     const err = new Error(
-      `An upgrade for app "${appName}" is already in progress (jobId=${existing}). ` +
+      `An upgrade for "${key}" is already in progress (jobId=${existing}). ` +
         `Wait for it to complete or fail before starting a new one.`
     );
     err.code = "CONFLICT";
@@ -138,6 +147,7 @@ export function createJob({
     jobId,
     status: "PROCESSING",
     appName,
+    lockKey: key,
     environment,
     jiraTicketId,
     approvedChangePlan,
@@ -159,13 +169,12 @@ export function createJob({
  * persisted record. Mirrors pf-set-status. Terminal statuses stamp completedAt when absent.
  * @returns updated record (or null if the job is gone)
  */
-const TERMINAL = new Set([
+export const TERMINAL = new Set([
   "DEPLOYED",
   "NO_CHANGE",
   "CLOSED",
   "FAILED_ASSESS",
   "FAILED_COMMIT",
-  "FAILED_CI",
   "FAILED_DEPLOY",
   "FAILED_INTERRUPTED",
 ]);
@@ -191,23 +200,51 @@ export function patchJob(jobId, fields = {}) {
 }
 
 // ── locks (locksStore) ────────────────────────────────────────────────────────────────
+// A held lock is STALE (and may be stolen) when either:
+//   · its holder job no longer exists, or is already in a terminal status (the holder crashed or
+//     finished without releasing — mirrors reconcile's FAILED_INTERRUPTED lock recovery), or
+//   · the lock file is older than LOCK_TTL_MS (a crashed run whose record was also lost).
+// This makes the single-flight lock self-healing so a dead job never permanently blocks re-runs.
+const LOCK_TTL_MS = 6 * 60 * 60 * 1000; // 6h — far longer than any real upgrade run
+
+/**
+ * lockIsStale(held, nowMs): whether a held-lock record can be safely stolen. Exported for tests.
+ * @param {{jobId?:string, at?:string}|null} held  the parsed lock file
+ * @param {number} [nowMs]
+ */
+export function lockIsStale(held, nowMs = Date.now()) {
+  if (!held) return true;
+  const holder = held.jobId ? getJob(held.jobId) : null;
+  if (!holder) return true; // holder record gone → orphaned lock
+  if (TERMINAL.has(holder.status)) return true; // holder finished/failed without releasing
+  const at = held.at ? Date.parse(held.at) : NaN;
+  if (!Number.isNaN(at) && nowMs - at > LOCK_TTL_MS) return true; // aged out
+  return false;
+}
+
 /**
  * acquireLock(appName, jobId): claim the single-flight lock. Returns the jobId that HOLDS the
  * lock afterwards — equal to the passed jobId when acquired, or the pre-existing holder on
- * contention. Best-effort atomicity via wx (exclusive create).
+ * contention. Best-effort atomicity via wx (exclusive create). A STALE lock (dead/terminal holder
+ * or aged past LOCK_TTL_MS) is stolen so a crashed job can't block the app forever.
  */
 export function acquireLock(appName, jobId) {
   const file = lockFile(appName);
   ensureDir(path.dirname(file));
+  const record = () =>
+    JSON.stringify({ key: `lock::${appName}`, appName, jobId, at: nowUtc() }, null, 2);
   try {
     // wx: fail if the file already exists → detects a held lock without a read/write race.
-    fs.writeFileSync(file, JSON.stringify({ key: `lock::${appName}`, appName, jobId, at: nowUtc() }, null, 2), {
-      flag: "wx",
-    });
+    fs.writeFileSync(file, record(), { flag: "wx" });
     return jobId;
   } catch (e) {
     if (e.code === "EEXIST") {
       const held = readJson(file);
+      if (lockIsStale(held)) {
+        // Steal: overwrite atomically. The prior holder is dead/terminal/aged, so this is safe.
+        writeJson(file, JSON.parse(record()));
+        return jobId;
+      }
       return held?.jobId ?? "unknown";
     }
     throw e;
@@ -286,8 +323,10 @@ export function deleteJob(jobId) {
   fs.rmSync(jobFile(jobId), { force: true });
   const branchCleared = rec.branchName ? removeBranchIndex(rec.branchName) : false;
   let lockReleased = false;
-  if (rec.appName && lockHolder(rec.appName) === jobId) {
-    lockReleased = releaseLock(rec.appName);
+  // Free the exact key this job claimed (lockKey for monorepo per-module jobs; appName otherwise).
+  const key = rec.lockKey ?? rec.appName;
+  if (key && lockHolder(key) === jobId) {
+    lockReleased = releaseLock(key);
   }
   return { deleted: true, branchCleared, lockReleased };
 }
@@ -307,6 +346,7 @@ export function reapplyJob(jobId) {
   }
   return createJob({
     appName: src.appName,
+    lockKey: src.lockKey ?? null,
     environment: src.environment,
     jiraTicketId: src.jiraTicketId,
     approvedChangePlan: src.approvedChangePlan,

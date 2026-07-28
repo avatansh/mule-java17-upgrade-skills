@@ -76,12 +76,18 @@ export function computeSignature(rawBody, secret) {
  * verifyWebhook({rawBody, headers, signatureHeader, allowTokenFallback}): validate a webhook
  * delivery. Returns {ok:boolean, reason?}. NEVER throws.
  *
- * @param {Buffer|string} rawBody           the exact bytes the signature was computed over
- * @param {object} headers                  lower-cased header map
- * @param {string} [signatureHeader]        "x-hub-signature-256" | "x-cd-signature-256"
- * @param {boolean} [allowTokenFallback]    accept x-cd-token === webhookSecret (cd-result only)
+ * @param {object} [opts]
+ * @param {Buffer|string} [opts.rawBody]             the exact bytes the signature was computed over
+ * @param {Record<string,string>} [opts.headers]   lower-cased header map
+ * @param {string} [opts.signatureHeader]          "x-hub-signature-256" | "x-cd-signature-256"
+ * @param {boolean} [opts.allowTokenFallback]      accept x-cd-token === webhookSecret (cd-result only)
  */
-export function verifyWebhook({ rawBody, headers = {}, signatureHeader = "x-hub-signature-256", allowTokenFallback = false } = {}) {
+export function verifyWebhook({
+  rawBody,
+  headers = {},
+  signatureHeader = "x-hub-signature-256",
+  allowTokenFallback = false,
+} = {}) {
   const secret = webhookSecret();
   if (!secret) return { ok: false, reason: "webhook secret not configured" };
 

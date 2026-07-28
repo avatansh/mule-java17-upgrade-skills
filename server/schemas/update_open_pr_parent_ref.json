@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "update_open_pr_parent_ref",
+  "title": "update_open_pr_parent_ref",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["appJobId", "parentRef"],
+  "properties": {
+    "appJobId": {
+      "type": "string",
+      "description": "The app's tracked job id whose ALREADY-OPEN PR should be amended (must be PR_OPEN with a branch)."
+    },
+    "parentRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The new <parent> reference to set inside the app pom (e.g. the newly-released parent-pom).",
+      "required": ["toVersion"],
+      "properties": {
+        "groupId": { "type": "string", "description": "Parent groupId to match (optional; matched loosely when omitted)." },
+        "artifactId": { "type": "string", "description": "Parent artifactId to match (e.g. solutions-parent-pom)." },
+        "toVersion": { "type": "string", "description": "New parent version to set (e.g. 1.1.0-SNAPSHOT)." }
+      }
+    },
+    "pomPath": {
+      "type": "string",
+      "description": "DO NOT set this normally. The app's own pom path is AUTO-DERIVED from the tracked app job (its changePlan), so a multi-module app under a sub-dir (e.g. customer-web-eapi/pom.xml) is amended in the correct file. Only override for a genuinely unusual layout."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["api", "local"],
+      "description": "Commit mode (\"api\" default)."
+    },
+    "repoRoot": {
+      "type": "string",
+      "description": "Local clone root (local mode)."
+    },
+    "jiraTicketId": {
+      "type": "string",
+      "description": "Optional Jira ticket ID appended to the amendment commit message."
+    }
+  }
+}

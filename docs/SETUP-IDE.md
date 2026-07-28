@@ -91,6 +91,7 @@ With the skills loaded, drive everything in natural language; Claude picks the r
 
 | You say | Skill | What runs |
 |---------|-------|-----------|
+| "Walk me through upgrading orders-api to Java 17" | `mule-upgrade-agent` | guided loop: assess → version menu → **dry-run** → confirm → execute → track |
 | "Assess `~/src/orders-api` for the Java 17 upgrade" | `mule-upgrade-assess` | `assess.js` → ChangePlan JSON + summary |
 | "Upgrade orders-api to Java 17 and open a PR" | `mule-upgrade` | full pipeline → PR at `PR_OPEN` |
 | "What's the status of job job-…?" | `mule-upgrade-job` | job record + next-poll hint |
@@ -103,6 +104,10 @@ With the skills loaded, drive everything in natural language; Claude picks the r
 ```bash
 # assess a local clone (no writes)
 node skills/mule-upgrade-assess/scripts/assess.js --repo ~/src/orders-api
+
+# preview the plan without writing anything (the interactive-agent confirm gate)
+node skills/mule-upgrade/scripts/upgrade.js start \
+  --app orders-api --mode api --owner acme --repo-name orders-api --env dev --dry-run
 
 # full upgrade in API mode → opens a PR
 node skills/mule-upgrade/scripts/upgrade.js start \
@@ -160,7 +165,7 @@ optional and degrades gracefully when its credential is absent. Do it in this or
 ```bash
 cd mule-java17-upgrade-skills
 npm ci
-node --test          # the full suite (191 tests) must pass — this needs no secrets and no network
+node --test          # the full suite (310 tests) must pass — this needs no secrets and no network
 ```
 
 **Step 2 — minimal `.env` (offline profile).** For pure local testing you don't even need the

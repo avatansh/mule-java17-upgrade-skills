@@ -58,20 +58,109 @@ function decryptTree(node, key) {
 
 let _cache = null;
 
+/** Normalise an env name into the suffix used by a per-env key var (e.g. "dev" → "DEV"). */
+function envKeySuffix(env) {
+  return String(env || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_");
+}
+
+/**
+ * Resolve the AES decryption key for a given environment, "set once, auto-selected per env".
+ * Precedence (first non-empty wins):
+ *   1. explicit opts.key            (tests / programmatic override)
+ *   2. MULE_CONFIG_KEY_<ENV>        (per-env key, e.g. MULE_CONFIG_KEY_PROD) — lets one .env
+ *                                    hold a distinct key per environment; the active env auto-picks
+ *   3. MULE_CONFIG_KEY              (single key shared across envs — the common case here)
+ * Returns "" when none is set, so key-free operations still work and the throw is deferred to the
+ * moment a secret is actually READ.
+ * @param {string} env
+ * @param {string} [optKey]
+ * @returns {string}
+ */
+export function resolveKey(env, optKey) {
+  if (optKey != null && optKey !== "") return optKey;
+  const perEnv = process.env[`MULE_CONFIG_KEY_${envKeySuffix(env)}`];
+  if (perEnv) return perEnv;
+  return process.env.MULE_CONFIG_KEY ?? "";
+}
+
+/** The environments this suite ships config file pairs for. Kept in sync with config/. */
+export const KNOWN_ENVS = ["dev", "local", "prod"];
+
+/**
+ * Resolve the active environment from an explicit invocation input, falling back to the
+ * loaded MULE_UPGRADE_ENV. Returns null when NEITHER is supplied — callers that require an
+ * explicit env (every user-facing entrypoint) use requireEnv() to turn that into a fail-fast.
+ * An arg-parser "present-but-valueless" flag (boolean `true`) is treated as absent.
+ * @param {string|boolean} [explicit]  e.g. the value of a --env flag
+ * @returns {string|null}
+ */
+export function resolveEnv(explicit) {
+  if (typeof explicit === "string" && explicit !== "") return explicit;
+  const fromEnv = process.env.MULE_UPGRADE_ENV;
+  if (typeof fromEnv === "string" && fromEnv !== "") return fromEnv;
+  return null;
+}
+
+/**
+ * Require an explicit environment at an invocation boundary — faithful to the Mule app, which
+ * refused to start without `-Denv`/`mule.env`. The env may be SUPPLIED two ways (both count as an
+ * explicit input): the `--env <e>` flag at the command/tool call, or `MULE_UPGRADE_ENV` loaded
+ * from the process env / `.env`. There is NO silent "dev" default. On success it also PINS
+ * `process.env.MULE_UPGRADE_ENV` so every downstream config read in this run resolves the same env.
+ * @param {string|boolean} [explicit]  the --env flag value (or a request field)
+ * @param {object} [opts]
+ * @param {string} [opts.flag="--env"]  flag name to cite in the error
+ * @param {boolean} [opts.validate=true] reject envs with no shipped config file pair
+ * @returns {string} the resolved, non-empty environment
+ * @throws {Error} code VALIDATION when no env was supplied (or an unknown one, when validate)
+ */
+export function requireEnv(explicit, opts = {}) {
+  const flag = opts.flag || "--env";
+  const env = resolveEnv(explicit);
+  if (!env) {
+    // When the caller's flag IS the env var (e.g. the server boots off MULE_UPGRADE_ENV), don't
+    // print the redundant "pass X or set X"; otherwise cite both the flag and the env var.
+    const how =
+      flag === "MULE_UPGRADE_ENV"
+        ? `set MULE_UPGRADE_ENV <${KNOWN_ENVS.join("|")}>`
+        : `pass ${flag} <${KNOWN_ENVS.join("|")}> or set MULE_UPGRADE_ENV`;
+    const e = new Error(
+      `environment is required: ${how} (in your .env or the process env). There is no default — ` +
+        `this mirrors the Mule app's mandatory -Denv selector.`
+    );
+    e.code = "VALIDATION";
+    throw e;
+  }
+  if (opts.validate !== false && !KNOWN_ENVS.includes(env)) {
+    const e = new Error(
+      `unknown environment "${env}": expected one of ${KNOWN_ENVS.join(", ")} ` +
+        `(each has a config-<env>.yaml + config-secure-<env>.yaml pair).`
+    );
+    e.code = "VALIDATION";
+    throw e;
+  }
+  // Pin it so downstream loadConfig()/get()/cfg() in this process resolve the SAME env, and so the
+  // per-env key (MULE_CONFIG_KEY_<ENV>) selection is consistent across every skill call in the run.
+  process.env.MULE_UPGRADE_ENV = env;
+  return env;
+}
+
 /**
  * Load and return the fully-resolved, decrypted config object for the active environment.
  * Cached after first call. Pass {force:true} to reload (e.g. after changing MULE_UPGRADE_ENV).
  *
  * @param {object} [opts]
  * @param {string} [opts.env]   override MULE_UPGRADE_ENV
- * @param {string} [opts.key]   override MULE_CONFIG_KEY (used by tests)
+ * @param {string} [opts.key]   override the resolved key (used by tests)
  * @param {boolean} [opts.force]
  * @returns {object}
  */
 export function loadConfig(opts = {}) {
   if (_cache && !opts.force && !opts.env && !opts.key) return _cache;
   const env = opts.env || process.env.MULE_UPGRADE_ENV || "dev";
-  const key = opts.key ?? process.env.MULE_CONFIG_KEY ?? "";
+  const key = resolveKey(env, opts.key);
 
   const dir = configDir();
   const base = readYaml(path.join(dir, "config.yaml")) ?? {};
@@ -105,7 +194,8 @@ export function get(dotted, fallback = undefined, opts = {}) {
     else return fallback;
   }
   if (isSecureValue(node)) {
-    return decryptSecure(secureCipherText(node), opts.key ?? process.env.MULE_CONFIG_KEY ?? "");
+    const env = opts.env || process.env.MULE_UPGRADE_ENV || "dev";
+    return decryptSecure(secureCipherText(node), resolveKey(env, opts.key));
   }
   return node ?? fallback;
 }

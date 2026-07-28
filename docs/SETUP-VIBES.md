@@ -8,12 +8,16 @@ server, so this suite plugs in two ways with no code changes:
 - **Option A — Skills** (recommended): drop the `SKILL.md` skills into Vibes' skills directory;
   Vibes activates them by trigger phrase via its `use_skill` tool. No server, no ports.
 - **Option B — Remote MCP server**: run `server/server.js` and register it in Vibes as a remote
-  MCP server; the 10 tools appear with their schemas. Best for the stateful tools + HMAC webhooks,
+  MCP server; the 12 tools appear with their schemas. Best for the stateful tools + HMAC webhooks,
   or if your Vibes runtime sandboxes skill script execution.
 
 > Sibling guides: [SETUP-IDE.md](./SETUP-IDE.md) (generic Claude Code) ·
 > [SETUP-AGENTFORCE.md](./SETUP-AGENTFORCE.md) (hosted server for Agentforce). Vibes reuses the
 > exact same skill scripts and job store underneath.
+>
+> **Wiring ALL four live integrations (Anypoint + GitHub + Jira + Slack) and testing every
+> function in Vibes?** See **[WIRE-LIVE-INTEGRATIONS.md](./WIRE-LIVE-INTEGRATIONS.md)** — the
+> full credential-wiring + per-tool live-test runbook.
 
 ---
 
@@ -55,7 +59,7 @@ problems, and needs **no live credentials** (every network call degrades gracefu
 
 ```bash
 cd mule-java17-upgrade-skills
-npm ci && node --test                                   # 191 tests, no secrets/network needed
+npm ci && node --test                                   # 310 tests, no secrets/network needed
 
 # assess a throwaway Mule 4.6–4.8 / Java 8|11 clone (read-only, fully offline):
 node skills/mule-upgrade-assess/scripts/assess.js --repo /path/to/target-app --no-fetch
@@ -86,7 +90,7 @@ frontmatter, plus `scripts/` and `references/`). Install into one of two scopes:
 - **Global scope** — Vibes' global skills storage (or the Claude Code target `.claude/skills`),
   so the skills trigger in every workspace.
 
-### A.1 — Copy the 7 skills into the workspace
+### A.1 — Copy the 8 skills into the workspace
 
 From the root of the ACB workspace where you want the skills available:
 
@@ -97,6 +101,7 @@ mkdir -p .a4drules/skills
 SUITE=/path/to/mule-java17-upgrade-skills
 
 # copy each skill folder verbatim (SKILL.md + scripts/ + references/)
+cp -R "$SUITE"/skills/mule-upgrade-agent       .a4drules/skills/
 cp -R "$SUITE"/skills/mule-upgrade             .a4drules/skills/
 cp -R "$SUITE"/skills/mule-upgrade-assess      .a4drules/skills/
 cp -R "$SUITE"/skills/mule-upgrade-apply       .a4drules/skills/
@@ -113,6 +118,7 @@ The layout Vibes expects:
 <workspace>/
 └── .a4drules/
     └── skills/
+        ├── mule-upgrade-agent/      # interactive conductor — "walk me through the Java 17 upgrade"
         ├── mule-upgrade/            # orchestrator — "upgrade <app> to Java 17"
         │   ├── SKILL.md
         │   └── scripts/…
@@ -133,7 +139,7 @@ The layout Vibes expects:
 > ```bash
 > ln -s "$SUITE"/skills/mule-upgrade            .a4drules/skills/mule-upgrade
 > ln -s "$SUITE"/skills/mule-upgrade-assess     .a4drules/skills/mule-upgrade-assess
-> # …and so on for the other 5
+> # …and so on for the other 6
 > ```
 >
 > On Windows use `mklink /D` (Command Prompt as admin) or `New-Item -ItemType SymbolicLink`.
@@ -143,7 +149,7 @@ The layout Vibes expects:
 ### A.2 — Reload and confirm
 
 1. Reload the ACB window (or restart Vibes) so it re-scans the skills directory.
-2. Open the Vibes Skills panel — the 7 skills should appear under **Workspace** scope.
+2. Open the Vibes Skills panel — the 8 skills should appear under **Workspace** scope.
 3. Vibes activates a matching skill through its `use_skill` tool when your prompt matches a
    skill's trigger phrases.
 
@@ -171,7 +177,7 @@ PR / job outcome.
 
 ## Option B — Register the hosted MCP server
 
-Use this for the 10 tools as first-class Vibes tools (with per-tool auto-approve/timeout controls)
+Use this for the 12 tools as first-class Vibes tools (with per-tool auto-approve/timeout controls)
 and for event-driven CI/CD via the HMAC webhook — or whenever skill script execution is sandboxed.
 
 ### B.1 — Start the server
@@ -210,9 +216,10 @@ Set `MCP_BEARER_TOKEN` for any non-local exposure (unset = open). Put TLS in fro
 
 ### B.3 — Confirm
 
-Reload Vibes; the server's 10 tools appear in the **Installed** tab — `assess_app`,
+Reload Vibes; the server's 12 tools appear in the **Installed** tab — `assess_app`,
 `start_upgrade`, `get_job_status`, `reapply_job`, `delete_job`, `upgrade_parent_pom`,
-`reconcile`, `rollback`, `scan_fleet`, `scan_notify` — each with enable/auto-approve/timeout
+`reconcile`, `rollback`, `scan_fleet`, `scan_notify`, `resolve_versions`, `check_drift` — each with
+enable/auto-approve/timeout
 controls. Invoke them by asking
 Vibes to assess/upgrade an app; it calls the tool and returns the JSON result. Wire the CI/CD
 webhook exactly as in [SETUP-AGENTFORCE.md](./SETUP-AGENTFORCE.md) §6.

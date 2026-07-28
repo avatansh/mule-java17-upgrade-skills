@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "upgrade_parent_pom",
+  "title": "upgrade_parent_pom",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "repoUrl": {
+      "type": "string",
+      "description": "Repository URL, optionally with /tree/<branch>/<subpath> to pin branch + pom directory."
+    },
+    "owner": {
+      "type": "string",
+      "description": "GitHub owner (alternative to repoUrl)."
+    },
+    "repo": {
+      "type": "string",
+      "description": "GitHub repository (alternative to repoUrl)."
+    },
+    "pomPath": {
+      "type": "string",
+      "description": "Path to the parent pom (default \"pom.xml\" or the URL-embedded sub-path)."
+    },
+    "branch": {
+      "type": "string",
+      "description": "Base branch (else URL branch, else repo default)."
+    },
+    "environment": {
+      "type": "string",
+      "description": "Log-only environment label."
+    },
+    "jiraTicketId": {
+      "type": "string",
+      "description": "Optional Jira ticket ID."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["api", "local"],
+      "description": "Commit mode (\"api\" default)."
+    },
+    "repoRoot": {
+      "type": "string",
+      "description": "Local clone root (local mode)."
+    },
+    "detectOnly": {
+      "type": "boolean",
+      "description": "Read-only: report what the pom inherits (its <parent> and imported BOMs) plus a connector edit preview, and STOP without taking a lock or opening a PR. Returns a DETECTED result. Use this first in the chained flow to decide whether to upgrade the BOM before the parent pom."
+    },
+    "parentRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Chained flow: repoint THIS pom's <parent> block at a newly-bumped BOM/parent version (e.g. point solutions-parent-pom at the new solutions-bom version). Emits a pomParentVersion edit.",
+      "properties": {
+        "groupId": { "type": "string", "description": "Parent groupId to match (optional; matched loosely when omitted)." },
+        "artifactId": { "type": "string", "description": "Parent artifactId to match (e.g. solutions-bom)." },
+        "toVersion": { "type": "string", "description": "New parent version to set (e.g. 1.1.0-SNAPSHOT)." }
+      },
+      "required": ["toVersion"]
+    },
+    "bumpOwnVersion": {
+      "type": "boolean",
+      "description": "Chained flow: force a minor bump of THIS pom's own <version> even when no connectors changed (used when the only reason to release is that the inherited BOM/parent moved)."
+    }
+  }
+}

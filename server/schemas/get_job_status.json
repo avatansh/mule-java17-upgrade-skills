@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "get_job_status",
+  "title": "get_job_status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobId"],
+  "properties": {
+    "jobId": {
+      "type": "string",
+      "description": "The job identifier returned by start_upgrade."
+    },
+    "jiraBaseUrl": {
+      "type": "string",
+      "description": "Optional Jira base URL to render a ticket link in the status payload."
+    },
+    "refresh": {
+      "type": "boolean",
+      "description": "When true (default), auto-refresh first: poll live PR state + CI checks and verify the deployment before returning, so the status is up to date. Set false for a pure cache read (no network)."
+    }
+  }
+}

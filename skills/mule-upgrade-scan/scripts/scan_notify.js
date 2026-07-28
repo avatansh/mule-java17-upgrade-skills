@@ -28,6 +28,7 @@ import { scanFleet, fleetScanSlackText } from "./scan.js";
 import { slackNotify } from "../../mule-upgrade/scripts/lib/notify.js";
 import { storeRoot } from "../../mule-upgrade-job/scripts/jobstore.js";
 import { nowUtc } from "../../../lib_shared/dates.js";
+import { requireEnv } from "../../../lib_shared/config.js";
 
 /** Where the watch baseline lives — beside the job store so all state is under one root. */
 export function watchStatePath() {
@@ -126,8 +127,10 @@ export async function scanAndNotify(opts = {}) {
         candidates: attention,
         heading: lead.length ? lead.join(" ") : undefined,
       });
-      if (changed.length) message += `\n\n:arrows_counterclockwise: ${changed.length} app(s) changed staleness reason.`;
-      if (resolved.length) message += `\n\n:white_check_mark: *Resolved since last scan:* ${resolved.join(", ")}`;
+      if (changed.length)
+        message += `\n\n:arrows_counterclockwise: ${changed.length} app(s) changed staleness reason.`;
+      if (resolved.length)
+        message += `\n\n:white_check_mark: *Resolved since last scan:* ${resolved.join(", ")}`;
     }
   }
 
@@ -177,6 +180,13 @@ export async function scanAndNotify(opts = {}) {
 const isMain = process.argv[1] && process.argv[1].endsWith("scan_notify.js");
 if (isMain) {
   const args = process.argv.slice(2);
+  try {
+    // Config env is mandatory (mirrors Mule's -Denv). --env here is the Anypoint env LIST to scan.
+    requireEnv(process.env.MULE_UPGRADE_ENV, { flag: "MULE_UPGRADE_ENV" });
+  } catch (e) {
+    process.stderr.write(e.message + "\n");
+    process.exit(2);
+  }
   const envIdx = args.indexOf("--env");
   const environments = envIdx >= 0 && args[envIdx + 1] ? args[envIdx + 1].split(",") : undefined;
   scanAndNotify({
@@ -197,7 +207,9 @@ if (isMain) {
       process.stdout.write(
         `Scan complete: ${r.report.staleApps} stale of ${r.report.totalApps} scanned. ` +
           `new=${newlyStale.length} changed=${changed.length} resolved=${resolved.length}. ` +
-          (r.notified ? "Slack push sent." : `No push (${r.notifyResult.skipped ?? r.notifyResult.error ?? "n/a"}).`) +
+          (r.notified
+            ? "Slack push sent."
+            : `No push (${r.notifyResult.skipped ?? r.notifyResult.error ?? "n/a"}).`) +
           "\n"
       );
       if (r.message) process.stdout.write("\n--- message ---\n" + r.message + "\n");

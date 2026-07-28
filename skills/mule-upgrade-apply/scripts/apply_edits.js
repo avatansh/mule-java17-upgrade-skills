@@ -18,6 +18,7 @@ import { rewriteMuleArtifact } from "./rewrites/mule_artifact.js";
 import { rewriteCiWorkflow } from "./rewrites/ci_workflow.js";
 import { rewriteMunitArgLines } from "./rewrites/munit_arglines.js";
 import { rewritePomVersion } from "./rewrites/pom_version.js";
+import { rewriteParentRefVersion } from "./rewrites/parent_pom.js";
 
 /**
  * Apply one file's edit list to its raw text.
@@ -42,11 +43,7 @@ export function applyEdits(rawText, edits) {
 
   const maEdit = edits.find((e) => e.kind === "muleArtifactJson");
   if (maEdit) {
-    text = rewriteMuleArtifact(
-      text,
-      String(maEdit.to.minMuleVersion),
-      maEdit.to.javaSpecificationVersions
-    );
+    text = rewriteMuleArtifact(text, String(maEdit.to.minMuleVersion), maEdit.to.javaSpecificationVersions);
   }
 
   const ciEdit = edits.find((e) => e.kind === "ciWorkflow");
@@ -57,6 +54,19 @@ export function applyEdits(rawText, edits) {
 
   const verEdit = edits.find((e) => e.kind === "pomVersion");
   if (verEdit) text = rewritePomVersion(text, String(verEdit.artifactId ?? ""), String(verEdit.to ?? ""));
+
+  // pomParentVersion: repoint the app's own <parent> block at a new parent-pom/BOM version. Used by the
+  // chained flow so the app PR's FIRST commit already points at the freshly-released parent — no second
+  // amend commit. Targets ONLY the <parent> block (rewritePomVersion above targets the project's own
+  // <version> outside <parent>), so the two never collide regardless of order.
+  const parentRefEdit = edits.find((e) => e.kind === "pomParentVersion");
+  if (parentRefEdit && parentRefEdit.to != null) {
+    text = rewriteParentRefVersion(
+      text,
+      { groupId: parentRefEdit.groupId, artifactId: parentRefEdit.artifactId },
+      String(parentRefEdit.to)
+    );
+  }
 
   return text;
 }
@@ -77,18 +87,25 @@ export function groupByFile(fileEdits) {
 }
 
 /**
- * Apply a whole ChangePlan against a local clone; returns staged files [{path, content}].
+ * Apply a whole ChangePlan; returns staged files [{path, content}].
+ *
+ * The `readFile` reader may be SYNC (local clone: default fs reader) or ASYNC (api mode: a GitHub
+ * Contents reader) — the result is awaited either way, so a caller with no local clone (opts.repoRoot
+ * === undefined) MUST supply a reader. Without one, the default fs reader runs path.join(undefined, p)
+ * and throws 'The "path" argument must be of type string. Received undefined' — the api-mode commit
+ * failure this guards against.
+ *
  * @param {object} changePlan  the ChangePlan (must carry fileEdits[])
- * @param {string} repoRoot    local clone root
- * @param {(p:string)=>string} readFile  reader (defaults to fs)
- * @returns {Array<{path:string, content:string}>}
+ * @param {string} [repoRoot]  local clone root (required only when no readFile is given)
+ * @param {(p:string)=>(string|Promise<string>)} [readFile]  reader (defaults to local fs)
+ * @returns {Promise<Array<{path:string, content:string}>>}
  */
-export function applyChangePlan(changePlan, repoRoot, readFile) {
+export async function applyChangePlan(changePlan, repoRoot, readFile) {
   const read = readFile || ((p) => fs.readFileSync(path.join(repoRoot, p), "utf8"));
   const grouped = groupByFile(changePlan.fileEdits);
   const staged = [];
   for (const [file, edits] of grouped) {
-    const before = read(file);
+    const before = await read(file);
     const after = applyEdits(before, edits);
     staged.push({ path: file, content: after });
   }
@@ -113,7 +130,7 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
   if (args["change-plan"] && args.repo) {
     const plan = JSON.parse(fs.readFileSync(args["change-plan"], "utf8"));
     const changePlan = plan.changePlan ?? plan; // accept full AssessmentResult or bare ChangePlan
-    const staged = applyChangePlan(changePlan, args.repo);
+    const staged = await applyChangePlan(changePlan, args.repo);
     if (args.write) {
       for (const f of staged) {
         fs.writeFileSync(path.join(args.repo, f.path), f.content);
@@ -124,9 +141,7 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
       process.stdout.write(JSON.stringify(staged, null, 2));
     }
   } else {
-    console.error(
-      "Usage: node apply_edits.js --change-plan <plan.json> --repo <clone-dir> [--write]"
-    );
+    console.error("Usage: node apply_edits.js --change-plan <plan.json> --repo <clone-dir> [--write]");
     process.exit(2);
   }
 }

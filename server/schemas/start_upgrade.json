@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "start_upgrade",
+  "title": "start_upgrade",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["appName"],
+  "properties": {
+    "appName": {
+      "type": "string",
+      "description": "Name of the MuleSoft application to upgrade."
+    },
+    "environment": {
+      "type": "string",
+      "description": "Anypoint environment to upgrade the application in."
+    },
+    "jiraTicketId": {
+      "type": "string",
+      "description": "Optional Jira ticket ID to link this migration to."
+    },
+    "approvedChangePlan": {
+      "type": "object",
+      "description": "Optional, audit-only. Recorded on the job record; the worker re-runs assessment and drives edits from its own fileEdits."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["api", "local"],
+      "description": "Commit mode: \"api\" (GitHub Git Data API, default) or \"local\" (git/gh over a clone)."
+    },
+    "repo": {
+      "type": "string",
+      "description": "GitHub repository override (used only when the app is not in the registry)."
+    },
+    "headSha": {
+      "type": "string",
+      "description": "Repo HEAD at assess time (stale-plan anchor)."
+    },
+    "owner": {
+      "type": "string",
+      "description": "GitHub owner/org override (used only when the app is not in the registry)."
+    },
+    "appPath": {
+      "type": "string",
+      "description": "Path to the Mule module within the repo (e.g. \".\" for repo root)."
+    },
+    "orgId": {
+      "type": "string",
+      "description": "Anypoint organization ID override (registry/convention fallback otherwise)."
+    },
+    "branch": {
+      "type": "string",
+      "description": "Explicit branch. Highest precedence over registry default / discovered default."
+    },
+    "versionStrategy": {
+      "type": "string",
+      "enum": ["min", "first-compatible", "in-major", "latest", "manual"],
+      "description": "How to pin connector versions. \"min\" (default) = the curated Java-17-safe matrix pin; \"first-compatible\" = the lowest version marked Java-17-safe in the connector's release-notes OpenJDK table (the minimum upgrade — may sit below the matrix pin by explicit opt-in); \"in-major\" = highest published patch within the matrix pin's major (never crosses a breaking major); \"latest\" = latest published overall (may be a breaking major — verify); \"manual\" = use connectorSelections per connector, falling back to the matrix pin. See resolve_versions for the menu."
+    },
+    "connectorSelections": {
+      "type": "object",
+      "description": "Per-connector version overrides keyed by artifactId (e.g. {\"mule-salesforce-connector\":\"10.19.2\"}). Applied when versionStrategy is \"manual\"; a connector absent here falls back to the curated matrix pin.",
+      "additionalProperties": { "type": "string" }
+    },
+    "deployedApiName": {
+      "type": "string",
+      "description": "Exact deployed application name in Anypoint Runtime Manager to look up (matched VERBATIM). Reported on the assessment's deployedStateCheck; skipped with a reason when omitted, not configured, or not found. Non-fatal."
+    },
+    "parentRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "CHAINED FLOW ONLY: when the app inherits from a shared parent-pom you just upgraded, pass its NEW version here so the app PR's FIRST commit repoints the app's <parent> to it (and the dry-run preview lists it) — no separate update_open_pr_parent_ref amend commit. The app's own pom is edited; emitted only if the app's <parent> matches and its version actually differs.",
+      "required": ["toVersion"],
+      "properties": {
+        "groupId": { "type": "string", "description": "Parent groupId to match (optional; matched loosely when omitted)." },
+        "artifactId": { "type": "string", "description": "Parent artifactId to match (e.g. solutions-parent-pom)." },
+        "toVersion": { "type": "string", "description": "New parent version to set in the app's <parent> (e.g. 1.1.0-SNAPSHOT)." }
+      }
+    },
+    "dryRun": {
+      "type": "boolean",
+      "description": "When true, PREVIEW ONLY: run assessment and build the plan (fileEdits, connectorChoices, warnings, deployed-state) but do NOT acquire the app lock, apply any edit, create a job, or open a PR — nothing is written. Returns status PLAN_PREVIEW (or ALREADY_UPGRADED when there is nothing to change). The confirmation gate for an interactive agent: show the preview, then re-invoke with dryRun=false to execute. Default false."
+    }
+  }
+}

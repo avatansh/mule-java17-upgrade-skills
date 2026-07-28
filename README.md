@@ -15,7 +15,7 @@ the async worker collapses into one synchronous run plus a polling tail.
 
 Two ways to run it: as **skills in your IDE** (Claude Code, no server) for hands-on upgrades,
 or as a **hosted MCP + REST server** so a remote agent like **Agentforce** can drive the same
-10 tools over the network — including the inbound HMAC CI/CD webhook. It also plugs into
+12 tools over the network — including the inbound HMAC CI/CD webhook. It also plugs into
 **MuleSoft Vibes** (Anypoint Code Builder) as native Skills or a remote MCP server. See
 [docs/SETUP-IDE.md](docs/SETUP-IDE.md), [docs/SETUP-AGENTFORCE.md](docs/SETUP-AGENTFORCE.md),
 and [docs/SETUP-VIBES.md](docs/SETUP-VIBES.md).
@@ -35,14 +35,15 @@ and [docs/SETUP-VIBES.md](docs/SETUP-VIBES.md).
 
 | Skill | Replaces | What it does |
 |-------|----------|--------------|
-| **mule-upgrade** (orchestrator) | `start_upgrade` pipeline | End-to-end: assess → apply → commit → PR → track, then poll the deploy tail. **Start here.** |
-| **mule-upgrade-assess** | `assess_app` + assessment DWL | Reads pom chain / `mule-artifact.json` / CI workflow against the matrix → `ChangePlan` + summary. |
+| **mule-upgrade-agent** (interactive) | *(new — the human loop)* | Conversational conductor: gather inputs → assess → show warnings → present the connector version menu → pick a strategy → **dry-run the plan** → confirm → execute → stream job status. Non-destructive until you say go. **Start here for a guided upgrade.** |
+| **mule-upgrade** (orchestrator) | `start_upgrade` pipeline | End-to-end: assess → apply → commit → PR → track, then poll the deploy tail. The non-interactive engine `mule-upgrade-agent` drives. |
+| **mule-upgrade-assess** | `assess_app` + assessment DWL | Reads pom chain / `mule-artifact.json` / CI workflow against the matrix → `ChangePlan` + connector version menu + verbatim deployed-state check + summary. |
 | **mule-upgrade-apply** | `applyEdits.dwl` + 8 rewrites | Applies the byte-preserving rewrites in fixed order → staged file contents. |
 | **mule-upgrade-pr** | `pf-atomic-commit` / `pf-open-pr` / `pf-rollback` | Commit + open PR (local `git`/`gh` **or** GitHub Git Data API); revert PR. |
 | **mule-upgrade-parent-pom** | `upgrade_parent_pom` | Pin the connectors a shared parent/BOM manages up to the matrix, open a PR. |
 | **mule-upgrade-job** | Object Store + `jobStatus` + `reconcile` | JSON job store, status machine, stale-scan reconcile, reapply/delete. |
 | **mule-upgrade-scan** | *(new — proactive)* | Scan the Anypoint fleet for apps still on old Mule/Java → count + candidate list mapped to repos. Runs on a timer and **pushes a Slack alert** when new stale apps appear (`scan_notify`, de-duped against remembered state). |
-| **mule-upgrade-mcp** | shared HTTP listener + `mcp:tool-listener` | Hosted server: 10 tools over MCP JSON-RPC + REST, HMAC CI/CD webhooks, bearer auth. |
+| **mule-upgrade-mcp** | shared HTTP listener + `mcp:tool-listener` | Hosted server: 12 tools over MCP JSON-RPC + REST, HMAC CI/CD webhooks, bearer auth. |
 
 Each skill has a `SKILL.md` with YAML frontmatter (`name` + trigger-phrase `description`) so
 Claude auto-invokes it, plus `scripts/` (Node.js, ES modules) and, where relevant, `references/`
@@ -65,7 +66,7 @@ mule-upgrade-parent-pom (standalone) ──► reuses mule-upgrade-apply + mule-
 
 ```bash
 npm install          # js-yaml only
-npm test             # node --test over tests/**  (191 tests)
+npm test             # node --test over tests/**  (310 tests)
 
 # assess a local clone
 node skills/mule-upgrade-assess/scripts/assess.js --repo /path/to/clone --app my-mule-app
@@ -86,7 +87,7 @@ node skills/mule-upgrade-parent-pom/scripts/parent_pom_cli.js \
 # proactive: scan the fleet and push a Slack alert when new stale apps appear (run on a timer)
 node skills/mule-upgrade-scan/scripts/scan_notify.js        # only pushes on change
 
-# OR run the hosted server (10 tools over MCP JSON-RPC + REST + HMAC webhooks)
+# OR run the hosted server (12 tools over MCP JSON-RPC + REST + HMAC webhooks)
 node server/server.js        # default :8080 — set MCP_BEARER_TOKEN to require auth
 ```
 
@@ -102,7 +103,7 @@ See each skill's `SKILL.md` for full flags, outcome objects, and exit codes; see
 | Jira comments / auto-create | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_AUTO_CREATE`, `JIRA_PROJECT_KEY`, `JIRA_ISSUE_TYPE` |
 | Anypoint deploy verify | `ANYPOINT_CLIENT_ID`, `ANYPOINT_CLIENT_SECRET`, `ANYPOINT_ORG_ID`, `ANYPOINT_BASE_URL`, `ANYPOINT_TOKEN_PATH`, `ANYPOINT_HEALTHY_STATUSES` |
 | Job store location | `MULE_UPGRADE_HOME` (default `~/.mule-upgrade`) |
-| Matrix cache | written to `~/.mule-upgrade/matrix-cache.json` (~24h TTL) |
+| Matrix source | Anypoint Exchange governed asset when `matrix.source=exchange*` (cached per `matrix.refreshSeconds`); bundled YAML fallback |
 
 All notifications and Anypoint verification are **non-fatal** and **env-gated** — a missing
 credential or an outage is logged and skipped, never a pipeline failure. This mirrors the
@@ -114,16 +115,36 @@ Mule app's `<try>`-wrapped notify sub-flows and the on-error-continue in `pf-ver
   runtime 4.6→4.9.18, Java 8/11→17, compiler source/target, mule-maven-plugin, MUnit / munit-extensions
   / weave versions, JPMS-flag removal, `manualReview` flags, `mule-artifact.json` targets. These do not
   live on the connector release-notes page, so they stay static and authoritative.
-- **Dynamic connectors:** at run time the latest Java-17-supported version per connector is fetched from
-  the MuleSoft release-notes page (`--release-notes-url`, else the default), cached to disk (~24h), and
-  merged over the bundled connector list. On **any** fetch/parse failure — or an empty result — it falls
-  back to the bundled YAML (never a hard failure) and logs which source won (`matrixSource`).
-- `--no-fetch` forces the bundled matrix.
-- **Gating-version drift check (advisory):** the static gating pins (runtime patch, mule-maven-plugin,
-  MUnit plugins) are *minimums required for Java 17*, not "newest available", so they stay bundled —
-  but `matrix_drift.js` audits them against MuleSoft's live Maven metadata and **warns** (never
-  auto-applies) when a pin trails the latest release on its LTS line. Emitted as `matrixDrift` in the
-  assess result; disable with `matrix.driftCheck: "false"`.
+- **Matrix source:** when `matrix.source=exchange*` the FULL governed matrix (gating + connectors) is
+  fetched from the Anypoint Exchange asset (`matrix.exchange`); on **any** fetch/parse failure — or an
+  empty connectors block — it falls back to the bundled YAML (never a hard failure) and logs which
+  source won (`matrixSource`). The connector list is otherwise the bundled, curated, Java-17-safe set.
+- **Live connector enrichment:** per-connector *versions* are resolved from the Exchange **Graph API**
+  and each connector's release-notes compatibility table is located via the curated
+  `references/connector-notes-map.yaml` (artifactId → release-notes URL). This enriches the choice
+  menu (below); it never replaces the curated pins. (The earlier release-notes-**index** scrape +
+  `~/.mule-upgrade/matrix-cache.json` disk cache have been retired — the index page carries no Maven
+  coordinates, so it was superseded by the Graph + notes-map resolver.)
+- `--no-fetch` forces the bundled matrix and skips all live enrichment.
+- **Lean assess + the Full Split:** by default `assess` is **lean and fast** — it emits the network-free
+  ChangePlan (including `connectorsInApp[]`: each app connector's `current` version, `matrixSet` pin, and
+  `willChange`) + deployed-state + warnings, with **no** live version/drift fetches. The two live,
+  advisory features are split into their own opt-in tools so the common path stays quick:
+  - **Connector version choice** → the **`resolve_versions`** tool (or `assess --versions` /
+    `includeVersions`). Builds a per-connector **menu** (`connectorChoices[]`), SCOPED to the app's
+    connectors, from two live non-fatal signals — the Exchange Graph (`latest-in-major`, `latest`) and
+    each connector's release-notes OpenJDK table (`first-compatible`, the minimum Java-17-safe version).
+    Live "latest" is **never** auto-adopted (it may be a breaking major); a `staleness` advisory fires
+    when a newer in-major version exists. `start_upgrade` accepts a `versionStrategy` (`min` |
+    `first-compatible` | `in-major` | `latest` | `manual`) + per-connector `connectorSelections` (it
+    computes the menu internally regardless of the lean default). See `mule-upgrade-assess/SKILL.md`.
+  - **Matrix-drift advisory** → the **`check_drift`** tool (or `assess --drift` / `includeDrift`). The
+    static gating pins (runtime patch, mule-maven-plugin, MUnit plugins) are *minimums required for Java
+    17*, not "newest available", so they stay bundled — but `matrix_drift.js` audits them against
+    MuleSoft's live Maven metadata (plus connector staleness) and **warns** (never auto-applies) when a
+    pin trails the latest release on its LTS line. Emitted as `matrixDrift`; disable the built-in path
+    with `matrix.driftCheck: "false"`.
+- `--no-fetch` forces the bundled matrix and lean output (skips all live enrichment).
 
 ## The 8 rewrites (byte-preserving)
 
@@ -149,6 +170,7 @@ mule-java17-upgrade-skills/
 ├── package.json                 # type: module; npm test = node --test
 ├── lib_shared/                  # dates.js (nowUtc), semver.js (lt/toNums/bumpMinor)
 ├── skills/
+│   ├── mule-upgrade-agent/      # interactive conductor (conversation layer over the tools)
 │   ├── mule-upgrade/            # orchestrator (start + poll)
 │   ├── mule-upgrade-assess/     # assess.js + lib/{matrix,matrix_fetch,pom_chain,pom_parse,topology,assess_engine}
 │   ├── mule-upgrade-apply/      # apply_edits.js + rewrites/*.js
@@ -170,7 +192,7 @@ mule-java17-upgrade-skills/
   GitHub API; merge/CI/deploy detection is **polling** (`gh` + Anypoint verify). No server, no
   open ports. See [docs/SETUP-IDE.md](docs/SETUP-IDE.md).
 - **Hosted server (`mule-upgrade-mcp`)** — for remote agents (Agentforce) and event-driven CD.
-  `server/server.js` exposes the same 10 tools over **MCP JSON-RPC** (`POST /mcp`) and a **REST**
+  `server/server.js` exposes the same 12 tools over **MCP JSON-RPC** (`POST /mcp`) and a **REST**
   facade (`/api/v1/tools/*`), guarded by a bearer token, plus **HMAC-verified** CI/CD webhooks
   (`POST /webhook/cd-result`) that drive the job state machine without polling. Every tool call is
   checked against its JSON Schema (the schema-contract guard) before dispatch. See
@@ -188,7 +210,10 @@ Both share the identical skill scripts and job store — the server is a thin tr
 
 ## Not reproduced (by design)
 
-- **Exchange-hosted matrix facade** — replaced by the fetch/fallback + 24h disk-cache mechanism above.
+- **Exchange-hosted matrix facade** — reproduced directly: when `matrix.source=exchange*` the governed
+  asset is fetched via the Exchange client with the bundled YAML as fallback (see above). The earlier
+  release-notes-index scrape + `~/.mule-upgrade/matrix-cache.json` disk cache have been retired in favour
+  of the Exchange Graph + `connector-notes-map.yaml` resolver.
 
 The inbound HMAC webhook the Mule app hosted **is** reproduced — but only in the optional hosted
 server, not in the IDE-skills flow (a skill cannot host a long-lived listener, so it polls instead).

@@ -24,21 +24,23 @@ import { AnypointClient, makeDeployVerifier } from "../../skills/mule-upgrade/sc
 function deliveryKey(headers, rawBody) {
   const explicit = headers["x-delivery-id"] || headers["x-github-delivery"] || headers["x-cd-delivery-id"];
   if (explicit) return `delivery::${explicit}`;
-  const h = crypto.createHash("sha256").update(Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody ?? ""), "utf8"));
+  const h = crypto
+    .createHash("sha256")
+    .update(Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody ?? ""), "utf8"));
   return `delivery::${h.digest("hex")}`;
 }
 
-/** Build the Anypoint deploy verifier when enabled + configured; else null (trust CI). */
+/**
+ * Build the Anypoint deploy verifier when enabled + configured; else null (trust CI).
+ * Returns the async verifier from makeDeployVerifier — ci_ingest now awaits verifyDeploy, so an
+ * async verifier is correctly resolved (previously this had to be opt-in because ci_ingest called
+ * it synchronously and would have received a Promise → "unknown").
+ */
 function defaultVerifyDeploy() {
   try {
     const client = new AnypointClient();
     if (!client.configured()) return null;
-    const verify = makeDeployVerifier(client);
-    // makeDeployVerifier returns an async fn; ci_ingest calls it synchronously via try/catch and
-    // treats a thrown/absent result as "unreachable". We wrap to a sync-ish adapter that returns a
-    // promise; ci_ingest awaits nothing, so instead expose a resolved-value bridge is not possible —
-    // therefore deploy verification here is opt-in through opts.verifyDeploy passed by the caller.
-    return verify;
+    return makeDeployVerifier(client);
   } catch {
     return null;
   }
@@ -46,13 +48,14 @@ function defaultVerifyDeploy() {
 
 /**
  * handleWebhook({ path, headers, rawBody, deps }): authenticate + ingest a CI/CD callback.
- * @param {string} path       "/webhook" | "/webhook/cd-result"
- * @param {object} headers    lower-cased header map
- * @param {Buffer|string} rawBody
- * @param {object} [deps]     { store, ingest, verifyDeploy, verifyWebhook } — injectable for tests
- * @returns {{statusCode:number, body:object}}
+ * @param {object} [opts]
+ * @param {string} [opts.path]                        "/webhook" | "/webhook/cd-result"
+ * @param {Record<string,string>} [opts.headers]    lower-cased header map
+ * @param {Buffer|string} [opts.rawBody]
+ * @param {object} [opts.deps]                       { store, ingest, verifyDeploy, verifyWebhook } — injectable for tests
+ * @returns {Promise<{statusCode:number, body:object}>}
  */
-export function handleWebhook({ path, headers = {}, rawBody = "", deps = {} } = {}) {
+export async function handleWebhook({ path, headers = {}, rawBody = "", deps = {} } = {}) {
   const isCdResult = path === "/webhook/cd-result";
   const doVerify = deps.verifyWebhook ?? verifyWebhook;
   const jobStore = deps.store ?? store;
@@ -72,7 +75,10 @@ export function handleWebhook({ path, headers = {}, rawBody = "", deps = {} } = 
   // ── parse body ───────────────────────────────────────────────────────────────────────────────
   let body;
   try {
-    body = typeof rawBody === "string" ? JSON.parse(rawBody || "{}") : JSON.parse(rawBody.toString("utf8") || "{}");
+    body =
+      typeof rawBody === "string"
+        ? JSON.parse(rawBody || "{}")
+        : JSON.parse(rawBody.toString("utf8") || "{}");
   } catch {
     return { statusCode: 400, body: { error: "invalid JSON body" } };
   }
@@ -82,13 +88,19 @@ export function handleWebhook({ path, headers = {}, rawBody = "", deps = {} } = 
   const fresh = jobStore.markOnce(key, { at: Date.now?.() ?? 0 });
   if (!fresh) {
     const rec = body.jobId ? jobStore.getJob(body.jobId) : null;
-    return { statusCode: 200, body: { acknowledged: true, idempotent: true, jobId: body.jobId ?? null, status: rec?.status ?? null } };
+    return {
+      statusCode: 200,
+      body: { acknowledged: true, idempotent: true, jobId: body.jobId ?? null, status: rec?.status ?? null },
+    };
   }
 
   // ── drive the state machine ──────────────────────────────────────────────────────────────────
-  const { statusCode, response } = ingest(body, {
+  // Platform confirmation for stage=deploy success: use the injected verifier if provided, else
+  // build the default Anypoint one (null when unconfigured → trust CI). ci_ingest awaits it.
+  const verifyDeploy = "verifyDeploy" in deps ? deps.verifyDeploy : defaultVerifyDeploy();
+  const { statusCode, response } = await ingest(body, {
     store: jobStore,
-    verifyDeploy: deps.verifyDeploy ?? null, // opt-in platform confirmation (see defaultVerifyDeploy note)
+    verifyDeploy,
   });
   return { statusCode, body: response };
 }
