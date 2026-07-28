@@ -18,10 +18,27 @@
 /** @typedef {{topology?:string, fileEdits?:any[], connectorGaps?:any[]}} ChangePlanLike */
 
 /**
+ * parentPomPathsFromGaps(connectorGaps): the DISTINCT in-repo pom paths that manage the inherited
+ * connector gaps (each gap's managedInPath, populated by the assess engine). Used to point the
+ * parent-pom upgrade at the pom that actually manages the connector — a multi-module repo's shared
+ * parent is often NOT the repo-root pom.xml (M5). Gaps with an unknown managing path are ignored.
+ * @param {any[]} connectorGaps
+ * @returns {string[]}
+ */
+export function parentPomPathsFromGaps(connectorGaps) {
+  const paths = new Set();
+  for (const g of connectorGaps ?? []) {
+    if (g && typeof g.managedInPath === "string" && g.managedInPath) paths.add(g.managedInPath);
+  }
+  return [...paths];
+}
+
+/**
  * routeUpgradeStrategy(changePlan): choose the upgrade strategy from the assessment.
  * @param {ChangePlanLike|null|undefined} changePlan
  * @returns {{strategy:"app-pom"|"parent-pom"|"none", topology:string, reason:string,
- *   fileEditCount:number, connectorGapCount:number, connectorGaps:any[]}}
+ *   fileEditCount:number, connectorGapCount:number, connectorGaps:any[],
+ *   parentPomPath:(string|null), parentPomPaths:string[]}}
  */
 export function routeUpgradeStrategy(changePlan) {
   const topology = changePlan?.topology ?? "UNKNOWN";
@@ -29,6 +46,10 @@ export function routeUpgradeStrategy(changePlan) {
   const connectorGaps = changePlan?.connectorGaps ?? [];
   const fileEditCount = fileEdits.length;
   const connectorGapCount = connectorGaps.length;
+  // Where the inherited connectors are actually managed (for the parent-pom route). A single distinct
+  // path ⇒ dispatch the parent-pom job straight at it; multiple ⇒ surfaced for the caller to fan out.
+  const parentPomPaths = parentPomPathsFromGaps(connectorGaps);
+  const parentPomPath = parentPomPaths.length === 1 ? parentPomPaths[0] : null;
 
   // The app pom (or a shared file it directly edits) carries changes → the normal app pipeline. This
   // takes precedence: if the app declares its own connector versions we pin them here, and any
@@ -41,6 +62,8 @@ export function routeUpgradeStrategy(changePlan) {
       fileEditCount,
       connectorGapCount,
       connectorGaps,
+      parentPomPath,
+      parentPomPaths,
     };
   }
 
@@ -54,10 +77,13 @@ export function routeUpgradeStrategy(changePlan) {
         `The app pom needs no edits, but ${connectorGapCount} connector(s) are inherited from a ` +
         `parent/BOM below the Java-17 matrix (${connectorGaps
           .map((g) => `${g.artifactId} ${g.from ?? "?"}→${g.to ?? "?"}`)
-          .join(", ")}). The shared parent/BOM must be bumped.`,
+          .join(", ")}). The shared parent/BOM must be bumped` +
+        (parentPomPath ? ` (managed in ${parentPomPath}).` : "."),
       fileEditCount,
       connectorGapCount,
       connectorGaps,
+      parentPomPath,
+      parentPomPaths,
     };
   }
 
@@ -69,5 +95,7 @@ export function routeUpgradeStrategy(changePlan) {
     fileEditCount,
     connectorGapCount,
     connectorGaps,
+    parentPomPath,
+    parentPomPaths,
   };
 }

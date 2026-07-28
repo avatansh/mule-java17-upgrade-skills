@@ -201,10 +201,12 @@ export function buildConnectorChoice({
           label: "First version marked Java-17-compatible (minimum upgrade)",
         }
       : null,
-    inMajor && inMajor !== matrixSet
+    // Never OFFER a live-derived option that sits BELOW the curated floor (a partial/stale Exchange
+    // list can make latest-in-major or latest lower than matrixSet). The floor pin stays the default.
+    inMajor && inMajor !== matrixSet && !lt(inMajor, matrixSet)
       ? { strategy: "in-major", version: inMajor, label: `Latest in ${major}.x (safe patch bump)` }
       : null,
-    latest && latest !== matrixSet
+    latest && latest !== matrixSet && !lt(latest, matrixSet)
       ? {
           strategy: "latest",
           version: latest,
@@ -261,13 +263,23 @@ export function buildConnectorChoice({
  */
 export const VERSION_STRATEGIES = ["min", "first-compatible", "in-major", "latest", "manual"];
 
+// Clamp a live-derived candidate to the curated matrix floor. The plain `??` only guards ABSENCE,
+// not a LOWER value — a partial/stale Exchange list could make latestInMajor/latest sit BELOW
+// matrixSet and yield a DOWNGRADE, contradicting pickVersion's documented contract (M4). Returns the
+// floor when the candidate is missing OR below it.
+function atLeastFloor(candidate, floor) {
+  return candidate != null && !lt(String(candidate), String(floor)) ? String(candidate) : floor;
+}
+
 export function pickVersion(choice, strategy, override) {
   if (!choice) return override ?? null;
   switch (strategy) {
+    // in-major / latest are floor-guaranteed → never below matrixSet.
     case "latest":
-      return choice.latest ?? choice.matrixSet;
+      return atLeastFloor(choice.latest, choice.matrixSet);
     case "in-major":
-      return choice.latestInMajor ?? choice.matrixSet;
+      return atLeastFloor(choice.latestInMajor, choice.matrixSet);
+    // first-compatible is the deliberate exception: the minimum-upgrade option, may be below matrixSet.
     case "first-compatible":
       return choice.firstCompatible ?? choice.matrixSet;
     case "manual":

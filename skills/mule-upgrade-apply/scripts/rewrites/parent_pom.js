@@ -45,12 +45,26 @@ function propInner(pomText, prop) {
   return inner.includes("<") ? null : inner; // close tag not found before next element
 }
 
+/** Regex-escape a literal (groupId/artifactId contain "." and "-") for a dynamic RegExp. */
+function reEsc(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Whitespace-tolerant test that a <dependency> block declares groupId g AND artifactId a. Using an
+ * exact `includes("<groupId>g</groupId>")` missed pretty-printed poms like `<groupId> g </groupId>`,
+ * so the connector was detected by assess (parsed XML) but never pinned by the rewrite (L6).
+ */
+function blockHasCoords(block, g, a) {
+  const gRe = new RegExp(`<groupId>\\s*${reEsc(g)}\\s*</groupId>`);
+  const aRe = new RegExp(`<artifactId>\\s*${reEsc(a)}\\s*</artifactId>`);
+  return gRe.test(block) && aRe.test(block);
+}
+
 /** Literal inline <version> for g:a, "REF" when it is a ${…} placeholder, or null. */
 function inlineDepVersion(pomText, g, a) {
   const blocks = pomText.match(/<dependency>[\s\S]*?<\/dependency>/g) ?? [];
-  const hit = blocks.find(
-    (b) => b.includes(`<groupId>${g}</groupId>`) && b.includes(`<artifactId>${a}</artifactId>`)
-  );
+  const hit = blocks.find((b) => blockHasCoords(b, g, a));
   if (!hit || !hit.includes("<version>")) return null;
   const v = hit.slice(hit.indexOf("<version>") + 9);
   const inner = v.slice(0, v.indexOf("</version>")).trim();
@@ -117,11 +131,7 @@ function applyParentEdits(pomText, edits) {
   const inlineEdits = edits.filter((x) => x.mode === "inline");
   if (inlineEdits.length === 0) return afterProps;
   return afterProps.replace(/<dependency>[\s\S]*?<\/dependency>/g, (block) => {
-    const hit = inlineEdits.find(
-      (e) =>
-        block.includes(`<groupId>${e.groupId}</groupId>`) &&
-        block.includes(`<artifactId>${e.artifactId}</artifactId>`)
-    );
+    const hit = inlineEdits.find((e) => blockHasCoords(block, e.groupId, e.artifactId));
     if (!hit) return block;
     return block.replace(/<version>[^<]*<\/version>/, `<version>${String(hit.to)}</version>`);
   });

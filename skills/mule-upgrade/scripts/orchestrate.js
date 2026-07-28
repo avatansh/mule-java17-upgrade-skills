@@ -134,10 +134,29 @@ export async function runUpgrade(opts) {
   // caller can force the plain app pipeline, and skipped in dryRun (the preview shows the routing).
   if (route.strategy === "parent-pom" && !dryRun && opts.routeParentPom !== false) {
     const doParentPomJob = deps.runParentPomJob ?? runParentPomJob;
+    // Target the pom that actually MANAGES the inherited connector(s). In a multi-module repo the
+    // shared parent is often NOT the repo-root pom.xml — dispatching without a pomPath read the root
+    // and returned NO_CHANGE while still claiming routedVia:"parent-pom" (M5). route.parentPomPath is
+    // derived from each gap's managedInPath; when known we thread it through so the correct pom is
+    // edited. When it can't be resolved (unknown / spread across multiple poms), we surface a warning
+    // rather than silently upgrading (or no-op'ing) the wrong file.
+    const parentPomPath = route.parentPomPath ?? undefined;
+    const routeWarnings = [];
+    if (!parentPomPath) {
+      routeWarnings.push(
+        route.parentPomPaths && route.parentPomPaths.length > 1
+          ? `Inherited connector gaps are managed across multiple poms (${route.parentPomPaths.join(", ")}); ` +
+              `run the parent-pom upgrade on each. Falling back to the repo-root pom for this dispatch.`
+          : `Could not resolve which pom manages the inherited connector gap(s) — the managing parent/BOM ` +
+              `may live in a different repo. Falling back to the repo-root pom; if this returns NO_CHANGE, ` +
+              `run the parent-pom upgrade directly against the parent's repo/pom.`
+      );
+    }
     const parent = await doParentPomJob({
       owner: coords?.owner,
       repo: coords?.repo,
       branch: coords?.defaultBranch,
+      pomPath: parentPomPath,
       environment,
       jiraTicketId,
       jiraBaseUrl,
@@ -153,8 +172,9 @@ export async function runUpgrade(opts) {
       topology: route.topology,
       routeReason: route.reason,
       connectorGaps: route.connectorGaps,
+      parentPomPath: route.parentPomPath ?? null,
       appName: parent.appName ?? appName,
-      warnings: [...(warnings ?? []), ...(parent.warnings ?? [])],
+      warnings: [...(warnings ?? []), ...routeWarnings, ...(parent.warnings ?? [])],
     };
   }
 
@@ -248,12 +268,19 @@ export async function runUpgrade(opts) {
 
   // ── (3) the pipeline proper — any throw here maps to a FAILED_* terminal + lock release ──
   try {
-    // optional Jira auto-create (pf-jira-create-issue) — non-fatal
+    // optional Jira auto-create (pf-jira-create-issue) — non-fatal. Guarded in its own try so a Jira
+    // outage (503/401/network) can NEVER abort the upgrade before a single edit is applied: the outer
+    // catch would otherwise map the throw to FAILED_COMMIT and release the lock for a job that hasn't
+    // even started committing. A failed auto-create just leaves jiraTicketId empty and continues.
     if (!jiraTicketId) {
-      const created = await notifiers.jiraCreateIssue({ appName, jobId });
-      if (created.created && created.key) {
-        jiraTicketId = created.key;
-        store.patchJob(jobId, { jiraTicketId });
+      try {
+        const created = await notifiers.jiraCreateIssue({ appName, jobId });
+        if (created.created && created.key) {
+          jiraTicketId = created.key;
+          store.patchJob(jobId, { jiraTicketId });
+        }
+      } catch {
+        /* non-fatal: proceed without a Jira ticket */
       }
     }
 
@@ -308,21 +335,29 @@ export async function runUpgrade(opts) {
     });
     if (pr.branchName) store.putBranchIndex(pr.branchName, jobId);
 
-    // notify (Slack + Jira) — non-fatal
-    const slackText = prOpenedSlackText({
-      appName,
-      prUrl: pr.prUrl,
-      jobId,
-      jiraTicketId,
-      jiraBaseUrl,
-      warnings,
-    });
-    await notifiers.slackNotify(slackText);
-    await notifiers.jiraComment(
-      jiraTicketId,
-      `Java 17 upgrade PR opened for ${appName} — status PR_OPEN.`,
-      pr.prUrl
-    );
+    // notify (Slack + Jira) — non-fatal. Guarded in its own try: the PR is ALREADY open and the job is
+    // ALREADY persisted PR_OPEN (with the branch→job index written) by this point, so a notifier error
+    // (Slack webhook 500, Jira 401, network blip) must NOT fall through to the outer catch — doing so
+    // would flip a genuinely-succeeded PR_OPEN job to FAILED_COMMIT, release the lock, and orphan the
+    // live PR from reconcile (which only advances PR_OPEN). A notify failure is cosmetic; swallow it.
+    try {
+      const slackText = prOpenedSlackText({
+        appName,
+        prUrl: pr.prUrl,
+        jobId,
+        jiraTicketId,
+        jiraBaseUrl,
+        warnings,
+      });
+      await notifiers.slackNotify(slackText);
+      await notifiers.jiraComment(
+        jiraTicketId,
+        `Java 17 upgrade PR opened for ${appName} — status PR_OPEN.`,
+        pr.prUrl
+      );
+    } catch {
+      /* non-fatal: the PR is open and the job is PR_OPEN; notification delivery is best-effort */
+    }
 
     return {
       status: "PR_OPEN",
@@ -345,7 +380,9 @@ export async function runUpgrade(opts) {
         ? "FAILED_ASSESS"
         : "FAILED_COMMIT";
     store.setStatus(jobId, failureStatus, { error: e.message });
-    store.releaseLock(appName);
+    // Only release the lock if THIS job still holds it — never stomp a lock another job re-acquired
+    // (e.g. after this one's was stolen as stale), matching deleteJob's ownership check (L3).
+    if (store.lockHolder(appName) === jobId) store.releaseLock(appName);
     const failText = failureSlackText({
       appName,
       jobId,

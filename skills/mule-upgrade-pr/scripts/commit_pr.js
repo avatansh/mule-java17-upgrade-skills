@@ -18,6 +18,20 @@ import path from "node:path";
 import { GitHubApi } from "./lib/gh_api.js";
 import { branchBase, pickBranchName, prTitle, prBody, commitMessage } from "./lib/pr_meta.js";
 
+// Warn ONCE per process when the stale-plan guard is enabled but the plan carries no headSha to
+// check against — so the missing protection is visible rather than silently no-op'd (L2).
+let _warnedNoHeadSha = false;
+function warnMissingHeadSha() {
+  if (_warnedNoHeadSha) return;
+  _warnedNoHeadSha = true;
+  process.emitWarning(
+    "commit: stale-plan guard is enabled but the changePlan has no headSha — the guard is a no-op " +
+      "for this commit, so a repo HEAD that moved since assessment would go undetected. Re-run assess " +
+      "so the plan records headSha (or pass enforceStalePlan:false to opt out explicitly).",
+    { code: "COMMIT_NO_HEADSHA" }
+  );
+}
+
 // ── api mode ────────────────────────────────────────────────────────────────────────────
 /**
  * commitAndPrApi(opts): full Git Data API commit + PR.
@@ -49,6 +63,11 @@ export async function commitAndPrApi(opts) {
     );
     err.code = "STALE_PLAN";
     throw err;
+  } else if (enforceStalePlan && !changePlan.headSha) {
+    // The guard is ON but there's nothing to check against — headSha was never threaded onto the plan.
+    // Silently skipping means a HEAD that moved since assessment goes undetected; warn so the missing
+    // protection is visible rather than invisible (L2).
+    warnMissingHeadSha();
   }
   const baseSha = changePlan.headSha || currentHead;
 
@@ -211,6 +230,9 @@ export async function commitAndPrLocal(opts) {
       err.code = "STALE_PLAN";
       throw err;
     }
+  } else if (enforceStalePlan && !changePlan.headSha) {
+    // Guard ON but no headSha to check against → protection is silently absent; warn (L2).
+    warnMissingHeadSha();
   }
 
   // collision-free branch (probe local + remote refs)

@@ -20,6 +20,13 @@ const env = process.env;
 const DEFAULT_BASE = "https://anypoint.mulesoft.com";
 const DEFAULT_TOKEN_PATH = "/accounts/api/v2/oauth2/token";
 const DEFAULT_HEALTHY = "RUNNING,APPLIED,STARTED";
+// Transitional platform states: the app IS found, but the rollout is still in flight. These are NOT a
+// failure — mapping them to "unhealthy" would prematurely fail a deployment that is still succeeding
+// (and release the app lock) the moment "check status now" runs seconds after a merge. They map to
+// "unknown" instead, which leaves a DEPLOYING job untouched so a later sweep re-checks it. Covers the
+// common CloudHub 2.0 / ARM in-flight statuses; tune via ANYPOINT_TRANSITIONAL_STATUSES / config.
+const DEFAULT_TRANSITIONAL =
+  "STARTING,DEPLOYING,UPDATING,PENDING,PARTIALLY_STARTED,DEPLOYMENT_IN_PROGRESS,APPLYING,RESTARTING,PROVISIONING";
 const DEFAULT_REFRESH_SECONDS = 3300; // 55 min — below the platform's 60-min token TTL
 
 // Read a config value, swallowing any decrypt/lookup error (missing key etc.) → fallback.
@@ -50,6 +57,14 @@ export class AnypointClient {
       env.ANYPOINT_HEALTHY_STATUSES ??
       cfg("anypoint.verify.healthyStatuses", DEFAULT_HEALTHY);
     this.healthyStatuses = (Array.isArray(healthy) ? healthy.join(",") : String(healthy))
+      .split(",")
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+    const transitional =
+      opts.transitionalStatuses ??
+      env.ANYPOINT_TRANSITIONAL_STATUSES ??
+      cfg("anypoint.verify.transitionalStatuses", DEFAULT_TRANSITIONAL);
+    this.transitionalStatuses = (Array.isArray(transitional) ? transitional.join(",") : String(transitional))
       .split(",")
       .map((s) => s.trim().toUpperCase())
       .filter(Boolean);
@@ -461,7 +476,8 @@ export function parseRuntimeVersion(rv) {
  * Classification matches the previous verifyDeployment-based mapping exactly:
  *   · app not in the env list (or the list is empty / unreachable) → "unknown"
  *   · app found, status ∈ healthyStatuses                          → "healthy"
- *   · app found, status ∉ healthyStatuses                          → "unhealthy"
+ *   · app found, status ∈ transitionalStatuses (rollout in flight) → "unknown" (re-check next sweep)
+ *   · app found, status ∉ either set                               → "unhealthy"
  */
 export function makeDeployVerifier(client) {
   // env(upper) → Promise<Array<{name,status,...}>>. Promise-valued so concurrent jobs for the same env
@@ -477,8 +493,11 @@ export function makeDeployVerifier(client) {
     const dep = items.find((d) => (d.name ?? "") === rec.appName);
     if (!dep) return { status: "unknown", detail: { found: false } };
     const status = String(dep.status ?? "").toUpperCase();
-    const healthy = client.healthyStatuses.includes(status);
-    return { status: healthy ? "healthy" : "unhealthy", detail: dep };
+    if (client.healthyStatuses.includes(status)) return { status: "healthy", detail: dep };
+    // Rollout still in flight → treat as "unknown" so the DEPLOYING job is left untouched and a later
+    // sweep re-checks, rather than being prematurely failed (which would also release the app lock).
+    if ((client.transitionalStatuses ?? []).includes(status)) return { status: "unknown", detail: dep };
+    return { status: "unhealthy", detail: dep };
   };
   // Drop the per-env cache so the next sweep re-reads platform state. Called by runReconcile per sweep.
   verify.reset = () => listByEnv.clear();

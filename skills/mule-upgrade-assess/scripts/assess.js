@@ -154,6 +154,21 @@ function cfg(dotted, fallback) {
   }
 }
 
+// Compare two runtime versions by their dotted components (build qualifier after ":" ignored).
+// Returns true when a SHARED component differs — i.e. a real mismatch. A prefix/startsWith test is
+// wrong here: "4.9.18".startsWith("4.9.1") is true yet 4.9.1 ≠ 4.9.18 (L5). "4.9" vs "4.9.1" is NOT a
+// mismatch (the shared "4","9" parts match), so a coarser deployed version never false-alarms.
+function runtimeBaseMismatch(a, b) {
+  const parts = (v) => String(v).split(":")[0].split(".").map((s) => s.trim());
+  const pa = parts(a);
+  const pb = parts(b);
+  const n = Math.min(pa.length, pb.length);
+  for (let i = 0; i < n; i++) {
+    if (pa[i] !== pb[i]) return true;
+  }
+  return false;
+}
+
 /**
  * batchACrossChecks — port of the two live Anypoint cross-checks the assess flow runs (ADR Batch A):
  *   #1 pf-read-deployment  (assess.armCrossCheck)  → warn when the deployed runtime differs from the
@@ -188,11 +203,9 @@ export async function batchACrossChecks({ appName, environment, orgId, result, c
       const targetRuntime = result?.changePlan?.targetRuntime;
       if (d.found && d.runtimeVersion && targetRuntime) {
         const deployedBase = String(d.runtimeVersion).split(":")[0]; // "4.6.0:..." → "4.6.0"
-        if (
-          deployedBase &&
-          !String(targetRuntime).startsWith(deployedBase) &&
-          deployedBase !== targetRuntime
-        ) {
+        // Compare by version COMPONENTS, not startsWith: "4.9.18".startsWith("4.9.1") is true and would
+        // HIDE a real 4.9.1 ≠ 4.9.18 mismatch (L5). runtimeBaseMismatch flags any differing shared part.
+        if (deployedBase && runtimeBaseMismatch(deployedBase, targetRuntime)) {
           out.warnings.push(
             `Deployed runtime (${d.runtimeVersion}, status ${d.status}) differs from the source pom target ${targetRuntime}. ` +
               `Verify the running app matches source before upgrading.`
@@ -235,7 +248,7 @@ export async function batchACrossChecks({ appName, environment, orgId, result, c
  * @param {string} [opts.environment]
  * @param {string} [opts.orgId]
  * @param {any}    [opts.client]           injectable AnypointClient (tests)
- * @returns {Promise<{checked:boolean, reason?:string, deployedState?:object}>}
+ * @returns {Promise<{checked:boolean, reason?:string, deployedState?:object, note?:string}>}
  */
 export async function checkDeployedState({ deployedApiName, environment, orgId, client } = {}) {
   const name = String(deployedApiName ?? "").trim();

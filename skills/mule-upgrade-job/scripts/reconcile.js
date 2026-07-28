@@ -65,20 +65,36 @@ function sharedGitHubApi() {
 // pending / 1 when some fail) is NOT one of these — those still print JSON and are salvaged by the
 // caller, so warning on them would be misleading noise.
 let _warnedGhError = false;
-function warnGhFailure(err) {
+let _warnedGhOpaque = false;
+function warnGhFailure(err, { salvageable = false } = {}) {
   const isEnoent = err?.code === "ENOENT";
   const blob = String(err?.stderr ?? err?.message ?? err ?? "").toLowerCase();
   const isAuth = /auth|login|not logged|unauthor|401|403/.test(blob);
-  if (!isEnoent && !isAuth) return; // pending/failing checks etc. → not an invisible failure
-  if (_warnedGhError) return;
-  _warnedGhError = true;
-  const hint = isEnoent
-    ? "the `gh` CLI is not installed or not on PATH"
-    : "the `gh` CLI is not authenticated (run `gh auth login`)";
+  if (isEnoent || isAuth) {
+    if (_warnedGhError) return;
+    _warnedGhError = true;
+    const hint = isEnoent
+      ? "the `gh` CLI is not installed or not on PATH"
+      : "the `gh` CLI is not authenticated (run `gh auth login`)";
+    process.emitWarning(
+      `reconcile: PR/CI polling via \`gh\` failed — ${hint}: ${err?.message ?? err}. Jobs will not ` +
+        "advance from polling until a GitHub token is set or `gh` works.",
+      { code: "RECONCILE_GH_ERROR" }
+    );
+    return;
+  }
+  // Not ENOENT/auth. `gh pr checks` legitimately exits non-zero when checks are PENDING (8) or
+  // FAILING (1) but still prints usable JSON — the caller salvages that, so it is NOT an invisible
+  // failure and we stay silent. Everything else (network blip, non-JSON output, JSON parse failure)
+  // returns a silent false/[] indistinguishable from "no changes" — warn ONCE so it isn't invisible (L1).
+  if (salvageable) return;
+  if (_warnedGhOpaque) return;
+  _warnedGhOpaque = true;
   process.emitWarning(
-    `reconcile: PR/CI polling via \`gh\` failed — ${hint}: ${err?.message ?? err}. Jobs will not ` +
-      "advance from polling until a GitHub token is set or `gh` works.",
-    { code: "RECONCILE_GH_ERROR" }
+    `reconcile: PR/CI polling via \`gh\` failed and returned no usable output: ${err?.message ?? err}. ` +
+      "This looks like a network error or an unexpected `gh` response; the affected job(s) were left " +
+      "unchanged this sweep. Set a GitHub token for the REST poller, or re-run reconcile.",
+    { code: "RECONCILE_GH_OPAQUE" }
   );
 }
 /** Test hook: drop the memoized client + warning latches so a later sweep re-reads the token/env. */
@@ -86,6 +102,7 @@ export function _resetReconcileApi() {
   _sharedApi = undefined;
   _warnedGhFallback = false;
   _warnedGhError = false;
+  _warnedGhOpaque = false;
 }
 
 /** isStale(rec, staleSeconds, nowMs): updatedAt older than the threshold. */
@@ -116,7 +133,8 @@ export function pollPrViaGh(rec) {
     const closed = !merged && pr.state === "CLOSED";
     return { merged, closed, open: !merged && !closed };
   } catch (err) {
-    warnGhFailure(err); // surface ENOENT/auth once instead of a silent "nothing changed"
+    // A PR view has nothing to salvage — any failure here is invisible (returns all-false).
+    warnGhFailure(err, { salvageable: false });
     return { merged: false, closed: false, open: false };
   }
 }
@@ -139,19 +157,20 @@ export function pollChecksViaGh(rec) {
     );
     return parseGhChecks(out);
   } catch (err) {
-    warnGhFailure(err); // surface ENOENT/auth once instead of a silent empty check list
     // `gh pr checks` exits non-zero when checks are PENDING (8) or FAILING (1) but still prints the
-    // JSON to stdout. execFileSync attaches that stdout to the thrown error — salvage it so failing
-    // checks still park the job (MUNIT_FAILED / DEP_GUARD_FAILED) instead of being lost as [].
-    const salvaged = err?.stdout;
-    if (salvaged) {
+    // JSON to stdout. execFileSync attaches that stdout to the thrown error — salvage it FIRST so
+    // failing checks still park the job (MUNIT_FAILED / DEP_GUARD_FAILED), and so a genuinely opaque
+    // failure (no usable stdout) can be told apart from those expected non-zero exits (L1).
+    let salvaged = null;
+    if (err?.stdout) {
       try {
-        return parseGhChecks(salvaged);
+        salvaged = parseGhChecks(err.stdout);
       } catch {
-        /* not JSON — fall through to [] */
+        /* not JSON — treat as opaque below */
       }
     }
-    return [];
+    warnGhFailure(err, { salvageable: salvaged != null });
+    return salvaged ?? [];
   }
 }
 

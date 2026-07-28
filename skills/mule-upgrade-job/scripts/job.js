@@ -2,7 +2,9 @@
 //
 // Subcommands (all print JSON to stdout):
 //   create   --app <name> [--env <e>] [--jira <KEY>] [--coords <json>] [--change-plan <file>]
-//   status   --job <jobId> [--jira-base-url <url>]     → buildJobStatus payload
+//   status   --job <jobId> [--jira-base-url <url>] [--no-refresh]  → buildJobStatus payload
+//     (AUTO-REFRESHES by default — polls live PR/CI/deploy state first, matching the MCP
+//      get_job_status tool; pass --no-refresh for a pure last-known cache read)
 //   set      --job <jobId> --status <S> [--field k=v ...]
 //   get      --job <jobId>                             → raw record
 //   list                                               → all records (summary)
@@ -11,6 +13,7 @@
 //   reapply  --job <jobId>                             → reseed new job
 //   delete   --job <jobId>                             → remove record + clear index + release lock
 //   reconcile [--stale-seconds N] [--now-ms N]         → run the sweep
+//     (defaults to --stale-seconds 0 = "poll every job now", matching the MCP `reconcile` tool)
 
 import fs from "node:fs";
 import {
@@ -107,10 +110,12 @@ async function main() {
     case "status": {
       if (!args.job) throw usage("status requires --job");
       if (!getJob(args.job)) throw notFound(args.job);
-      // --refresh (opt-in on the CLI): poll live PR/CI/deploy state before reading, mirroring the
-      // MCP get_job_status auto-refresh. Non-fatal — a poll error still prints the last-known status.
+      // AUTO-REFRESH by default (parity with the MCP get_job_status tool, which refreshes unless
+      // refresh:false): poll live PR/CI/deploy state before reading. Pass --no-refresh for a pure
+      // last-known cache read. Non-fatal — a poll error still prints the last-known status.
+      const doRefresh = !args["no-refresh"];
       let checks;
-      if (args.refresh) {
+      if (doRefresh) {
         try {
           // Wire the Anypoint verifier so a DEPLOYING job's deploy state is actually verified here,
           // matching the MCP get_job_status path (server/lib/tools.js:195).
@@ -177,7 +182,10 @@ async function main() {
     }
     case "reconcile": {
       const res = await runReconcile({
-        staleSeconds: args["stale-seconds"] ? Number(args["stale-seconds"]) : undefined,
+        // Default 0 ("poll every job now") to match the MCP `reconcile` tool (server/lib/tools.js).
+        // Without this the CLI fell through to runReconcile's 900s default and silently skipped any
+        // job younger than 15 min — e.g. a PR opened moments ago never advanced on `reconcile`.
+        staleSeconds: typeof args["stale-seconds"] === "string" ? Number(args["stale-seconds"]) : 0,
         nowMs: args["now-ms"] ? Number(args["now-ms"]) : undefined,
         // Verify deployments on Anypoint (matches the MCP `reconcile` tool, server/lib/tools.js:306).
         verifyDeploy: safeDeployVerifier(),

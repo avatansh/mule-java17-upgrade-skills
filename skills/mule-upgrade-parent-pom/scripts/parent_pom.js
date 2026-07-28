@@ -22,6 +22,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { resolveMatrix } from "../../mule-upgrade-assess/scripts/lib/matrix_fetch.js";
 import { rewriteParentPom, rewriteParentRefVersion } from "../../mule-upgrade-apply/scripts/rewrites/parent_pom.js";
 import {
@@ -114,6 +115,15 @@ export async function assessParentPom(opts) {
     const abs = path.join(repoRoot, pomPath);
     if (!fs.existsSync(abs)) throw validationError(`pom.xml not found at ${abs}.`);
     pomText = fs.readFileSync(abs, "utf-8");
+    // Anchor the stale-plan guard to the local HEAD at assess time. commitAndPrLocal re-checks
+    // `git rev-parse HEAD` before committing; without a headSha here that guard was silently skipped,
+    // so a parent-pom commit could land on a moved HEAD undetected (M6). Non-fatal: if repoRoot isn't
+    // a git clone (or git is unavailable) headSha stays null and the guard behaves as before.
+    try {
+      headSha = execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], { encoding: "utf-8" }).trim();
+    } catch {
+      /* non-fatal — not a git clone / git unavailable */
+    }
     // keep the constructed client available to the commit phase
     if (_api) deps.api = _api;
   }
@@ -427,7 +437,12 @@ export async function runParentPomJob(opts) {
         ? "FAILED_ASSESS"
         : "FAILED_COMMIT";
     jobStore.setStatus(jobId, failureStatus, { error: e.message });
-    jobStore.releaseLock(lockKey);
+    // Only release the lock if THIS job still holds it (ownership check, like deleteJob) so a failed
+    // run can't stomp a lock another job legitimately re-acquired (L3). Fall back to an unconditional
+    // release when the injected store has no lockHolder (test doubles), preserving prior behavior.
+    if (typeof jobStore.lockHolder !== "function" || jobStore.lockHolder(lockKey) === jobId) {
+      jobStore.releaseLock(lockKey);
+    }
     return {
       status: failureStatus,
       jobId,

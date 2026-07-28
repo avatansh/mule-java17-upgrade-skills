@@ -311,8 +311,17 @@ function appDeclaresVersion(chain, g, a) {
   return d != null && versionOf(d.dep) != null;
 }
 
-function effectiveVersion(chain, r) {
+/**
+ * effectiveVersionInfo(chain, r): the connector's effective version AND the chain pom path that
+ * declares/manages it. A REAL declared or managed <dependency> occurrence is REQUIRED — a bare
+ * parent <property> (e.g. a shared parent that predeclares `http.connector.version` for a connector
+ * the app never actually uses) does NOT count, so it can no longer manufacture a phantom connector
+ * gap (M3). Returns {version, path}; both null when the app neither declares nor inherits it.
+ * @returns {{version:(string|null), path:(string|null)}}
+ */
+export function effectiveVersionInfo(chain, r) {
   let occ = null;
+  let occPath = null;
   for (const c of chain) {
     const all = [...dependenciesOf(c.pom), ...managedDependenciesOf(c.pom)];
     const hit = all.find(
@@ -323,13 +332,20 @@ function effectiveVersion(chain, r) {
     );
     if (hit) {
       occ = hit;
+      occPath = c.path ?? null;
       break;
     }
   }
-  const raw = occ ? versionOf(occ) : null;
-  if (raw == null) return resolveProp(chain, r.property);
-  if (isRef(raw)) return resolveProp(chain, refName(raw));
-  return String(raw);
+  if (!occ) return { version: null, path: null };
+  const raw = versionOf(occ);
+  // A ${property} version resolves against the chain, but the MANAGING pom is still the one that
+  // declared the dependency/managed entry (occPath) — that is the pom whose pin must be bumped.
+  const version = isRef(raw) ? resolveProp(chain, refName(raw)) : raw == null ? null : String(raw);
+  return { version, path: occPath };
+}
+
+function effectiveVersion(chain, r) {
+  return effectiveVersionInfo(chain, r).version;
 }
 
 export function connectorGaps(chain, matrix) {
@@ -338,13 +354,21 @@ export function connectorGaps(chain, matrix) {
   for (const r of matrix.connectors ?? []) {
     if (!(r.groupId && r.artifactId)) continue;
     if (appDeclaresVersion(chain, String(r.groupId), String(r.artifactId))) continue;
-    const from = effectiveVersion(chain, r);
+    const { version: from, path: managedInPath } = effectiveVersionInfo(chain, r);
     if (from == null) continue;
     if (!needsBump(String(from), { set: r.set })) continue;
     const key = `${r.groupId}:${r.artifactId}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ groupId: String(r.groupId), artifactId: String(r.artifactId), from, to: String(r.set) });
+    out.push({
+      groupId: String(r.groupId),
+      artifactId: String(r.artifactId),
+      from,
+      to: String(r.set),
+      // The chain pom that MANAGES this inherited connector (e.g. "parent-pom/pom.xml"). The parent-pom
+      // upgrade must edit THIS file rather than a blind repo-root pom.xml (M5). null when unknown.
+      managedInPath: managedInPath ?? null,
+    });
   }
   return out;
 }

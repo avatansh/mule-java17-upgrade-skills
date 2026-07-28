@@ -20,6 +20,21 @@ import { rewriteMunitArgLines } from "./rewrites/munit_arglines.js";
 import { rewritePomVersion } from "./rewrites/pom_version.js";
 import { rewriteParentRefVersion } from "./rewrites/parent_pom.js";
 
+// Warn ONCE per process when a planned pomVersion bump matched nothing during apply — the plan and
+// the committed file would otherwise silently disagree (L4).
+let _warnedPomVersionNoOp = false;
+function warnPomVersionNoOp(edit) {
+  if (_warnedPomVersionNoOp) return;
+  _warnedPomVersionNoOp = true;
+  process.emitWarning(
+    `apply: a pomVersion bump for "${edit.artifactId ?? "?"}" (${edit.from ?? "?"} -> ${edit.to ?? "?"}) ` +
+      `in ${edit.file ?? "the pom"} matched nothing and was NOT applied. The project's <version> is likely ` +
+      `declared BEFORE its <artifactId> or is a \${property} — the plan claims a bump the file won't get. ` +
+      `Reorder the pom coordinates (groupId → artifactId → version) or drop the bump from the plan.`,
+    { code: "APPLY_POMVERSION_NOOP" }
+  );
+}
+
 /**
  * Apply one file's edit list to its raw text.
  * @param {string} rawText the file's current text
@@ -53,7 +68,17 @@ export function applyEdits(rawText, edits) {
   if (argEdit) text = rewriteMunitArgLines(text, argEdit.flags);
 
   const verEdit = edits.find((e) => e.kind === "pomVersion");
-  if (verEdit) text = rewritePomVersion(text, String(verEdit.artifactId ?? ""), String(verEdit.to ?? ""));
+  if (verEdit) {
+    const before = text;
+    text = rewritePomVersion(text, String(verEdit.artifactId ?? ""), String(verEdit.to ?? ""));
+    // The plan asked for an own-version bump but the rewrite matched nothing — e.g. the pom declares
+    // <version> BEFORE <artifactId> (rewritePomVersion is intentionally order-sensitive) or the
+    // version is a ${property}. Silently dropping it makes the PR claim a bump that never lands, so
+    // warn to surface the divergence between plan and file (L4).
+    if (before === text && String(verEdit.from ?? "") !== String(verEdit.to ?? "")) {
+      warnPomVersionNoOp(verEdit);
+    }
+  }
 
   // pomParentVersion: repoint the app's own <parent> block at a new parent-pom/BOM version. Used by the
   // chained flow so the app PR's FIRST commit already points at the freshly-released parent — no second

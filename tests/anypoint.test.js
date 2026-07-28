@@ -143,6 +143,34 @@ test("makeDeployVerifier maps to healthy/unhealthy/unknown", async () => {
   assert.equal((await verify({ appName: "a", environment: "Dev" })).status, "healthy");
 });
 
+// H1: a found-but-still-rolling-out app must classify as "unknown" (re-check next sweep), NOT
+// "unhealthy" — otherwise "check status now" seconds after a merge prematurely FAILED_DEPLOYs a
+// deployment that is actually still succeeding, and releases the app lock.
+test("makeDeployVerifier: transitional platform state → unknown, not unhealthy", async () => {
+  const mk = (status) =>
+    new AnypointClient({
+      ...CREDS,
+      fetchImpl: makeFetch([
+        ["/oauth2/token", { json: { access_token: "t" } }],
+        ["/environments", { json: { data: [{ name: "Dev", id: "e" }] } }],
+        ["/deployments", { json: { items: [{ name: "a", status }] } }],
+      ]),
+      healthyStatuses: "RUNNING,STARTED",
+    });
+  for (const s of ["STARTING", "UPDATING", "PARTIALLY_STARTED", "PENDING", "DEPLOYING"]) {
+    const v = await makeDeployVerifier(mk(s))({ appName: "a", environment: "Dev" });
+    assert.equal(v.status, "unknown", `${s} should be transitional → unknown`);
+  }
+  // A genuinely bad terminal state still fails.
+  const bad = await makeDeployVerifier(mk("UNDEPLOYED"))({ appName: "a", environment: "Dev" });
+  assert.equal(bad.status, "unhealthy");
+});
+
+test("AnypointClient: transitionalStatuses override is honored", async () => {
+  const c = new AnypointClient({ ...CREDS, transitionalStatuses: "FOO,BAR" });
+  assert.deepEqual(c.transitionalStatuses, ["FOO", "BAR"]);
+});
+
 test("makeDeployVerifier batches one platform read per env across jobs, reset re-reads", async () => {
   const log = [];
   const client = new AnypointClient({
