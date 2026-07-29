@@ -68,7 +68,11 @@
 <div class="doc-nav">Doc · <a href="./SETUP-IDE.html">← Switch to IDE setup</a></div>
 
 <h1>Setup — Hosted MCP server for Agentforce (remote)</h1>
-<p class="subtitle">Run the upgrade suite as a <strong>hosted server</strong> that exposes the 12 tools over MCP JSON-RPC + a REST facade, so a remote agent — <strong>Agentforce</strong> or any MCP client — can drive upgrades over the network. This guide stands up the server, secures it, wires the CI/CD webhook callback, and connects Agentforce.</p>
+<p class="subtitle">Run the upgrade suite as a <strong>hosted server</strong> that exposes the 13 tools over MCP JSON-RPC + a REST facade, so a remote agent — <strong>Agentforce</strong> or any MCP client — can drive upgrades over the network. This guide stands up the server, secures it, wires the CI/CD webhook callback, and connects Agentforce.</p>
+
+<blockquote>
+<p><strong>In a hurry?</strong> Jump to <a href="#quickstart">§9 — Quick start: expose these tools to an Agentforce agent (end-to-end)</a> for the click-by-click path: validate with MCP Inspector → expose over HTTPS → register in the Agentforce Registry → build and test one agent.</p>
+</blockquote>
 
 <blockquote>
 <p>For hands-on, one-app-at-a-time upgrades inside an IDE (no server), see <a href="./SETUP-IDE.html">SETUP-IDE.html</a>. The server reuses the exact same skill scripts underneath.</p>
@@ -87,7 +91,26 @@
 <tr><td>Health</td><td><code>GET /health</code></td><td>open</td></tr>
 </tbody>
 </table>
-<p>The 12 tools: <code>assess_app</code>, <code>start_upgrade</code>, <code>get_job_status</code>, <code>reapply_job</code>, <code>delete_job</code>, <code>upgrade_parent_pom</code>, <code>reconcile</code>, <code>rollback</code>, <code>scan_fleet</code>, <code>scan_notify</code>, <code>resolve_versions</code>, <code>check_drift</code>. Every call is validated against the tool's JSON Schema (the <strong>schema-contract guard</strong>) before the handler runs.</p>
+<p>The 13 tools: <code>assess_app</code>, <code>resolve_versions</code>, <code>check_drift</code>, <code>start_upgrade</code>, <code>get_job_status</code>, <code>reapply_job</code>, <code>delete_job</code>, <code>upgrade_parent_pom</code>, <code>update_open_pr_parent_ref</code>, <code>reconcile</code>, <code>rollback</code>, <code>scan_fleet</code>, <code>scan_notify</code>. Every call is validated against the tool's JSON Schema (the <strong>schema-contract guard</strong>) before the handler runs.</p>
+<details>
+<summary style="cursor:pointer;color:var(--accent);font-size:.93rem;">What each tool does (advertised to the agent via <code>tools/list</code>)</summary>
+<table>
+<thead><tr><th>Tool</th><th>Purpose</th><th>Writes?</th></tr></thead>
+<tbody>
+<tr><td><code>assess_app</code></td><td>Read-only readiness + byte-level ChangePlan (LEAN/fast).</td><td>No</td></tr>
+<tr><td><code>resolve_versions</code></td><td>Per-connector version MENU (min / first-compatible / in-major / latest).</td><td>No</td></tr>
+<tr><td><code>check_drift</code></td><td>Advisory: is the bundled matrix trailing live data?</td><td>No</td></tr>
+<tr><td><code>start_upgrade</code></td><td>The pipeline: assess → lock → apply → commit → PR. <code>dryRun:true</code> = preview only.</td><td>Only when <code>dryRun:false</code></td></tr>
+<tr><td><code>get_job_status</code></td><td>Live job status; auto-refreshes PR/CI/deploy state.</td><td>No</td></tr>
+<tr><td><code>reconcile</code></td><td>Self-healing sweep: advance stale jobs (merge/CI/deploy).</td><td>Job store only</td></tr>
+<tr><td><code>rollback</code></td><td>Open a revert PR for a failed deploy.</td><td>Yes (PR)</td></tr>
+<tr><td><code>reapply_job</code> / <code>delete_job</code></td><td>Retry from a job's coords / purge a job record + release its lock.</td><td>Job store</td></tr>
+<tr><td><code>upgrade_parent_pom</code></td><td>Upgrade a shared parent/BOM pom (tracked job). <code>detectOnly:true</code> = read-only.</td><td>Only when not <code>detectOnly</code></td></tr>
+<tr><td><code>update_open_pr_parent_ref</code></td><td>Chained-flow: repoint <code>&lt;parent&gt;</code> inside an app's already-open PR.</td><td>Yes (commit)</td></tr>
+<tr><td><code>scan_fleet</code> / <code>scan_notify</code></td><td>Proactive fleet audit for old Mule/Java; Slack push on change.</td><td>No / Slack</td></tr>
+</tbody>
+</table>
+</details>
 <p><strong>Confirm-before-write.</strong> For a human-in-the-loop agent, call <code>start_upgrade</code> with <code>dryRun: true</code> first: it assesses and returns the full plan (<code>PLAN_PREVIEW</code> — file edits, connector choices, warnings, deployed-state) while acquiring <strong>no lock</strong>, creating <strong>no job</strong>, and opening <strong>no PR</strong>. Show the preview, get an explicit yes, then re-call with the identical arguments and <code>dryRun: false</code> to execute. See <code>AGENTS.md</code> at the repo root for the full guardrails and intent→tool routing.</p>
 
 <hr>
@@ -111,7 +134,7 @@ node --test          # sanity check</code></pre>
 
 <h2>2a. Smoke-test the server locally, end-to-end (no live credentials needed)</h2>
 <p>Before exposing anything, prove the server runs on your own machine. Every downstream call (GitHub, Anypoint, Slack, Jira, connector-matrix fetch) is env-gated and degrades gracefully, so a bare local server is fully testable:</p>
-<pre><code>npm ci &amp;&amp; node --test                 # 290 tests — no secrets, no network
+<pre><code>npm ci &amp;&amp; node --test                 # full test suite — no secrets, no network
 
 # minimal .env for a locked-down LOCAL test (see §3); keep test jobs isolated:
 #   MCP_BEARER_TOKEN=local-test-token
@@ -119,12 +142,12 @@ node --test          # sanity check</code></pre>
 #   MULE_UPGRADE_HOME=./.local-jobstore
 
 node server/server.js                  # → listening on http://0.0.0.0:8080</code></pre>
-<p>In a second terminal, drive the 12 tools over the loopback interface — no TLS, no tunnel:</p>
+<p>In a second terminal, drive the 13 tools over the loopback interface — no TLS, no tunnel:</p>
 <pre><code>TOKEN=local-test-token
 curl -s localhost:8080/health
 curl -sX POST localhost:8080/mcp -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'                    # expect 12 tools
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'                    # expect 13 tools
 
 # call a read-only tool end-to-end against a throwaway clone (assess writes nothing).
 # assess_app requires appName; pass repo for local-clone mode:
@@ -183,15 +206,17 @@ curl -sX POST localhost:8080/mcp -H "authorization: Bearer $TOKEN" \
 
 <hr>
 
-<h2>5. Connect Agentforce</h2>
-<p>Agentforce consumes this as an <strong>external MCP endpoint</strong>:</p>
-<ol>
-<li>Expose the server at an HTTPS URL (reverse proxy / tunnel).</li>
-<li>In Agentforce, register a new <strong>MCP server / external tool provider</strong> pointing at <code>https://&lt;host&gt;/mcp</code>.</li>
-<li>Set the auth header <strong><code>Authorization: Bearer &lt;MCP_BEARER_TOKEN&gt;</code></strong>.</li>
-<li>Agentforce calls <code>initialize</code> then <code>tools/list</code>; the 12 tools appear with their input schemas. Invoking a tool sends <code>tools/call</code>; results come back as MCP content (JSON), with schema violations surfaced as JSON-RPC <code>-32602</code> and domain failures as <code>isError:true</code> tool results.</li>
-</ol>
-<p>If your Agentforce integration prefers plain REST over JSON-RPC, point it at <code>POST /api/v1/tools/{name}</code> with the same bearer header — identical validation and result payload.</p>
+<h2>5. Connect Agentforce (overview)</h2>
+<p>Agentforce reaches this server as an <strong>external MCP server</strong> registered in the <strong>Agentforce Registry</strong> (Salesforce Setup). Two hard requirements from Salesforce:</p>
+<ul>
+<li><strong>Public HTTPS + Streamable HTTP transport.</strong> Expose <code>https://&lt;host&gt;/mcp</code> over TLS. The server speaks JSON-RPC request/response over <code>POST /mcp</code> (<code>initialize</code> → <code>tools/list</code> → <code>tools/call</code>), which is the non-streaming Streamable-HTTP shape Agentforce needs.</li>
+<li><strong>OAuth 2.0 for authentication.</strong> The Registry wizard authenticates through a Named Credential + External Credential that <em>it generates</em> — it does <strong>not</strong> accept a static header. This server ships a <strong>static bearer</strong> guard (<code>MCP_BEARER_TOKEN</code>), so for the native Registry path you put an <strong>OAuth-capable proxy/gateway in front</strong> that terminates Salesforce's OAuth token and injects the upstream <code>Authorization: Bearer &lt;MCP_BEARER_TOKEN&gt;</code> (see <a href="#quickstart">§9, Part C</a>).</li>
+</ul>
+<p>Once connected, Agentforce calls <code>initialize</code> then <code>tools/list</code> (the 13 tools appear with their input schemas); invoking a tool sends <code>tools/call</code>. Schema violations surface as JSON-RPC <code>-32602</code> and domain failures as <code>isError:true</code> tool results.</p>
+<p>Prefer plain REST over JSON-RPC (Apex/Flow callouts or External Services)? Point those at <code>POST /api/v1/tools/{name}</code> with the same bearer header — identical validation and result payloads.</p>
+<blockquote>
+<p><strong>For the full click-by-click walkthrough</strong> — validate with MCP Inspector, expose over HTTPS, register in the Registry, and build + test one agent — see <a href="#quickstart">§9 Quick start</a> at the end of this guide.</p>
+</blockquote>
 
 <hr>
 
@@ -233,6 +258,143 @@ curl -sX POST localhost:8080/mcp -H "authorization: Bearer $TOKEN" \
 <li><strong><code>-32602</code> from a tool call</strong> → arguments failed the schema-contract guard; check the <code>data.problems</code> list in the error.</li>
 <li><strong>Tool returns <code>isError:true</code></strong> → a domain failure (e.g. <code>NOT_FOUND</code> for an unknown jobId); the text content carries <code>{error, code}</code>.</li>
 <li><strong>Server open with no auth</strong> → you left <code>MCP_BEARER_TOKEN</code> empty; set it before exposing.</li>
+</ul>
+
+<hr>
+
+<h2 id="quickstart">9. Quick start: expose these tools to an Agentforce agent (end-to-end)</h2>
+<p>This is the shortest path from a running server to a working Agentforce agent that can assess and upgrade Mule apps. It assumes you already have an <strong>Agentforce-enabled Salesforce org</strong> and the <strong>MCP Inspector</strong> (<code>@modelcontextprotocol/inspector</code>) — as you do.</p>
+
+<table>
+<thead><tr><th>Part</th><th>You do</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>A</td><td>Validate the MCP surface with MCP Inspector (bearer)</td><td>Prove all 13 tools list + call</td></tr>
+<tr><td>B</td><td>Expose the server over public HTTPS</td><td>A <code>https://…/mcp</code> URL</td></tr>
+<tr><td>C</td><td>Put OAuth 2.0 in front (Registry requirement)</td><td>An OAuth-guarded endpoint</td></tr>
+<tr><td>D</td><td>Register it in the Agentforce Registry</td><td>Named/External Credential + Permission Set</td></tr>
+<tr><td>E</td><td>Assign the generated Permission Set</td><td>The agent user can call the tools</td></tr>
+<tr><td>F</td><td>Build one agent (Topic + Actions + instructions)</td><td>A conversational upgrade agent</td></tr>
+<tr><td>G</td><td>Test it in the preview</td><td>Assess → dry-run → confirm → PR</td></tr>
+</tbody>
+</table>
+
+<h3>Part A — Validate the MCP surface with MCP Inspector (5 min, local)</h3>
+<p>Do this <em>before</em> touching Salesforce — it isolates "is my MCP server correct?" from "is my Salesforce wiring correct?". With the server running locally (<code>node server/server.js</code>, bearer set):</p>
+<pre><code>npx @modelcontextprotocol/inspector</code></pre>
+<p>In the Inspector UI:</p>
+<ol>
+<li><strong>Transport Type:</strong> <code>Streamable HTTP</code>.</li>
+<li><strong>URL:</strong> <code>http://localhost:8080/mcp</code>.</li>
+<li><strong>Authentication:</strong> add a request header <code>Authorization</code> = <code>Bearer &lt;MCP_BEARER_TOKEN&gt;</code> (Inspector's "Authentication → Header Name / Bearer Token" field).</li>
+<li>Click <strong>Connect</strong> → the <code>initialize</code> handshake runs.</li>
+<li>Open <strong>Tools → List Tools</strong> → you should see all <strong>13</strong> tools with their input schemas.</li>
+<li><strong>Run a read-only tool:</strong> select <code>assess_app</code>, fill <code>{ "appName": "orders-api", "owner": "acme", "repo": "orders-api", "environment": "dev" }</code>, run it, and confirm you get an <code>ASSESSED</code> result (or a clear <code>401: Bad credentials</code> if <code>GITHUB_TOKEN</code> isn't set — that's the tool working, just missing creds).</li>
+<li><strong>Exercise the confirm-before-write gate:</strong> call <code>start_upgrade</code> with <code>"dryRun": true</code> → you get <code>PLAN_PREVIEW</code> and nothing is written.</li>
+</ol>
+<blockquote>
+<p>This server implements <strong>request/response JSON-RPC</strong> (no server-initiated SSE streaming). Inspector's Streamable HTTP transport handles that fine. If a client insists on an SSE stream, front it with a proxy that bridges — but Agentforce's request/response calls do not need it.</p>
+</blockquote>
+
+<h3>Part B — Expose the server over public HTTPS</h3>
+<p>Agentforce is in Salesforce's cloud, so <code>localhost</code> won't do — it needs a public TLS URL.</p>
+<ul>
+<li><strong>Fast tunnel (demo / PoC):</strong>
+<pre><code># pick one — both give you a public https URL that forwards to :8080
+cloudflared tunnel --url http://localhost:8080
+ngrok http 8080</code></pre>
+Your MCP endpoint is then <code>https://&lt;random&gt;.trycloudflare.com/mcp</code> (or the ngrok host).</li>
+<li><strong>Production:</strong> run <code>node server/server.js</code> as a service behind a TLS reverse proxy (Caddy/nginx) or your platform's ingress. <code>GET /health</code> stays open for probes.</li>
+</ul>
+<p>Re-run Part A against the public <code>https://…/mcp</code> URL in Inspector to confirm it's reachable and still authed.</p>
+
+<h3>Part C — Put OAuth 2.0 in front (the Registry's auth requirement)</h3>
+<p>The Agentforce Registry authenticates to an external MCP server with <strong>OAuth 2.0</strong> (it generates a Named/External Credential and sends a token) — it will not send a fixed <code>Authorization: Bearer</code> header. This server's guard is a <strong>static bearer</strong>, so bridge the two:</p>
+<ol>
+<li>Stand up a thin <strong>OAuth-capable gateway / reverse proxy</strong> in front of <code>…/mcp</code> (an API gateway, or a small proxy) that:
+<ul>
+<li><strong>Validates</strong> the OAuth 2.0 access token Salesforce presents (use the <strong>client-credentials</strong> grant — this is a service account; no per-user identity is needed for upgrades), and</li>
+<li><strong>Injects</strong> the upstream <code>Authorization: Bearer &lt;MCP_BEARER_TOKEN&gt;</code> when it forwards to the Node server.</li>
+</ul>
+</li>
+<li>Register the <strong>gateway's</strong> <code>/mcp</code> URL in the Registry (Part D), with the gateway's OAuth token URL + client id/secret + scope.</li>
+</ol>
+<blockquote>
+<p><strong>Shortcut for a private internal PoC:</strong> if you're only demoing on a locked-down tunnel, you can run the Node server with <code>MCP_BEARER_TOKEN</code> unset (guard OFF) behind the OAuth gateway so the gateway is the only auth layer — but never expose an unauthenticated server on an open network.</p>
+<p><strong>Roadmap note:</strong> native OAuth-token validation can be added directly in <code>server/lib/auth.js</code> so no proxy is needed; today the static bearer + gateway is the supported pattern.</p>
+</blockquote>
+
+<h3>Part D — Register the server in the Agentforce Registry</h3>
+<ol>
+<li>In Salesforce <strong>Setup</strong>, Quick Find → <strong>Agentforce Registry</strong> (labels vary slightly by release; it's the "MCP Servers" / external-tool registry).</li>
+<li>Click <strong>New</strong> and follow the guided wizard.</li>
+<li><strong>Server URL:</strong> your public <code>https://&lt;gateway-host&gt;/mcp</code>. <strong>Transport:</strong> Streamable HTTP.</li>
+<li><strong>Authentication:</strong> OAuth 2.0 (client credentials) → enter the gateway's token endpoint, client id, client secret, and scope.</li>
+<li><strong>Select tools to register.</strong> Start small for a clean first agent, then add more:
+<ul>
+<li><code>assess_app</code>, <code>resolve_versions</code> — read-only, safe.</li>
+<li><code>start_upgrade</code> — the action (keep <code>dryRun</code> in play; see the Topic instructions in Part F).</li>
+<li><code>get_job_status</code>, <code>reconcile</code> — track progress.</li>
+<li><code>rollback</code>, <code>scan_fleet</code> — optional; add <code>upgrade_parent_pom</code> / <code>update_open_pr_parent_ref</code> only once the basic flow works.</li>
+</ul>
+</li>
+<li>Finish. Salesforce auto-creates a <strong>Named Credential</strong>, an <strong>External Credential</strong>, and a <strong>Permission Set</strong> (usually named "<em>&lt;ServerName&gt;</em> - Permission Set").</li>
+<li>Open <strong>Setup → Named Credentials → your NC → External Credential → Principals</strong>, edit the principal, and confirm the OAuth <strong>client id / secret</strong> are populated.</li>
+</ol>
+
+<h3>Part E — Assign the generated Permission Set</h3>
+<p>This is the step that's easy to miss and looks like "the agent has no tools":</p>
+<ol>
+<li>Setup → <strong>Permission Sets</strong> → open "<em>&lt;ServerName&gt;</em> - Permission Set".</li>
+<li><strong>Manage Assignments → Add Assignment</strong> → assign it to <strong>yourself</strong> (to manage) <em>and</em> to the <strong>agent's user</strong> (the bot/agent user record). Without this, the agent can authenticate to Salesforce but can't invoke the MCP tools.</li>
+</ol>
+
+<h3>Part F — Build one agent (Topic + Actions + instructions)</h3>
+<ol>
+<li>Open <strong>Agentforce Studio / Agent Builder</strong> → open an existing agent or create a new <strong>Agentforce (Service/Employee)</strong> agent.</li>
+<li>Add a <strong>Topic</strong>, e.g. <em>"MuleSoft Java 17 Upgrades"</em>, with a classification description like: <em>"Assess, plan, execute, track, and roll back MuleSoft application upgrades to Java 17 / Mule 4.9 LTS."</em></li>
+<li>Under the topic, add <strong>Actions</strong> = the MCP tools you registered in Part D.</li>
+<li>Paste <strong>Topic Instructions</strong> that encode this suite's guardrails (this is what keeps a probabilistic agent safe):</li>
+</ol>
+<pre><code>You upgrade MuleSoft apps to Java 17 by calling the registered MCP tools only.
+
+ALWAYS:
+- Ask for the Anypoint environment (dev | test | prod). Never assume it.
+- Start with assess_app (read-only). Summarize: current runtime/Java -&gt; 4.9.18 / Java 17,
+  the file-edit count, and each warning in one plain sentence.
+- Before any change, call start_upgrade with dryRun:true and SHOW the PLAN_PREVIEW.
+- Only after the user explicitly says "yes / go ahead", call start_upgrade with dryRun:false
+  using the identical arguments. "Looks good but change X" is NOT a yes — loop back.
+- Track with get_job_status (it auto-refreshes). A passing MUnit stays PR_OPEN; status moves
+  to DEPLOYING on merge, then DEPLOYED after Anypoint verification.
+
+NEVER:
+- Invent connector/runtime versions, hand-write a pom, or fabricate a plan — report only what
+  the tools return.
+- Proceed past connectorGaps / missingFromMatrix silently — raise them as human-judgement items.
+- Print secrets or tokens.
+
+If a tool returns an error, report it verbatim and stop.</code></pre>
+<ol start="5">
+<li><strong>Save</strong> and <strong>Activate</strong> the agent (and the topic).</li>
+</ol>
+
+<h3>Part G — Test it in the conversation preview</h3>
+<p>Open the agent's <strong>Conversation Preview</strong> and try, in order:</p>
+<ul>
+<li><em>"Assess orders-api for Java 17 in dev — owner acme, repo orders-api."</em> → the agent calls <code>assess_app</code> and summarizes readiness.</li>
+<li><em>"Show me the upgrade plan."</em> → <code>start_upgrade { dryRun: true }</code> → it presents the <code>PLAN_PREVIEW</code> (nothing written).</li>
+<li><em>"Yes, go ahead."</em> → <code>start_upgrade { dryRun: false }</code> → it reports <code>PR_OPEN</code> with the PR URL and a <code>jobId</code>.</li>
+<li><em>"What's the status of job &lt;jobId&gt;?"</em> → <code>get_job_status</code> → live PR/CI/deploy state.</li>
+</ul>
+
+<h3>Agentforce-specific troubleshooting</h3>
+<ul>
+<li><strong>Registration fails / "authentication required":</strong> the Registry needs OAuth 2.0 — a static bearer alone won't register. Put the OAuth gateway in front (Part C) and register that URL.</li>
+<li><strong>No tools appear after registering:</strong> the endpoint must be public HTTPS with Streamable HTTP transport. Re-validate the exact <code>…/mcp</code> URL in MCP Inspector (Part A) first.</li>
+<li><strong>Agent says it can't perform the action / "insufficient access":</strong> assign the generated Permission Set to the <em>agent's</em> user (Part E), not just yourself.</li>
+<li><strong>Tool call rejected with <code>-32602</code> (invalid arguments):</strong> the agent omitted a required field (commonly <code>environment</code>). Tighten the Topic Instructions to always collect it.</li>
+<li><strong>Upstream 401 behind the gateway:</strong> the proxy isn't injecting <code>Authorization: Bearer &lt;MCP_BEARER_TOKEN&gt;</code>, or the token doesn't match the server's <code>MCP_BEARER_TOKEN</code>.</li>
+<li><strong>Everything works in Inspector but not in Agentforce:</strong> the difference is almost always Part C (OAuth) or Part E (permission set) — the MCP surface itself is already proven by Part A.</li>
 </ul>
 
 </div>

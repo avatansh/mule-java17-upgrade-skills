@@ -33,9 +33,13 @@ import { assess, resolveVersionsForApp } from "../../skills/mule-upgrade-assess/
 import { runDriftCheck } from "../../skills/mule-upgrade-assess/scripts/lib/matrix_drift.js";
 import { runUpgrade } from "../../skills/mule-upgrade/scripts/orchestrate.js";
 import { buildJobStatus } from "../../skills/mule-upgrade-job/scripts/status.js";
-import { getJob, reapplyJob, deleteJob } from "../../skills/mule-upgrade-job/scripts/jobstore.js";
+import { getJob, reapplyJob, deleteJob, TERMINAL } from "../../skills/mule-upgrade-job/scripts/jobstore.js";
 import { runReconcile, reconcileJob } from "../../skills/mule-upgrade-job/scripts/reconcile.js";
-import { AnypointClient, makeDeployVerifier } from "../../skills/mule-upgrade/scripts/lib/anypoint.js";
+import {
+  AnypointClient,
+  makeDeployVerifier,
+  fetchDeployedState,
+} from "../../skills/mule-upgrade/scripts/lib/anypoint.js";
 import { runParentPomJob, updateOpenPrParentRef } from "../../skills/mule-upgrade-parent-pom/scripts/parent_pom.js";
 import { rollbackApi } from "../../skills/mule-upgrade-pr/scripts/rollback.js";
 import { scanFleet } from "../../skills/mule-upgrade-scan/scripts/scan.js";
@@ -187,7 +191,10 @@ export const TOOLS = [
       "Fetch the current status of an upgrade job by jobId (status message, nextPollSeconds, dep-guard/munit " +
       "sub-stage). By default it AUTO-REFRESHES first: it polls the live PR state + CI checks (over the GitHub " +
       "token, no `gh` CLI needed) and verifies the deployment on Anypoint, so 'check status now' returns the " +
-      "up-to-date status and surfaces which checks passed/failed. Pass refresh:false for a pure cache read.",
+      "up-to-date status and surfaces which checks passed/failed. When Anypoint is configured it also attaches a " +
+      "`deployedState` block read live from Runtime Manager (status/runtime/Java/environment + matchesTarget), so " +
+      "deploy status is answerable from this tool even when the PR hasn't merged or the deploy ran out-of-band " +
+      "(a separate CI/CD action). Pass refresh:false for a pure cache read.",
     inputSchema: loadSchema("get_job_status"),
     async handler(args) {
       if (!getJob(args.jobId)) throw notFoundError(args.jobId);
@@ -207,6 +214,19 @@ export const TOOLS = [
         // Surface the exact CI checks seen this refresh (e.g. test:success, dependency-guard:success),
         // so callers can report sub-status even when the enum stays PR_OPEN.
         out.checks = checks.map((c) => ({ stage: c.stage, result: c.result }));
+      }
+      // Reach out to Runtime Manager for a live deployed-state snapshot (advisory). Without this the
+      // ARM check is gated behind DEPLOYING (post-merge) only, so a PR whose deploy ran out-of-band
+      // (separate GitHub Action, no cd-result callback / PR check) could never report deploy status
+      // from this tool — the caller had to fall back to a different platform tool. Non-terminal jobs
+      // only; never fatal — a lookup error just omits the field.
+      if (args.refresh !== false && rec && !TERMINAL.has(rec.status)) {
+        try {
+          const ds = await fetchDeployedState({ client: new AnypointClient(), rec });
+          if (ds) out.deployedState = ds;
+        } catch {
+          /* advisory only — never block the status read */
+        }
       }
       return out;
     },

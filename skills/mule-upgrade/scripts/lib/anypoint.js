@@ -503,3 +503,82 @@ export function makeDeployVerifier(client) {
   verify.reset = () => listByEnv.clear();
   return verify;
 }
+
+/**
+ * Component-wise version-base comparison (mirrors assess.js runtimeBaseMismatch): true when two
+ * version bases differ on any SHARED numeric component. "4.9.18" vs "4.9.18" → false (match);
+ * "4.9.1" vs "4.9.18" → true; "4.9" vs "4.9.18" → false (a prefix, not a mismatch). A missing side
+ * is treated as a mismatch (we can't confirm equality). Internal to fetchDeployedState.
+ */
+function deployedBaseMismatch(a, b) {
+  if (!a || !b) return true;
+  const pa = String(a).split(".");
+  const pb = String(b).split(".");
+  const n = Math.min(pa.length, pb.length);
+  for (let i = 0; i < n; i++) if (pa[i] !== pb[i]) return true;
+  return false;
+}
+
+/**
+ * fetchDeployedState({ client, rec }): reach out to Runtime Manager for a job's app and return an
+ * ADVISORY snapshot of what is ACTUALLY deployed — used by get_job_status / `job.js status` so
+ * "check status" reports live deploy state even when the PR has not merged or the deploy ran
+ * out-of-band (e.g. a separate GitHub Action that never posts a cd-result callback and isn't a PR
+ * check). Reads the job's own environment first, then falls back to an all-environments search (the
+ * common "right app name, wrong/blank env label" case).
+ *
+ * ADVISORY ONLY — this never changes the job enum. A running app can PREDATE the open PR (its archive
+ * may not contain the PR's connector bumps), so `matchesTarget` reports whether the deployed
+ * runtime/Java already equals the upgrade target, letting the caller say e.g. "already on
+ * 4.9.18 / Java 17" without falsely claiming the PR itself is deployed.
+ *
+ * NEVER throws. Returns:
+ *   · null                          when Anypoint isn't configured or the job has no app name (omit the field)
+ *   · { found:false, reason }       when the app isn't located in any environment
+ *   · { found:true, status, healthy, runtimeVersion, muleVersion, javaVersion, replicas, lastDeploy,
+ *       environment, matchesTarget, target:{runtime, javaVersion} }
+ *
+ * @param {object} args
+ * @param {AnypointClient} args.client
+ * @param {object} args.rec  the persisted job record
+ * @returns {Promise<null|object>}
+ */
+export async function fetchDeployedState({ client, rec }) {
+  try {
+    if (!client || typeof client.configured !== "function" || !client.configured()) return null;
+    const app = String(rec?.deployedApiName ?? rec?.appName ?? "").trim();
+    if (!app) return null;
+    const env = rec?.environment ? String(rec.environment) : "";
+    let d = env ? await client.describeDeployment({ app, env }) : { found: false };
+    if (!d.found) {
+      const across = await client.findDeploymentAcrossEnvs({ app });
+      if (across.found) d = across;
+    }
+    if (!d.found) return { found: false, reason: d.reason ?? `no deployment named "${app}" found` };
+
+    const targetRuntime = rec?.changePlan?.targetRuntime ?? null;
+    const targetJava = rec?.changePlan?.targetJavaVersion ?? null;
+    // null = "couldn't compare this dimension"; matchesTarget requires at least one comparable
+    // dimension AND no comparable dimension mismatching.
+    const runtimeOk = targetRuntime ? !deployedBaseMismatch(d.muleVersion, targetRuntime) : null;
+    const javaOk = targetJava != null ? Number(d.javaVersion) === Number(targetJava) : null;
+    const comparable = runtimeOk !== null || javaOk !== null;
+    const matchesTarget = comparable && runtimeOk !== false && javaOk !== false;
+
+    return {
+      found: true,
+      status: d.status ?? "UNKNOWN",
+      healthy: (client.healthyStatuses ?? []).includes(String(d.status ?? "").toUpperCase()),
+      runtimeVersion: d.runtimeVersion ?? null,
+      muleVersion: d.muleVersion ?? null,
+      javaVersion: d.javaVersion ?? null,
+      replicas: d.replicas ?? null,
+      lastDeploy: d.lastDeploy ?? null,
+      environment: d.environment ?? env ?? null,
+      matchesTarget,
+      target: { runtime: targetRuntime, javaVersion: targetJava },
+    };
+  } catch (e) {
+    return { found: false, reason: `deployed-state lookup failed: ${e?.message ?? e}` };
+  }
+}

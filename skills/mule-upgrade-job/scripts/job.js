@@ -25,10 +25,15 @@ import {
   releaseLock,
   reapplyJob,
   deleteJob,
+  TERMINAL,
 } from "./jobstore.js";
 import { buildJobStatus } from "./status.js";
 import { runReconcile, reconcileJob } from "./reconcile.js";
-import { AnypointClient, makeDeployVerifier } from "../../mule-upgrade/scripts/lib/anypoint.js";
+import {
+  AnypointClient,
+  makeDeployVerifier,
+  fetchDeployedState,
+} from "../../mule-upgrade/scripts/lib/anypoint.js";
 
 // Build the Anypoint deploy verifier for the poll-driven CLI paths (status --refresh / reconcile),
 // mirroring server/lib/tools.js safeDeployVerifier(). Without it, runReconcile keeps its "unknown"
@@ -129,6 +134,18 @@ async function main() {
       const status = buildJobStatus(rec, typeof args["jira-base-url"] === "string" ? args["jira-base-url"] : "");
       if (Array.isArray(checks) && checks.length) {
         status.checks = checks.map((c) => ({ stage: c.stage, result: c.result }));
+      }
+      // Reach out to Runtime Manager for a live deployed-state snapshot (advisory), matching the MCP
+      // get_job_status tool. Lets "check status" report what's actually deployed even when the PR
+      // hasn't merged or the deploy ran out-of-band (separate GitHub Action, no cd-result callback).
+      // Non-terminal jobs only; never fatal — a lookup error just omits the field.
+      if (doRefresh && rec && !TERMINAL.has(rec.status)) {
+        try {
+          const ds = await fetchDeployedState({ client: new AnypointClient(), rec });
+          if (ds) status.deployedState = ds;
+        } catch {
+          /* advisory only — never block the status read */
+        }
       }
       out(status);
       break;

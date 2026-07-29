@@ -2,7 +2,7 @@
 name: mule-upgrade-mcp
 description: >-
   Run the Java 17 upgrade suite as a hosted MCP + REST server so remote agents (e.g.
-  Agentforce) can drive it over the network. Exposes the 8 upgrade tools over MCP
+  Agentforce) can drive it over the network. Exposes the 13 upgrade tools over MCP
   JSON-RPC and a plain REST facade, plus HMAC-verified CI/CD webhooks. Use this when
   the user says things like "start the MCP server", "expose the upgrade tools to
   Agentforce", "run the upgrade server", "how do agents call these tools remotely",
@@ -29,18 +29,63 @@ extra flags.
 
 ## Run
 
+> **CRITICAL — the server is NOT inside this skill folder.** `server/server.js` lives at the
+> **suite root** (the cloned `mule-java17-upgrade-skills`), *not* under
+> `…/skills/mule-upgrade-mcp/`. Running `node server/server.js` from the skill directory fails with
+> `Cannot find module …\skills\mule-upgrade-mcp\server\server.js` (`MODULE_NOT_FOUND`). **Never
+> construct a `server/` path under this skill.** Use the launcher below (it resolves the suite root
+> from its own location) or point directly at the clone.
+
+**Execution contract for the agent:**
+1. **Start it with the launcher**, using the *absolute path to this skill's* `scripts/start_server.mjs`
+   (the same directory this `SKILL.md` was loaded from). The launcher walks up to the suite root and
+   starts `server/server.js` there — cwd-independent:
+   ```bash
+   node "<this-skill-dir>/scripts/start_server.mjs"
+   ```
+   Example on this machine (skill symlinked into the Vibes global store):
+   ```powershell
+   node "C:\Users\avatansh.sharma\AppData\Roaming\Code\User\globalStorage\salesforce.mule-dx-vscode\Rules\skills\mule-upgrade-mcp\scripts\start_server.mjs"
+   ```
+2. **Run it in the BACKGROUND / as a long-running task.** It is a server — it does not return; it
+   listens until stopped. Do not wait for it to "complete."
+3. If the launcher reports it can't find the server, the skill was **copied, not symlinked** — see the
+   fallback and the fix note below.
+
+**Fallback — run directly from the clone** (when you know the suite root; `server/` is a sibling of
+`skills/`, never a child):
+
 ```bash
-node server/server.js
-# → listening on http://0.0.0.0:8080
-#   MCP JSON-RPC : POST /mcp
-#   REST tools   : GET /api/v1/tools · POST /api/v1/tools/{name}
-#   Webhooks     : POST /webhook · POST /webhook/cd-result (HMAC)
-#   Health       : GET /health
-#   Bearer auth  : OFF (open — set MCP_BEARER_TOKEN to require)
+node "<suite-root>/server/server.js"
+# e.g. node "C:\Workspaces\7.25\mule-java17-upgrade-skills\server\server.js"
 ```
+
+Expected startup (to stderr):
+
+```text
+[mule-java17-upgrade-skills] listening on http://0.0.0.0:8080
+  Environment  : dev (config-dev.yaml + config-secure-dev.yaml)
+  MCP JSON-RPC : POST /mcp
+  REST tools   : GET /api/v1/tools · POST /api/v1/tools/{name}
+  Webhooks     : POST /webhook · POST /webhook/cd-result (HMAC)
+  Health       : GET /health · GET /metrics
+  Bearer auth  : OFF (open — set MCP_BEARER_TOKEN to require)
+```
+
+Then confirm from a second terminal: `curl -s localhost:8080/health`.
 
 Port resolves from `MCP_SERVER_PORT`, else config `http.port`, else `8080`. Host from
 config `http.host`, else `0.0.0.0`.
+
+> **Prerequisites (fail-fast):** the server refuses to boot without `MULE_UPGRADE_ENV` (exit code 2)
+> and reads secrets/config from the suite-root `.env` + `config-<env>.yaml` (needs `MULE_CONFIG_KEY`).
+> Set these in the **suite root** `.env`, and run `npm ci` in the clone once. See `docs/SETUP-VIBES.md`.
+>
+> **Why `MODULE_NOT_FOUND` happens and how to fix it for good:** Vibes skills should be **symlinked**
+> into the skills directory, never copied. When copied, only `SKILL.md` (and now `scripts/`) exist in
+> isolation — the sibling `server/`, `lib_shared/`, and `config/` at the suite root are unreachable.
+> Re-install every skill as a symlink to the single clone (see `docs/SETUP-VIBES.md` → Option A →
+> "symlink"), then reload the window. After that the launcher resolves the suite root correctly.
 
 ## Auth model
 
@@ -57,19 +102,21 @@ config `http.host`, else `0.0.0.0`.
   is recorded via `jobstore.markOnce`; a repeated delivery short-circuits to the last-known
   job status without re-applying the transition.
 
-## The 12 tools
+## The 13 tools
 
-Six are parity with the Mule MCP tools; the rest (`reconcile`, `rollback`, `scan_fleet`,
-`scan_notify`, `resolve_versions`, `check_drift`) are added:
+Six are parity with the Mule MCP tools; the rest (`upgrade_parent_pom`,
+`update_open_pr_parent_ref`, `reconcile`, `rollback`, `scan_fleet`, `scan_notify`,
+`resolve_versions`, `check_drift`) are added:
 
 | Tool | Does |
 |------|------|
 | `assess_app` | Assess a repo/app → LEAN ChangePlan (incl. `connectorsInApp[]`) + verbatim deployed-state check (no writes). Version menu / drift are opt-in (`includeVersions` / `includeDrift`) |
-| `start_upgrade` | Full pipeline: assess → apply → commit → PR → job PR_OPEN (accepts `versionStrategy` + `connectorSelections` + `deployedApiName`) |
-| `get_job_status` | Job record + status message + `nextPollSeconds` |
+| `start_upgrade` | Full pipeline: assess → apply → commit → PR → job PR_OPEN (accepts `versionStrategy` + `connectorSelections` + `deployedApiName` + `parentRef`) |
+| `get_job_status` | Job record + status message + `nextPollSeconds`; auto-refreshes live PR/CI state and attaches a live Runtime Manager `deployedState` |
 | `reapply_job` | Re-seed coordinates under a fresh jobId |
 | `delete_job` | Remove record, clear branch index, release lock |
-| `upgrade_parent_pom` | Parent/BOM pom minor-bump + connector pinning → PR |
+| `upgrade_parent_pom` | Parent/BOM pom minor-bump + connector pinning → PR (tracked job) |
+| `update_open_pr_parent_ref` | Fold the app's `<parent>` version repoint into an already-open upgrade PR (chained parent/BOM flow) |
 | `reconcile` | Sweep stale jobs (poll PR/CI, verify deploy, release locks) |
 | `rollback` | Revert a job's PR (revert branch + revert PR) |
 | `scan_fleet` | Audit the Anypoint fleet for apps still on old Mule/Java → candidate list |
@@ -133,7 +180,7 @@ server: a handler returns `{statusCode, body}` and never crashes the listener.
 
 - `server/server.js` — the HTTP server + routing (`route`, `createServer` exported for tests).
 - `server/lib/mcp.js` — JSON-RPC 2.0 dispatcher (`handleRpc`).
-- `server/lib/tools.js` — the 8-tool catalog + handlers.
+- `server/lib/tools.js` — the 13-tool catalog + handlers.
 - `server/lib/schema.js` — dependency-free JSON-Schema validator (the contract guard).
 - `server/lib/auth.js` — bearer guard + webhook HMAC verify.
 - `server/lib/webhook.js` — CI/CD callback → `ci_ingest` bridge with delivery de-dup.

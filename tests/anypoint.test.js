@@ -6,7 +6,11 @@
 //   · ExchangeClient version resolution + connectorless safety-net (pf-load-matrix)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AnypointClient, makeDeployVerifier } from "../skills/mule-upgrade/scripts/lib/anypoint.js";
+import {
+  AnypointClient,
+  makeDeployVerifier,
+  fetchDeployedState,
+} from "../skills/mule-upgrade/scripts/lib/anypoint.js";
 import {
   ExchangeClient,
   highestSemver,
@@ -364,6 +368,143 @@ test("findDeploymentAcrossEnvs: not configured → skip-with-reason", async () =
   const d = await c.findDeploymentAcrossEnvs({ app: "x" });
   assert.equal(d.found, false);
   assert.match(d.reason, /not configured/);
+});
+
+// ── fetchDeployedState (advisory RM snapshot for get_job_status / `job.js status`) ─────────────────
+test("fetchDeployedState: hit on the job's env → matchesTarget true when runtime+Java equal target", async () => {
+  const c = new AnypointClient({
+    ...CREDS,
+    fetchImpl: makeFetch([
+      ["/oauth2/token", { json: { access_token: "t" } }],
+      ["/environments", { json: { data: [{ name: "dev", id: "eDev" }] } }],
+      [
+        "/deployments",
+        {
+          json: {
+            items: [
+              {
+                name: "lead-to-contacts-demo-api",
+                application: { status: "RUNNING" },
+                target: { deploymentSettings: { runtimeVersion: "4.9.18:3-java17" } },
+              },
+            ],
+          },
+        },
+      ],
+    ]),
+    healthyStatuses: "RUNNING,STARTED,APPLIED",
+  });
+  const rec = {
+    appName: "lead-to-contacts-demo-api",
+    environment: "dev",
+    changePlan: { targetRuntime: "4.9.18", targetJavaVersion: 17 },
+  };
+  const ds = await fetchDeployedState({ client: c, rec });
+  assert.equal(ds.found, true);
+  assert.equal(ds.status, "RUNNING");
+  assert.equal(ds.healthy, true);
+  assert.equal(ds.muleVersion, "4.9.18");
+  assert.equal(ds.javaVersion, 17);
+  assert.equal(ds.matchesTarget, true);
+  assert.equal(ds.environment, "dev");
+  assert.deepEqual(ds.target, { runtime: "4.9.18", javaVersion: 17 });
+});
+
+test("fetchDeployedState: running an OLDER runtime than target → matchesTarget false", async () => {
+  const c = new AnypointClient({
+    ...CREDS,
+    fetchImpl: makeFetch([
+      ["/oauth2/token", { json: { access_token: "t" } }],
+      ["/environments", { json: { data: [{ name: "dev", id: "eDev" }] } }],
+      [
+        "/deployments",
+        {
+          json: {
+            items: [
+              { name: "orders-api", application: { status: "RUNNING" }, currentRuntimeVersion: "4.6.0:8-java" },
+            ],
+          },
+        },
+      ],
+    ]),
+    healthyStatuses: "RUNNING",
+  });
+  const rec = { appName: "orders-api", environment: "dev", changePlan: { targetRuntime: "4.9.18", targetJavaVersion: 17 } };
+  const ds = await fetchDeployedState({ client: c, rec });
+  assert.equal(ds.found, true);
+  assert.equal(ds.matchesTarget, false, "old runtime/Java must not read as target-matched");
+  assert.equal(ds.javaVersion, 8);
+});
+
+test("fetchDeployedState: wrong/blank env label → falls back to a cross-env search", async () => {
+  const c = new AnypointClient({
+    ...CREDS,
+    fetchImpl: makeFetch([
+      ["/oauth2/token", { json: { access_token: "t" } }],
+      ["/environments", { json: { data: [{ name: "Sandbox", id: "eSbx" }, { name: "DEV", id: "eDev" }] } }],
+      [
+        "/deployments",
+        (url) =>
+          url.includes("/eDev/")
+            ? {
+                json: {
+                  items: [
+                    {
+                      name: "app-x",
+                      application: { status: "RUNNING" },
+                      target: { deploymentSettings: { runtimeVersion: "4.9.18:17" } },
+                    },
+                  ],
+                },
+              }
+            : { json: { items: [{ name: "unrelated", status: "RUNNING" }] } },
+      ],
+    ]),
+    healthyStatuses: "RUNNING",
+  });
+  // The job records the WRONG env (Sandbox); the app really runs in DEV.
+  const rec = { appName: "app-x", environment: "Sandbox", changePlan: { targetRuntime: "4.9.18", targetJavaVersion: 17 } };
+  const ds = await fetchDeployedState({ client: c, rec });
+  assert.equal(ds.found, true);
+  assert.equal(ds.environment, "DEV", "located via the cross-env fallback");
+  assert.equal(ds.matchesTarget, true);
+});
+
+test("fetchDeployedState: not configured → null (field omitted by callers)", async () => {
+  const c = new AnypointClient({ clientId: "", clientSecret: "", orgId: "" });
+  assert.equal(await fetchDeployedState({ client: c, rec: { appName: "x" } }), null);
+});
+
+test("fetchDeployedState: app not deployed anywhere → found:false with a reason", async () => {
+  const c = new AnypointClient({
+    ...CREDS,
+    fetchImpl: makeFetch([
+      ["/oauth2/token", { json: { access_token: "t" } }],
+      ["/environments", { json: { data: [{ name: "dev", id: "e" }] } }],
+      ["/deployments", { json: { items: [{ name: "other", status: "RUNNING" }] } }],
+    ]),
+  });
+  const ds = await fetchDeployedState({ client: c, rec: { appName: "ghost", environment: "dev" } });
+  assert.equal(ds.found, false);
+  assert.match(ds.reason, /ghost/);
+});
+
+test("fetchDeployedState: deployedApiName overrides appName for the RM lookup", async () => {
+  const c = new AnypointClient({
+    ...CREDS,
+    fetchImpl: makeFetch([
+      ["/oauth2/token", { json: { access_token: "t" } }],
+      ["/environments", { json: { data: [{ name: "dev", id: "e" }] } }],
+      ["/deployments", { json: { items: [{ name: "deployed-name", application: { status: "RUNNING" } }] } }],
+    ]),
+    healthyStatuses: "RUNNING",
+  });
+  const rec = { appName: "repo-name", deployedApiName: "deployed-name", environment: "dev" };
+  const ds = await fetchDeployedState({ client: c, rec });
+  assert.equal(ds.found, true);
+  assert.equal(ds.status, "RUNNING");
+  // No target in the plan → matchesTarget can't be computed → false (nothing comparable).
+  assert.equal(ds.matchesTarget, false);
 });
 
 // ── readApiPolicies (Batch A #6) ────────────────────────────────────────────────────────────────

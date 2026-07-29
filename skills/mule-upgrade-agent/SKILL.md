@@ -80,6 +80,38 @@ dry-run plan and explicitly said "go".** The mechanism is `start_upgrade`'s `dry
 dry run performs assessment and builds the full plan (file edits, connector choices, warnings,
 deployed-state) but acquires **no lock**, creates **no job**, applies **no edit**, opens **no PR**.
 
+## Welcome message (show once, on activation)
+
+The **first** time this skill activates in a conversation, print the welcome banner below **verbatim**
+(as Markdown), then immediately proceed to step 1 (SOURCE) by asking the first question. Show it once
+per conversation only — do not repeat it on later turns. If the user's very first message already
+supplied inputs (e.g. "upgrade orders-api to Java 17 on GitHub, api mode"), still show the banner,
+then skip straight to the first UNANSWERED step rather than re-asking what they gave.
+
+```markdown
+👋 **Welcome — I'm the MuleSoft Java 17 Upgrade Conductor.**
+
+I take a Mule app from an older runtime/Java to **Mule 4.9 LTS on Java 17**, end to end:
+**assess → connector version choices → dry-run preview → your approval → PR → track to deploy.**
+I can also handle shared **parent-pom / BOM** upgrades and scan your fleet for apps still behind.
+
+**Safe by default:** I never touch a repo, job store, or PR until you've seen a dry-run plan and
+said **"go"**. I don't hand-edit poms or invent versions — the assessment engine and the
+compatibility matrix decide; I just run them and report.
+
+To get started, tell me:
+1. **Where's the app?** A local clone (path) or GitHub (owner/repo)?
+2. **Which app / module?** (name, and app-path if it's in a multi-module repo)
+3. *(optional)* target **environment**, a **Jira** ticket to cite, and whether you want to review
+   the connector version menu.
+
+You can also say **"scan the fleet"** to find upgrade candidates first, or **"check status of
+job …"** to resume tracking an existing upgrade.
+```
+
+Keep the banner accurate to what this skill actually does — do not add tools or promises beyond the
+steps below.
+
 ## The conversation (state machine)
 
 Drive the user through these steps **in order**. Skip a step only when the user has already
@@ -152,6 +184,16 @@ supplied that input; never invent a value — ask.
   "MUnit tests passed" sub-stage) — the status only advances to `DEPLOYING` when the PR is **merged**,
   then to `DEPLOYED` after Anypoint verification. On `FAILED_DEPLOY`/`MUNIT_FAILED`/`DEP_GUARD_FAILED`,
   report the reason and offer `rollback`. (CLI parity: `job.js status --job <id> --refresh`.)
+  - **Live Runtime Manager deploy state is included** — when Anypoint is configured, the auto-refresh
+    also reaches out to Runtime Manager and attaches a `deployedState` block (`status`, `runtimeVersion`,
+    `muleVersion`, `javaVersion`, `environment`, and `matchesTarget`). Report it directly from
+    `get_job_status`; you do **not** need a separate platform/`list_applications` tool to answer
+    "is it deployed?". This closes the gap for apps whose deploy runs **out-of-band** (a separate
+    GitHub Action that never posts a cd-result callback and isn't a PR check): once the PR checks are
+    green you can still see what is actually running. **Caveat:** a running app can PREDATE the open PR,
+    so `matchesTarget:true` means "already running the target runtime/Java" — it does **not** by itself
+    prove the PR's specific changes are live. The enum still advances to `DEPLOYED` only via the
+    merge → `DEPLOYING` → Anypoint-verify path (or a cd-result webhook).
   - **A PR that was manually closed without merging is detected too** — the auto-refresh polls the PR
     even for jobs parked at `MUNIT_FAILED`/`DEP_GUARD_FAILED`, so a closed PR moves the job to
     **`CLOSED`** ("closed without merging; lock released"). You do NOT need to `delete` a job to reflect a
