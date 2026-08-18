@@ -1,0 +1,106 @@
+# Java 21 upgrade rules - NOT YET CURATED.
+#
+# Scaffolded from the default target. Identity fields (connector properties and coordinates,
+# gating coordinates, manualReview patterns) were copied verbatim and MUST stay in sync with
+# every other target file - the parity test enforces this.
+#
+# Every version-bearing field below is "TODO". While status is "uncurated" the engine REFUSES
+# to run against this target, so these placeholders can never reach a plan.
+#
+# TO CURATE: replace each "TODO" with the value verified for Java 21 (release notes, the
+# MuleSoft Java-compatible connector KB, runtime support matrices), then delete the status line.
+# See ./MATRIX.md section 5.
+schemaVersion: "1.2"
+status: "uncurated"   # delete this line once every TODO above is filled in
+target:
+  runtime: "TODO"          # app.runtime AND app.runtime.semver
+  javaVersion: "21"          # the single source of truth for the engine's Java target
+
+# GATING - if installed < min, upgrade is REQUIRED (rule_1..rule_4)
+# `property` is the primary (Maven property placeholder) key. Optional `groupId`/`artifactId`
+# let the resolver also detect versions pinned INLINE on a <dependency>/<dependencyManagement>
+# entry (no property); optional `pluginGroupId`/`pluginArtifactId` do the same for a
+# <build><plugins>/<pluginManagement> <plugin> entry. Resolution order per rule is:
+# property  ->  inline dependency version  ->  inline plugin version. Rules with no
+# coordinates are property-only (e.g. runtime/java, which are never plain dependencies).
+gating:
+  muleRuntime:        { property: "app.runtime",                       min: "TODO", set: "TODO" }
+  muleRuntimeSemver:  { property: "app.runtime.semver",                min: "TODO", set: "TODO" }
+  # compare:"java" = bump whenever the installed JAVA MAJOR is below `set`. "1.8", "8" and "8.0.402" all
+  # read as Java 8. Do NOT go back to an explicit in:[...] list here: it has to be hand-extended the day
+  # `set` moves (17 would need adding when targeting 21) and forgetting it fails SILENTLY — the plan just
+  # omits the Java bump. Derived comparison keeps retargeting to a single edit of target.javaVersion.
+  javaVersion:        { property: "java.version",                      compare: "java", set: "21" }
+  javaCompilerSource: { property: "maven.compiler.source",             compare: "java", set: "21" }
+  javaCompilerTarget: { property: "maven.compiler.target",             compare: "java", set: "21" }
+  # mule-maven-plugin 4.1.1+ is the documented floor for Java-17 DEPLOY (mvn deploy w/ -Dmule.jvm=17).
+  # Releases < 4.1.1 predate Java-17 packaging support, so 4.1.0 is flagged and bumped.
+  muleMavenPlugin:    { property: "mule.maven.plugin.version",         min: "TODO", set: "TODO", pluginGroupId: "org.mule.tools.maven",     pluginArtifactId: "mule-maven-plugin" }
+  # MUnit 3.6.3+ is REQUIRED on Mule 4.9 / Java 17. Releases < 3.6.3 fail embedded-container
+  # startup with "javax.naming is not open to module org.mule.runtime.jpms.utils" (fixed by
+  # W-20335051). min is set to 3.6.3 so 3.6.1/3.6.2 are flagged and bumped, never left as-is.
+  munit:              { property: "munit.version",                     min: "TODO", set: "TODO", groupId: "com.mulesoft.munit", artifactId: "munit-runner", pluginGroupId: "com.mulesoft.munit.tools", pluginArtifactId: "munit-maven-plugin" }
+  munitExtPlugin:     { property: "munit.extensions.maven.plugin.version",min: "TODO", set: "TODO", pluginGroupId: "com.mulesoft.munit.tools", pluginArtifactId: "munit-extensions-maven-plugin" }
+  weave:              { property: "weave.version",                     min: "TODO", set: "TODO", groupId: "org.mule.weave", artifactId: "assertions" }
+
+# COMPATIBILITY - bump to 'set' if installed < 'set' (rule_5)
+connectors:
+  - { property: "apikit.version",                   set: "TODO", groupId: "org.mule.modules",    artifactId: "mule-apikit-module" }
+  - { property: "http.connector.version",           set: "TODO", groupId: "org.mule.connectors", artifactId: "mule-http-connector" }
+  - { property: "sockets.connector.version",        set: "TODO",  groupId: "org.mule.connectors", artifactId: "mule-sockets-connector" }
+  - { property: "objectstore.connector.version",    set: "TODO",  groupId: "org.mule.connectors", artifactId: "mule-objectstore-connector" }
+  - { property: "secure.conf.prop.module.version",  set: "TODO",  groupId: "com.mulesoft.modules", artifactId: "mule-secure-configuration-property-module" }
+  - { property: "db.connector.version",             set: "TODO", groupId: "org.mule.connectors", artifactId: "mule-db-connector" }
+  - { property: "validation.module.version",        set: "TODO",  groupId: "org.mule.modules",    artifactId: "mule-validation-module" }
+  - { property: "json.module.version",              set: "TODO",  groupId: "org.mule.modules",    artifactId: "mule-json-module" }
+  - { property: "xml.module.version",               set: "TODO",  groupId: "org.mule.modules",    artifactId: "mule-xml-module" }
+  - { property: "oauth.module.version",             set: "TODO", groupId: "org.mule.modules",    artifactId: "mule-oauth-module" }
+  - { property: "tracing.module.version",           set: "TODO",  groupId: "org.mule.modules",    artifactId: "mule-tracing-module" }
+  # -- Third-party SaaS connectors (Java 17 versions per MuleSoft connector release notes /
+  #    KB "Java 17-Compatible Anypoint Connectors", id=000782248). 'set' = a conservative,
+  #    known-good Java-17 version WITHIN the connector's current major line. Notes:
+  #      twilio 4.2.9 (Java 17 since 4.2.7); gmail 1.1.2 (latest); slack 1.0.17 (1.x, 2.x is a
+  #      breaking major); salesforce 10.19.2 (10.x, 11.x is a newer major).
+  - { property: "twilio.connector.version",         set: "TODO",  groupId: "com.mulesoft.connectors", artifactId: "mule-twilio-connector" }
+  - { property: "gmail.connector.version",          set: "TODO",  groupId: "com.mulesoft.connectors", artifactId: "mule4-gmail-connector" }
+  - { property: "slack.connector.version",          set: "TODO", groupId: "com.mulesoft.connectors", artifactId: "mule4-slack-connector" }
+  - { property: "salesforce.connector.version",     set: "TODO", groupId: "com.mulesoft.connectors", artifactId: "mule-salesforce-connector" }
+
+# NOTE: wsc/vm/sftp/file/email/mq are present in the BOM but unused by the demo app - add here if found.
+
+# HYGIENE
+removeJvmFlags: ["-XX:-UseBiasedLocking", "-M-XX:-UseBiasedLocking"]
+
+# On Mule 4.9 / Java 17 the embedded MUnit container manages JPMS itself and REJECTS any
+# boot-module-layer tweaks passed to the forked test JVM, failing with
+# "Invalid module tweaking options passed to the JVM running the Mule Runtime".
+# These argLine flags must be stripped from the munit-(maven|extensions) plugin <argLines>.
+removeMunitJpmsFlags: ["--add-opens", "--add-exports", "--add-modules"]
+
+# MANUAL-REVIEW FLAGS - never auto-fix; raise warnings (rule_7, rule_8)
+# `scanGlobs` match file PATHS in the repo tree; `scanRegex` match file CONTENT (Java sources +
+# pom text). Each hit raises the `warn` prose (deduped) - the upgrade never edits these for you.
+manualReview:
+  customJavaCode:   { scanGlobs: ["src/main/java/**/*.java"], warn: "Custom Java - reflection/SecurityManager restricted on 17" }
+  javaPojoInDw:     { scanRegex: "as Object \\{ class:",        warn: "DataWeave Java POJO needs getters AND setters on 17" }
+  apiPolicies:      { source: "apiManager",                 warn: "App has API Manager policies - re-validate after upgrade" }
+  munitJpmsFlags:   { scanRegex: "add-(opens|exports|modules)", warn: "Remove add-opens/add-exports argLines from the MUnit plugin - rejected by the Mule 4.9 embedded container on Java 17" }
+  # Java-17 hardening scans (per MuleSoft customer/partner connector-upgrade guides):
+  setAccessible:    { scanRegex: "setAccessible\\s*\\(",       warn: "Reflective setAccessible() found - Java 17 strong encapsulation blocks setAccessible on JDK internals; refactor or you will hit InaccessibleObjectException at runtime." }
+  resourceBundle:   { scanRegex: "ResourceBundle\\.getBundle", warn: "ResourceBundle.getBundle() found - JPMS changes resource/bundle loading on Java 17; verify bundles resolve (consider ResourceBundleProvider) or move them onto the classpath." }
+  powermock:        { scanRegex: "(?:org\\.powermock|powermock-)", warn: "PowerMock detected - it cannot mock JVM classes under Java 17; migrate the affected tests to a current Mockito (inline mock maker) before upgrading." }
+  # Java 17 Upgrade Process Guide - DataWeave API change. error.muleMessage was removed; the
+  # replacement is error.errorMessage. Scanned across .dwl AND src/main/mule/*.xml (inline
+  # expressions + <ee:transform> scripts), which is where this actually lives.
+  dwErrorMuleMessage: { scanRegex: "error\\s*\\.\\s*muleMessage", warn: "DataWeave uses error.muleMessage, which is REMOVED on the Java 17 / Mule 4.9 line - replace every occurrence with error.errorMessage (this is a runtime failure, not a build failure, so tests must cover the error paths)." }
+
+# JAVA 17 UPGRADE PROCESS GUIDE - baseline reporting only (never auto-edited).
+# Floors for things that are NOT in the pom (local toolchain / IDE / platform) plus extra prose for
+# the scan-driven checklist items. Consumed by scripts/lib/process_guide.js to produce the per-item
+# ok / will-fix / action / manual verdicts. Changing a floor here changes the report, nothing else.
+processGuide:
+  mavenMin: "3.9.6"    # asserted only when the repo pins a Maven WRAPPER; otherwise reported as manual
+  studioMin: "7.17"    # never determinable from a repo - always reported as manual
+
+# mule-artifact.json target
+muleArtifact: { minMuleVersion: "TODO", javaSpecificationVersions: ["21"] }

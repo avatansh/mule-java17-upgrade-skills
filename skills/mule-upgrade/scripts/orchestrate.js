@@ -8,11 +8,11 @@
 //        ▼
 //   acquire lock (CONFLICT:UPGRADE_IN_PROGRESS if held) ──► job PROCESSING
 //        ▼
-//   [optional] auto-create Jira ticket ──► COMMITTING
+//   [opt-in] create Jira ticket ──► COMMITTING
 //        ▼
 //   apply transforms (SKILL 2) ──► commit + open PR (SKILL 3) ──► COMMITTED ──► PR_OPEN
 //        ▼
-//   notify (Slack + Jira) ──► record branchName/commitSha/prNumber/prUrl + branch index
+//   [opt-in] notify (Slack + Jira) ──► record branchName/commitSha/prNumber/prUrl + branch index
 //
 // On ANY stage error: job → FAILED_ASSESS (validation/http) or FAILED_COMMIT (else), lock released,
 // failure notified — same taxonomy as the Mule async error-handler.
@@ -33,6 +33,7 @@ import {
   jiraCreateIssue,
   prOpenedSlackText,
   failureSlackText,
+  resolveNotifyPrefs,
 } from "./lib/notify.js";
 
 /**
@@ -51,6 +52,10 @@ import {
  * @param {object} [opts.assessResult]  pre-computed AssessmentResult (skip the assess step)
  * @param {object} [opts.assessOpts]    extra options forwarded to assess() (appPath, environment, orgId, versionStrategy, connectorSelections)
  * @param {object} [opts.approvedChangePlan]  operator-approved ChangePlan recorded on the job
+ * @param {{slack?:boolean, jira?:"none"|"comment"|"create"}} [opts.notifyPrefs] per-run Slack/Jira
+ *   opt-in. Default (and any malformed value) is SILENT: no Slack, no Jira ticket, no Jira comment —
+ *   configured credentials alone are never treated as consent. Persisted on the job so later sweeps
+ *   (reconcile / status auto-refresh / webhook) honor the same choice.
  * @param {boolean} [opts.dryRun]       preview ONLY: assess + build the plan, then return status
  *   PLAN_PREVIEW / ALREADY_UPGRADED WITHOUT acquiring a lock, applying edits, or opening a PR.
  *   The confirmation gate for the interactive agent — nothing is written and no job is created.
@@ -75,6 +80,7 @@ export async function runUpgrade(opts) {
     deps = {},
   } = opts;
   let jiraTicketId = opts.jiraTicketId ?? null;
+  const notifyPrefs = resolveNotifyPrefs(opts.notifyPrefs);
 
   const doAssess = deps.assess ?? assess;
   const doApply = deps.applyChangePlan ?? applyChangePlan;
@@ -160,9 +166,13 @@ export async function runUpgrade(opts) {
       environment,
       jiraTicketId,
       jiraBaseUrl,
+      notifyPrefs,
       mode,
       repoRoot,
-      matrixOpts: opts.assessOpts?.matrixOpts ?? {},
+      // The parent/BOM must be judged against the SAME Java target as the app that routed us here —
+      // otherwise a Java 21 app run would raise a parent-pom PR built from Java 17 floors. An
+      // explicit matrixOpts.targetJava still wins, so callers can override deliberately.
+      matrixOpts: { targetJava: opts.assessOpts?.targetJava, ...(opts.assessOpts?.matrixOpts ?? {}) },
       deps: deps.parentPomDeps ?? {},
     });
     // Annotate the parent-pom result so the caller can see WHY it was routed here.
@@ -237,30 +247,39 @@ export async function runUpgrade(opts) {
   }
 
   // ── (2) acquire lock + persist PROCESSING job ──────────────────────────────────────────
+  // The lock is claimed per app+environment, so the SAME app can be upgraded in dev and test at once
+  // while a second dev run still CONFLICTs. Remember the exact key so the failure path below releases
+  // what this job claimed rather than guessing at the bare app name.
   let jobId;
+  let lockKey;
   try {
     const created = store.createJob({
       appName,
       environment,
       jiraTicketId,
+      notifyPrefs,
       approvedChangePlan: opts.approvedChangePlan ?? null,
       coords,
       changePlan,
     });
     jobId = created.jobId;
+    lockKey = created.record.lockKey;
   } catch (e) {
     if (e.code === "CONFLICT") {
       const held = store.getJob(e.existingJobId) ?? {};
+      const scope = environment ? `app "${appName}" in ${environment}` : `app "${appName}"`;
       return {
         status: "CONFLICT",
         code: "UPGRADE_IN_PROGRESS",
         appName,
+        environment,
         existingJobId: e.existingJobId,
         prUrl: held.prUrl ?? null,
         message:
-          `An upgrade for app "${appName}" is already in progress (jobId=${e.existingJobId}).` +
+          `An upgrade for ${scope} is already in progress (jobId=${e.existingJobId}).` +
           (held.prUrl ? ` PR: ${held.prUrl}.` : "") +
-          ` Wait for it to complete or fail before starting a new one.`,
+          ` Wait for it to complete or fail before starting a new one` +
+          (environment ? ` in ${environment} (other environments are unaffected).` : `.`),
       };
     }
     throw e;
@@ -268,13 +287,14 @@ export async function runUpgrade(opts) {
 
   // ── (3) the pipeline proper — any throw here maps to a FAILED_* terminal + lock release ──
   try {
-    // optional Jira auto-create (pf-jira-create-issue) — non-fatal. Guarded in its own try so a Jira
-    // outage (503/401/network) can NEVER abort the upgrade before a single edit is applied: the outer
-    // catch would otherwise map the throw to FAILED_COMMIT and release the lock for a job that hasn't
-    // even started committing. A failed auto-create just leaves jiraTicketId empty and continues.
-    if (!jiraTicketId) {
+    // optional Jira ticket creation (pf-jira-create-issue) — non-fatal, and only when the operator
+    // asked for it via notifyPrefs.jira="create". Guarded in its own try so a Jira outage
+    // (503/401/network) can NEVER abort the upgrade before a single edit is applied: the outer catch
+    // would otherwise map the throw to FAILED_COMMIT and release the lock for a job that hasn't even
+    // started committing. A failed create just leaves jiraTicketId empty and continues.
+    if (!jiraTicketId && notifyPrefs.jira === "create") {
       try {
-        const created = await notifiers.jiraCreateIssue({ appName, jobId });
+        const created = await notifiers.jiraCreateIssue({ appName, jobId }, { autoCreate: true });
         if (created.created && created.key) {
           jiraTicketId = created.key;
           store.patchJob(jobId, { jiraTicketId });
@@ -340,21 +360,33 @@ export async function runUpgrade(opts) {
     // (Slack webhook 500, Jira 401, network blip) must NOT fall through to the outer catch — doing so
     // would flip a genuinely-succeeded PR_OPEN job to FAILED_COMMIT, release the lock, and orphan the
     // live PR from reconcile (which only advances PR_OPEN). A notify failure is cosmetic; swallow it.
+    // Both channels are opt-in per run (notifyPrefs); an opted-out run announces nothing anywhere.
     try {
-      const slackText = prOpenedSlackText({
-        appName,
-        prUrl: pr.prUrl,
-        jobId,
-        jiraTicketId,
-        jiraBaseUrl,
-        warnings,
-      });
-      await notifiers.slackNotify(slackText);
-      await notifiers.jiraComment(
-        jiraTicketId,
-        `Java 17 upgrade PR opened for ${appName} — status PR_OPEN.`,
-        pr.prUrl
-      );
+      if (notifyPrefs.slack) {
+        await notifiers.slackNotify(
+          prOpenedSlackText({
+            appName,
+            prUrl: pr.prUrl,
+            jobId,
+            jiraTicketId,
+            jiraBaseUrl,
+            warnings,
+          })
+        );
+      }
+      if (notifyPrefs.jira !== "none" && jiraTicketId) {
+        await notifiers.jiraComment(
+          jiraTicketId,
+          `Java 17 upgrade PR opened for ${appName} — status PR_OPEN.`,
+          pr.prUrl
+        );
+      }
+      // Record that PR_OPEN was already announced so the reconcile-driven job notifier (which fires on
+      // every later transition, including ones surfaced during a status read) never re-alerts PR_OPEN.
+      // Skipped when nothing was sent, so opting in mid-run still gets the next transition.
+      if (notifyPrefs.slack || notifyPrefs.jira !== "none") {
+        store.patchJob(jobId, { notifiedStatus: "PR_OPEN" });
+      }
     } catch {
       /* non-fatal: the PR is open and the job is PR_OPEN; notification delivery is best-effort */
     }
@@ -380,18 +412,28 @@ export async function runUpgrade(opts) {
         ? "FAILED_ASSESS"
         : "FAILED_COMMIT";
     store.setStatus(jobId, failureStatus, { error: e.message });
-    // Only release the lock if THIS job still holds it — never stomp a lock another job re-acquired
-    // (e.g. after this one's was stolen as stale), matching deleteJob's ownership check (L3).
-    if (store.lockHolder(appName) === jobId) store.releaseLock(appName);
-    const failText = failureSlackText({
-      appName,
-      jobId,
-      status: failureStatus,
-      error: e.message,
-      jiraTicketId,
-      jiraBaseUrl,
-    });
-    await notifiers.slackNotify(failText);
+    // Release the EXACT key this job claimed (app::env, not the bare app name), and only if THIS job
+    // still holds it — never stomp a lock another job re-acquired (e.g. after this one's was stolen as
+    // stale), matching deleteJob's ownership check (L3).
+    if (lockKey && store.lockHolder(lockKey) === jobId) store.releaseLock(lockKey);
+    if (notifyPrefs.slack) {
+      await notifiers.slackNotify(
+        failureSlackText({
+          appName,
+          jobId,
+          status: failureStatus,
+          error: e.message,
+          jiraTicketId,
+          jiraBaseUrl,
+        })
+      );
+      // Mark this hard-failure as already announced so a later status read won't duplicate the alert.
+      try {
+        store.patchJob(jobId, { notifiedStatus: failureStatus });
+      } catch {
+        /* best-effort */
+      }
+    }
     return {
       status: failureStatus,
       jobId,

@@ -12,7 +12,7 @@
 import { runUpgrade } from "./orchestrate.js";
 import { runReconcile } from "../../mule-upgrade-job/scripts/reconcile.js";
 import { AnypointClient, makeDeployVerifier } from "./lib/anypoint.js";
-import { slackNotify } from "./lib/notify.js";
+import { makeJobNotifier } from "./lib/notify.js";
 import { resolveCoordinates } from "../../../lib_shared/coordinates.js";
 import { GitHubApi } from "../../mule-upgrade-pr/scripts/lib/gh_api.js";
 import { requireEnv } from "../../../lib_shared/config.js";
@@ -32,6 +32,21 @@ function parseArgs(argv) {
 function jsonArg(args, name, fallback) {
   if (args[name] != null && args[name] !== true) return JSON.parse(args[name]);
   return fallback;
+}
+
+/**
+ * notifyPrefsFromArgs(args): translate the opt-in CLI flags into a notifyPrefs object.
+ *   --slack                 → post Slack lifecycle alerts for this run
+ *   --jira-mode <mode>      → none (default) | comment (on --jira's ticket) | create (open one first)
+ * Omit both and the run is silent even with a webhook and Jira token configured — credentials are
+ * capability, not consent.
+ */
+function notifyPrefsFromArgs(args) {
+  const mode = args["jira-mode"];
+  if (mode != null && mode !== true && !["none", "comment", "create"].includes(mode)) {
+    fail(2, `--jira-mode must be one of none|comment|create (got "${mode}")`);
+  }
+  return { slack: Boolean(args.slack), jira: mode === true ? "none" : (mode ?? "none") };
 }
 function fail(code, msg) {
   process.stderr.write(msg + "\n");
@@ -77,6 +92,7 @@ async function main() {
         appName: args.app,
         environment,
         jiraTicketId: args.jira || null,
+        notifyPrefs: notifyPrefsFromArgs(args),
         mode: args.mode || "api",
         coords,
         repo: args.repo,
@@ -88,6 +104,10 @@ async function main() {
         assessOpts: {
           appPath: args["app-path"],
           noFetch: Boolean(args["no-fetch"]),
+          // Which Java are we upgrading TO? Selects the per-target compatibility matrix. Omitted
+          // means the default target, so this changed nothing for existing callers. An uncurated
+          // target throws rather than quietly planning against another Java's floors.
+          targetJava: args["target-java"],
           // EPIC B — connector version CHOICE (forwarded so the plan pins the chosen versions).
           versionStrategy: args["version-strategy"],
           connectorSelections,
@@ -120,13 +140,15 @@ async function main() {
     const staleSeconds = Number(args["stale-seconds"] ?? 0); // 0 → treat every job as pollable now
     const client = new AnypointClient();
     const verifyDeploy = makeDeployVerifier(client);
-    const notify = (ev) => slackNotify(`:gear: reconcile: ${ev}`);
+    // Per-JOB notifier rather than a blanket "reconcile ran" ping: each transition this sweep
+    // discovers alerts only if that job's own notifyPrefs asked for it, de-duped per status.
+    const notify = makeJobNotifier();
     const once = async () => {
       const res = await runReconcile({
         staleSeconds,
         nowMs: Date.parse(new Date().toISOString()),
         verifyDeploy: /** @type {(rec:any) => Promise<{status:string, detail?:any}>} */ (verifyDeploy),
-        notify: (ev) => void notify(ev),
+        notify,
       });
       process.stdout.write(JSON.stringify(res, null, 2) + "\n");
       return res;
@@ -157,6 +179,8 @@ async function main() {
       "         coords auto-resolve (registry→request→config→live branch) unless --coords given:\n" +
       "         [--owner o] [--repo-name r] [--app-path p] [--org-id id] [--branch b]\n" +
       "         [--repo <local-clone-path>] [--repo-root <path>] [--head-sha <sha>] [--jira <t>] [--jira-base-url <u>] [--no-fetch]\n" +
+      "         notifications are OPT-IN (silent by default, even with creds configured):\n" +
+      "         [--slack] post Slack lifecycle alerts · [--jira-mode none|comment|create] comment on --jira's ticket, or create one\n" +
       "         [--dry-run] preview the plan (no writes) · [--version-strategy min|first-compatible|in-major|latest|manual] [--connector-selections '{\"artifactId\":\"version\"}']\n" +
       "         [--parent-ref-artifact <a> --parent-ref-version <v> [--parent-ref-group <g>]] chained: fold the app's <parent> repoint into THIS first PR commit\n" +
       "  node upgrade.js poll [--stale-seconds N] [--watch --interval <sec>]"

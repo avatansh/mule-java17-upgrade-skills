@@ -1,13 +1,15 @@
 ---
 name: mule-upgrade-matrix-update
 description: >-
-  Turn check_drift advisories into a REVIEWED bump of the bundled Java-17 compatibility matrix.
-  Use this when the user says things like "update the compatibility matrix", "the matrix pins are
-  stale", "bump the matrix to the latest connector/gating versions", "adopt the drift advisories",
-  or "our compatibility-matrix.yaml is behind". It proposes the bumps for review by default and
-  writes them back to references/compatibility-matrix.yaml ONLY on an explicit apply. This is a
-  maintenance action on the RULES DATA — distinct from mule-upgrade (which upgrades an app) and
-  from check_drift (which only reports, never proposes an edit).
+  Turn check_drift advisories into a REVIEWED bump of the bundled compatibility matrices, and manage
+  the per-Java-target matrix files (list, diff, scaffold a new target). Use this when the user says
+  things like "update the compatibility matrix", "the matrix pins are stale", "bump the matrix to the
+  latest connector/gating versions", "adopt the drift advisories", "our compatibility-matrix.yaml is
+  behind", "what differs between Java 17 and 21", or "add a Java 25 target". It proposes bumps for
+  review by default and writes ONLY on an explicit apply, and with more than one Java target present
+  it ASKS which target(s) a change belongs in rather than guessing. This is a maintenance action on
+  the RULES DATA — distinct from mule-upgrade (which upgrades an app) and from check_drift (which
+  only reports, never proposes an edit).
 ---
 
 # mule-upgrade-matrix-update
@@ -49,16 +51,50 @@ node skills/mule-upgrade-matrix-update/scripts/matrix_update_cli.js --no-connect
 node skills/mule-upgrade-matrix-update/scripts/matrix_update_cli.js --json
 
 # Adopt the bumps (the ONLY thing that writes the matrix):
-node skills/mule-upgrade-matrix-update/scripts/matrix_update_cli.js --apply
+node skills/mule-upgrade-matrix-update/scripts/matrix_update_cli.js --apply --targets 17
+
+# Inspect the per-Java-target files:
+node skills/mule-upgrade-matrix-update/scripts/matrix_update_cli.js targets
+node skills/mule-upgrade-matrix-update/scripts/matrix_update_cli.js diff 17 21
+node skills/mule-upgrade-matrix-update/scripts/matrix_update_cli.js scaffold 25
 ```
 
-| Flag              | Effect                                                                  |
+| Flag / command    | Effect                                                                  |
 |-------------------|-------------------------------------------------------------------------|
 | *(none)*          | dry-run review — gather drift, print proposed bumps, write nothing      |
-| `--apply`         | write the proposed bumps to `references/compatibility-matrix.yaml`      |
+| `--apply`         | write the proposed bumps to the chosen target file(s)                   |
+| `--targets`       | which Java target(s) to touch: `17`, `17,21`, or `all`                  |
 | `--no-connectors` | gating pins only (skip connector latest-in-major bumps)                 |
 | `--no-fetch`      | skip all network → nothing to propose (drift unchecked)                 |
 | `--json`          | emit the raw report JSON instead of the human summary                   |
+| `targets`         | list every Java target and whether it is curated                        |
+| `diff <a> <b>`    | the version-level delta between two targets                             |
+| `scaffold <n>`    | create a new (uncurated) target from the default                        |
+
+## Which target file? (ALWAYS ask — never guess)
+
+There is **one matrix file per Java target** (`compatibility-matrix.yaml` is the default;
+`compatibility-matrix-java21.yaml` and friends sit alongside it). Java-neutral fields are therefore
+duplicated across files, and deciding where a change belongs is a judgement the **operator** makes.
+
+So when more than one target exists and `--targets` was not given, this skill **refuses and asks**:
+it returns `needsTargetChoice` with the available targets and writes nothing, even under `--apply`.
+
+Put the question to the user in those terms:
+
+> Which Java target should this land in — 17, 21, or both?
+
+| Change | Usually belongs in |
+|---|---|
+| A version bump (drift, a CVE forces a pin up) | the **specific** target — the safe version differs per Java |
+| A new connector, a renamed coordinate, a new scan pattern | **all** targets — coordinates are Java-neutral |
+
+If you get it wrong, `npm test` catches it: the parity test fails by name when the Java-neutral
+identity fields drift between target files. See `references/MATRIX.md` for the full model.
+
+**Uncurated targets absorb nothing.** A scaffolded target's versions are all `TODO`, so no bump's
+`from` guard can match and every proposal skips. That is by design, and the summary says so rather
+than printing a wall of identical skip lines.
 
 ## What it edits
 
@@ -69,18 +105,26 @@ node skills/mule-upgrade-matrix-update/scripts/matrix_update_cli.js --apply
 
 ## Output
 
-A report `{ path, driftChecked, proposals[], applied[], skipped[], changed, wrote, warnings[] }`:
+A report `{ path, driftChecked, proposals[], applied[], skipped[], changed, wrote, targets[], needsTargetChoice, availableTargets[], warnings[] }`:
 - `proposals` — every `{kind, id, label, from, to}` drift wants to bump.
 - `applied` — the ones whose YAML line matched, with the 1-indexed line numbers touched.
 - `skipped` — proposals whose line didn't match the expected `from` (already moved / not found).
 - `wrote` — true only when `--apply` was given AND something changed.
+- `targets[]` — per-target `{javaVersion, path, curated, applied, skipped, changed, wrote}`.
+- `needsTargetChoice` — true when the target question is unanswered; nothing was written.
+
+`path`/`applied`/`skipped` mirror the first target, so callers written before multi-target support
+keep working unchanged.
 
 ## Recommended workflow
 
 1. Run `check_drift` (or the assess skill's drift advisory) to see what's trailing.
 2. Run this skill **without** `--apply` to see the exact proposed matrix edits.
 3. Eyeball the `from → to` list; confirm the LTS-line / in-major constraints look right.
-4. Re-run with `--apply` to adopt, then run the test suite and commit the matrix change.
+4. Ask the user which target(s) the change belongs in (see above).
+5. Re-run with `--apply --targets <answer>` to adopt.
+6. Run `npm test` — the parity test is what catches a change that should have gone to every target
+   but only landed in one. Then commit.
 
 This is the human-in-the-loop adoption step. It does not open a PR or touch any application — it
 only maintains the rules data that every other skill reads.

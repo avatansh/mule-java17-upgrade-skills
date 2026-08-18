@@ -3,9 +3,11 @@
 // Two trusted signals feed the version CHOICE offered to the operator:
 //   1. Each connector's release-notes page carries a per-version Compatibility TABLE whose
 //      "OpenJDK" row states the supported JDKs ("8 and 11" -> "8, 11, and 17"). Parsing that cell
-//      is the ONLY machine-readable, MuleSoft-authored statement of Java-17 compatibility per
-//      version. parseOpenJdkTable() extracts { version, jdks:[8,11,17] } rows from that table, from
-//      which we derive firstJava17Version (the MINIMUM compatible version) and latest.
+//      is the ONLY machine-readable, MuleSoft-authored statement of per-version Java compatibility.
+//      parseOpenJdkTable() extracts { version, jdks:[8,11,17] } rows from that table, from which we
+//      derive firstCompatibleVersion(entries, targetJava) (the MINIMUM compatible version) and latest.
+//      The target Java major is a PARAMETER throughout (sourced from matrix.target.javaVersion), so
+//      retargeting 17 -> 21 is a matrix edit rather than a code edit.
 //   2. The Exchange Maven facade (exchange.listVersions) enumerates every PUBLISHED version, so we
 //      can offer "latest-in-major" (highest patch within the matrix pin's major, never crossing a
 //      breaking major) and "latest overall".
@@ -16,6 +18,7 @@
 // caller injects HTML + version lists (fetched via matrix_fetch/exchange, both non-fatal).
 
 import { lt } from "../../../../lib_shared/semver.js";
+import { javaMajor } from "../../../../lib_shared/java_version.js";
 
 /** majorOf("10.19.2") -> 10 ; tolerant of qualifiers/short forms. Returns null when unparseable. */
 export function majorOf(v) {
@@ -123,11 +126,31 @@ export function muleRuntimeFor(entries, version) {
   return hit?.muleRuntime ?? null;
 }
 
-/** firstJava17Version(entries): the LOWEST version whose OpenJDK cell includes 17, else null. */
-export function firstJava17Version(entries) {
-  const compatible = (entries ?? []).filter((e) => Array.isArray(e.jdks) && e.jdks.includes(17));
+/**
+ * firstCompatibleVersion(entries, targetJava): the LOWEST connector version whose OpenJDK cell lists
+ * `targetJava`, else null. This is the "minimum upgrade" option in the version menu.
+ *
+ * Parameterised on the target rather than hardcoded to 17 so retargeting the engine (17 → 21 → …) is a
+ * matrix change, not a code change. parseJdkCell already tokenises 8/11/17/21, so the release-notes
+ * side needed nothing.
+ * @param {Array<{version:string, jdks:number[]}>} entries
+ * @param {string|number} [targetJava]
+ * @returns {string|null}
+ */
+export function firstCompatibleVersion(entries, targetJava = 17) {
+  const want = javaMajor(targetJava);
+  if (want == null) return null;
+  const compatible = (entries ?? []).filter((e) => Array.isArray(e.jdks) && e.jdks.includes(want));
   if (!compatible.length) return null;
   return compatible.reduce((lo, e) => (lt(e.version, lo) ? e.version : lo), compatible[0].version);
+}
+
+/**
+ * Back-compat alias fixed to Java 17. Prefer firstCompatibleVersion(entries, matrix.target.javaVersion).
+ * @param {Array<{version:string, jdks:number[]}>} entries
+ */
+export function firstJava17Version(entries) {
+  return firstCompatibleVersion(entries, 17);
 }
 
 /** highestVersion(versions): the numerically highest semver in the list, or null. */
@@ -156,8 +179,8 @@ export function latestInMajor(versions, major) {
  *
  * Returns { artifactId, groupId, current, matrixSet, firstCompatible, latest, latestInMajor,
  *           recommended, options[], staleness }:
- *   - matrixSet       - the curated, Java-17-safe pin (authoritative floor)
- *   - firstCompatible - lowest version the OpenJDK table marks Java-17-compatible (min upgrade)
+ *   - matrixSet       - the curated, target-Java-safe pin (authoritative floor)
+ *   - firstCompatible - lowest version the OpenJDK table marks target-Java-compatible (min upgrade)
  *   - latest          - highest published version overall (may be a breaking major -> advisory only)
  *   - latestInMajor   - highest published version within the matrix pin's major (safe patch bump)
  *   - recommended     - default pick = matrixSet (curated floor); NEVER auto-jumps to latest
@@ -171,6 +194,7 @@ export function latestInMajor(versions, major) {
  * @param {string} o.matrixSet                 the bundled matrix `set` pin (required)
  * @param {string[]} [o.liveVersions]          published versions from exchange.listVersions
  * @param {Array<{version,jdks:number[]}>} [o.jdkEntries]  parsed OpenJDK-table rows
+ * @param {string|number} [o.targetJava]     target Java major (from matrix.target.javaVersion; default 17)
  */
 export function buildConnectorChoice({
   artifactId,
@@ -179,9 +203,11 @@ export function buildConnectorChoice({
   matrixSet,
   liveVersions = [],
   jdkEntries = [],
+  targetJava = 17,
 }) {
   const major = majorOf(matrixSet);
-  const firstCompatible = firstJava17Version(jdkEntries);
+  const java = javaMajor(targetJava) ?? 17;
+  const firstCompatible = firstCompatibleVersion(jdkEntries, java);
   const latest = highestVersion(liveVersions);
   const inMajor = major == null ? null : latestInMajor(liveVersions, major);
   // B6: the Mule-runtime requirement the release-notes table states for the key versions. jdkEntries
@@ -193,12 +219,12 @@ export function buildConnectorChoice({
 
   // Options menu (deduped by version, matrixSet first = the recommended default).
   const rawOptions = [
-    { strategy: "min", version: matrixSet, label: "Curated Java-17-safe pin (recommended)" },
+    { strategy: "min", version: matrixSet, label: `Curated Java-${java}-safe pin (recommended)` },
     firstCompatible
       ? {
           strategy: "first-compatible",
           version: firstCompatible,
-          label: "First version marked Java-17-compatible (minimum upgrade)",
+          label: `First version marked Java-${java}-compatible (minimum upgrade)`,
         }
       : null,
     // Never OFFER a live-derived option that sits BELOW the curated floor (a partial/stale Exchange

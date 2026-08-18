@@ -146,6 +146,9 @@ export async function resolveVersions(opts = {}) {
         matrixSet: c.set,
         liveVersions,
         jdkEntries,
+        // The target Java major comes from the matrix, so a retarget (17 → 21) changes which release-
+        // notes row counts as "first compatible" without touching this code.
+        targetJava: matrix?.target?.javaVersion ?? 17,
       });
     })
   );

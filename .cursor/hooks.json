@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "node .cursor/hooks/refresh-jobs.mjs --event sessionStart",
+        "timeout": 15
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "node .cursor/hooks/refresh-jobs.mjs --event beforeSubmitPrompt",
+        "timeout": 10
+      }
+    ]
+  }
+}

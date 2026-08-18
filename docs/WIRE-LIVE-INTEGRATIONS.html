@@ -69,7 +69,7 @@ accounts:</p>
   <tbody>
     <tr><td>Anypoint</td><td><code>anypoint.defaultOrgId</code>, <code>anypoint.verify.enabled</code>, <code>assess.armCrossCheck</code>, <code>assess.apiPolicyCheck</code></td><td>your org UUID; verify + cross-checks <strong>on</strong></td></tr>
     <tr><td>GitHub</td><td><code>github.defaultOwner</code></td><td><code>avatansh</code></td></tr>
-    <tr><td>Jira</td><td><code>jira.baseUrl</code>, <code>jira.host</code>, <code>jira.projectKey</code>, <code>jira.autoCreate</code></td><td><code>avatansh-sharma.atlassian.net</code>, <code>J1U</code>, autoCreate <strong>on</strong></td></tr>
+    <tr><td>Jira</td><td><code>jira.baseUrl</code>, <code>jira.host</code>, <code>jira.projectKey</code>, <code>jira.autoCreate</code></td><td><code>avatansh-sharma.atlassian.net</code>, <code>J1U</code>, autoCreate <strong>off</strong> (tickets are a per-run opt-in)</td></tr>
     <tr><td>Slack</td><td><code>slack.channel</code></td><td><code>#java17-upgrades</code></td></tr>
   </tbody>
 </table>
@@ -209,10 +209,21 @@ dev, so <code>assess</code> reads Runtime Manager + API Manager too.</p>
 <pre><code>node skills/mule-upgrade-scan/scripts/scan_notify.js --dry-run   # compute, do NOT send
 node skills/mule-upgrade-scan/scripts/scan_notify.js            # send to #java17-upgrades</code></pre>
 
-<h3>2.5 Jira — auto-create / comment (autoCreate is ON in dev)</h3>
-<p>Jira fires as part of the orchestrator: on a real <code>upgrade … start</code>, with
-<code>jira.autoCreate=true</code> and creds resolved, a ticket is created in project <strong>J1U</strong>
-and a PR-opened comment is posted. Missing creds → "no Jira creds" skip.</p>
+<h3>2.5 Jira + Slack — opt in, once</h3>
+<p>Both are <strong>silent by default</strong>. A configured webhook and Jira token only make delivery
+<em>possible</em>; someone still has to ask, so a plain <code>upgrade … start</code> posts nothing. (In Vibes
+the conductor asks once, as the second intake question, and reuses your answer for the whole session.)</p>
+<pre><code># comment on an existing ticket, and alert Slack
+node skills/mule-upgrade/scripts/upgrade.js start --app orders-api --env dev --mode api \
+  --owner acme --repo-name orders-api --jira J1U-12 --jira-mode comment --slack
+
+# let the suite file the ticket first (needs jira.projectKey), then comment on it
+node skills/mule-upgrade/scripts/upgrade.js start --app orders-api --env dev --mode api \
+  --owner acme --repo-name orders-api --jira-mode create</code></pre>
+<p>With <code>--jira-mode create</code> a ticket appears in project <strong>J1U</strong> and a PR-opened
+comment follows; missing creds → a clean "no Jira creds" skip. The choice is stored on the job, so later
+transitions (merge → deploy) alert too. Set <code>jira.autoCreate: "true"</code> only for an unattended
+pipeline that should always file a ticket.</p>
 <blockquote>
 <p><strong>State lives</strong> under <code>~/.mule-upgrade/</code> (override with
 <code>MULE_UPGRADE_HOME</code>). Inspect any run with <code>cat ~/.mule-upgrade/jobs/*.json</code>.
@@ -377,7 +388,8 @@ integrations and leaves a clean job store.</p>
     <tr><td>GitHub <code>401/403</code></td><td><code>github.token</code> rotated or lacks <code>repo</code> scope. Set a fresh plaintext <code>GITHUB_TOKEN</code>, or <code>gh auth login</code> for local mode.</td></tr>
     <tr><td>Anypoint rows all <code>unverified</code></td><td>Anypoint creds/org not resolving, or the Connected App lacks Runtime/API Manager scope.</td></tr>
     <tr><td>Slack "no SLACK_WEBHOOK_URL"</td><td>Webhook not resolving — check the key decrypts, or set <code>SLACK_WEBHOOK_URL</code> plaintext.</td></tr>
-    <tr><td>Jira "no Jira creds" / no ticket</td><td><code>jira.email</code>/<code>jira.apiToken</code> not resolving, or <code>jira.autoCreate</code> off.</td></tr>
+    <tr><td>Jira "no Jira creds" / no ticket</td><td><code>jira.email</code>/<code>jira.apiToken</code> not resolving, or the run didn't opt in (<code>--jira-mode create</code>).</td></tr>
+    <tr><td>No Slack message despite a working webhook</td><td>The run didn't pass <code>--slack</code>. Notifications are opt-in per run by design.</td></tr>
     <tr><td>Skills don't appear in Vibes</td><td>Confirm <code>.a4drules/skills/&lt;skill&gt;/SKILL.md</code> and reload ACB; symlink (don't copy).</td></tr>
     <tr><td>MCP server 401</td><td>Service URL must end in <code>/mcp</code> and the bearer header must equal <code>MCP_BEARER_TOKEN</code>.</td></tr>
   </tbody>

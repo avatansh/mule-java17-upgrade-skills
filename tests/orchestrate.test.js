@@ -104,8 +104,9 @@ test("orchestrate-happy-path-drives-to-PR_OPEN", async () => {
   assert.equal(job.commitSha, "c1");
   // branch index recorded for reconcile correlation
   assert.equal(store.jobIdForBranch("migrate/app-h-4.9.18-java17"), res.jobId);
-  // lock still held while PR is open
-  assert.equal(store.lockHolder("app-happy"), res.jobId);
+  // lock still held while PR is open — keyed per app + environment
+  assert.equal(job.lockKey, "app-happy::dev");
+  assert.equal(store.lockHolder("app-happy::dev"), res.jobId);
 });
 
 test("orchestrate-dryRun-returns-PLAN_PREVIEW-and-writes-nothing", async () => {
@@ -208,6 +209,160 @@ test("orchestrate-second-run-same-app-returns-CONFLICT", async () => {
   assert.equal(second.status, "CONFLICT");
   assert.equal(second.existingJobId, first.jobId);
   assert.equal(second.prUrl, "u");
+  assert.equal(second.environment, "dev");
+  assert.match(second.message, /in dev/, "the conflict must name the environment it is scoped to");
+});
+
+test("orchestrate-same-app-in-another-environment-runs-concurrently", async () => {
+  // The single-flight lock is per app+env, so a dev upgrade being in flight must not block test.
+  const deps = {
+    ...notifyStubs,
+    assess: assessOk({ changePlan: CHANGE_PLAN, warnings: [] }),
+    applyChangePlan: () => [{ path: "pom.xml", content: "<project/>" }],
+    commitApi: async () => ({ branchName: "b", commitSha: "c", prNumber: 1, prUrl: "u" }),
+  };
+  const coords = { owner: "o", repo: "r", defaultBranch: "main" };
+
+  const dev = await runUpgrade({ appName: "app-envs", environment: "dev", coords, headSha: "HEAD1", deps });
+  const test_ = await runUpgrade({ appName: "app-envs", environment: "test", coords, headSha: "HEAD1", deps });
+
+  assert.equal(dev.status, "PR_OPEN");
+  assert.equal(test_.status, "PR_OPEN", "a sibling environment must not CONFLICT");
+  assert.notEqual(dev.jobId, test_.jobId);
+  assert.equal(store.lockHolder("app-envs::dev"), dev.jobId);
+  assert.equal(store.lockHolder("app-envs::test"), test_.jobId);
+});
+
+// ── notification opt-in ──────────────────────────────────────────────────────────────────────────
+// Configured Slack/Jira credentials are capability, not consent: nothing is sent and no ticket is
+// created unless THIS run asked for it. The choice is persisted so later sweeps honor it too.
+function notifySpy() {
+  const calls = { slack: [], jiraComment: [], jiraCreate: [] };
+  return {
+    calls,
+    deps: {
+      slackNotify: async (text) => {
+        calls.slack.push(text);
+        return { sent: true };
+      },
+      jiraComment: async (ticket, text, url) => {
+        calls.jiraComment.push({ ticket, text, url });
+        return { sent: true };
+      },
+      jiraCreateIssue: async (_args, opts) => {
+        calls.jiraCreate.push(opts ?? {});
+        return { created: true, key: "NEW-1" };
+      },
+    },
+  };
+}
+
+const PR_DEPS = {
+  assess: assessOk({ changePlan: CHANGE_PLAN, warnings: [] }),
+  applyChangePlan: () => [{ path: "pom.xml", content: "<project/>" }],
+  commitApi: async () => ({ branchName: "b", commitSha: "c", prNumber: 1, prUrl: "https://x/pull/1" }),
+};
+
+test("orchestrate-without-notifyPrefs-sends-nothing-and-creates-no-ticket", async () => {
+  const spy = notifySpy();
+  const res = await runUpgrade({
+    appName: "app-silent",
+    environment: "dev",
+    coords: { owner: "o", repo: "r", defaultBranch: "main" },
+    headSha: "HEAD1",
+    deps: { ...spy.deps, ...PR_DEPS },
+  });
+  assert.equal(res.status, "PR_OPEN");
+  assert.deepEqual(spy.calls.slack, []);
+  assert.deepEqual(spy.calls.jiraComment, []);
+  assert.deepEqual(spy.calls.jiraCreate, [], "no ticket may be created without an explicit opt-in");
+  const job = store.getJob(res.jobId);
+  assert.deepEqual(job.notifyPrefs, { slack: false, jira: "none" });
+  assert.equal(job.notifiedStatus, undefined, "nothing announced → dedupe slot stays free");
+});
+
+test("orchestrate-opting-in-sends-Slack-and-comments-on-the-supplied-ticket", async () => {
+  const spy = notifySpy();
+  const res = await runUpgrade({
+    appName: "app-loud",
+    environment: "dev",
+    jiraTicketId: "J-1",
+    notifyPrefs: { slack: true, jira: "comment" },
+    coords: { owner: "o", repo: "r", defaultBranch: "main" },
+    headSha: "HEAD1",
+    deps: { ...spy.deps, ...PR_DEPS },
+  });
+  assert.equal(res.status, "PR_OPEN");
+  assert.equal(spy.calls.slack.length, 1);
+  assert.match(spy.calls.slack[0], /app-loud/);
+  assert.equal(spy.calls.jiraComment.length, 1);
+  assert.equal(spy.calls.jiraComment[0].ticket, "J-1");
+  assert.deepEqual(spy.calls.jiraCreate, [], "\"comment\" must never create a ticket");
+  const job = store.getJob(res.jobId);
+  assert.deepEqual(job.notifyPrefs, { slack: true, jira: "comment" });
+  assert.equal(job.notifiedStatus, "PR_OPEN", "PR_OPEN announced here, so a later sweep won't repeat it");
+});
+
+test("orchestrate-jira-create-opt-in-creates-a-ticket-and-records-it", async () => {
+  const spy = notifySpy();
+  const res = await runUpgrade({
+    appName: "app-newticket",
+    environment: "dev",
+    notifyPrefs: { jira: "create" },
+    coords: { owner: "o", repo: "r", defaultBranch: "main" },
+    headSha: "HEAD1",
+    deps: { ...spy.deps, ...PR_DEPS },
+  });
+  assert.equal(res.status, "PR_OPEN");
+  assert.equal(res.jiraTicketId, "NEW-1");
+  assert.equal(spy.calls.jiraCreate.length, 1);
+  assert.equal(
+    spy.calls.jiraCreate[0].autoCreate,
+    true,
+    "the run's own consent overrides the ambient jira.autoCreate=false default"
+  );
+  assert.equal(store.getJob(res.jobId).jiraTicketId, "NEW-1");
+  assert.deepEqual(spy.calls.slack, [], "Jira opt-in alone must not enable Slack");
+});
+
+test("orchestrate-jira-create-does-nothing-when-a-ticket-was-already-supplied", async () => {
+  // The intake question is an either/or ("give me a ticket" OR "create one"). If both somehow arrive —
+  // e.g. a session opted into auto-create and the user later pasted a key — the supplied ticket wins and
+  // no duplicate is filed.
+  const spy = notifySpy();
+  const res = await runUpgrade({
+    appName: "app-bothjira",
+    environment: "dev",
+    jiraTicketId: "MINE-7",
+    notifyPrefs: { jira: "create" },
+    coords: { owner: "o", repo: "r", defaultBranch: "main" },
+    headSha: "HEAD1",
+    deps: { ...spy.deps, ...PR_DEPS },
+  });
+  assert.equal(res.jiraTicketId, "MINE-7");
+  assert.deepEqual(spy.calls.jiraCreate, [], "an existing ticket must suppress creation");
+  assert.equal(spy.calls.jiraComment.length, 1);
+  assert.equal(spy.calls.jiraComment[0].ticket, "MINE-7");
+});
+
+test("orchestrate-failure-alert-is-also-opt-in", async () => {
+  const spy = notifySpy();
+  const res = await runUpgrade({
+    appName: "app-failquiet",
+    environment: "dev",
+    coords: { owner: "o", repo: "r", defaultBranch: "main" },
+    headSha: "HEAD1",
+    deps: {
+      ...spy.deps,
+      assess: assessOk({ changePlan: CHANGE_PLAN, warnings: [] }),
+      applyChangePlan: () => {
+        throw new Error("boom");
+      },
+    },
+  });
+  assert.equal(res.status, "FAILED_COMMIT");
+  assert.deepEqual(spy.calls.slack, [], "a failure on an opted-out run stays silent");
+  assert.equal(store.lockHolder("app-failquiet::dev"), null, "lock still released");
 });
 
 test("orchestrate-commit-throws-goes-FAILED_COMMIT-and-releases-lock", async () => {
@@ -227,7 +382,8 @@ test("orchestrate-commit-throws-goes-FAILED_COMMIT-and-releases-lock", async () 
   });
   assert.equal(res.status, "FAILED_COMMIT");
   assert.equal(store.getJob(res.jobId).status, "FAILED_COMMIT");
-  assert.equal(store.lockHolder("app-fail"), null); // lock released on failure
+  // the env-scoped key this job claimed is the one that gets released
+  assert.equal(store.lockHolder("app-fail::dev"), null);
 });
 
 test("orchestrate-stale-plan-maps-to-FAILED_ASSESS", async () => {
@@ -248,7 +404,7 @@ test("orchestrate-stale-plan-maps-to-FAILED_ASSESS", async () => {
     },
   });
   assert.equal(res.status, "FAILED_ASSESS");
-  assert.equal(store.lockHolder("app-stale"), null);
+  assert.equal(store.lockHolder("app-stale::dev"), null);
 });
 
 // ── Tier 2c: topology routing (app-pom vs parent-pom vs none) ───────────────────────────────────

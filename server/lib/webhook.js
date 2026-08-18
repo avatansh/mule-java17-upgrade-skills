@@ -19,6 +19,7 @@ import { ingestCiResult } from "../../skills/mule-upgrade-job/scripts/ci_ingest.
 import * as store from "../../skills/mule-upgrade-job/scripts/jobstore.js";
 import { verifyWebhook } from "./auth.js";
 import { AnypointClient, makeDeployVerifier } from "../../skills/mule-upgrade/scripts/lib/anypoint.js";
+import { makeJobNotifier } from "../../skills/mule-upgrade/scripts/lib/notify.js";
 
 /** Stable idempotency key for a delivery: explicit delivery header, else sha256 of the raw body. */
 function deliveryKey(headers, rawBody) {
@@ -98,9 +99,14 @@ export async function handleWebhook({ path, headers = {}, rawBody = "", deps = {
   // Platform confirmation for stage=deploy success: use the injected verifier if provided, else
   // build the default Anypoint one (null when unconfigured → trust CI). ci_ingest awaits it.
   const verifyDeploy = "verifyDeploy" in deps ? deps.verifyDeploy : defaultVerifyDeploy();
+  // Fire Slack + Jira on each state change this callback drives (parked/resumed, deployed, deploy
+  // failed). De-duped per status so a resent delivery / no-op sub-stage never double-alerts. Tests can
+  // inject deps.notify (including a no-op) to suppress it.
+  const notify = "notify" in deps ? deps.notify : makeJobNotifier({ getJob: jobStore.getJob, patchJob: jobStore.patchJob });
   const { statusCode, response } = await ingest(body, {
     store: jobStore,
     verifyDeploy,
+    notify,
   });
   return { statusCode, body: response };
 }

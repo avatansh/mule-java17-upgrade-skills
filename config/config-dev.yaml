@@ -38,7 +38,11 @@ jira:
   # Non-secret Jira Cloud site coordinates. email + apiToken are encrypted in config-secure-dev.yaml.
   baseUrl: "https://avatansh-sharma.atlassian.net"   # Atlassian Cloud site (project key: J1U)
   host: "avatansh-sharma.atlassian.net"
-  autoCreate: "true"                                 # auto-create a migration ticket when none is supplied
+  # Ambient consent for ticket creation. FALSE: creating a Jira ticket is a choice the operator makes
+  # (notifyPrefs.jira = "create" / --jira-mode create) — the conductor asks once at the start of a
+  # session — never a side effect of having credentials configured.
+  # Only set "true" for an unattended pipeline that should always file a ticket.
+  autoCreate: "false"
   projectKey: "J1U"                                  # Jira project the auto-created ticket lands in
 
 matrix:

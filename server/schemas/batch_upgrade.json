@@ -1,0 +1,91 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "batch_upgrade",
+  "title": "batch_upgrade",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["environment"],
+  "properties": {
+    "apps": {
+      "type": "array",
+      "description": "The apps to upgrade. Each entry needs appName; owner/repo/appPath/branch are optional overrides (coordinates otherwise resolve through the registry -> convention waterfall). Duplicates are skipped. Omit when using fromScan.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["appName"],
+        "properties": {
+          "appName": { "type": "string" },
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "appPath": { "type": "string", "description": "Path to the app module inside the repo (monorepo)." },
+          "branch": { "type": "string" },
+          "deployedApiName": { "type": "string", "description": "Exact Runtime Manager name for the live deployed-state check." }
+        }
+      }
+    },
+    "fromScan": {
+      "type": "boolean",
+      "description": "Instead of `apps`, take the fleet-scan candidate list. Candidates the scan could not map to a GitHub repo are reported SKIPPED, never guessed at."
+    },
+    "environment": {
+      "type": "string",
+      "description": "ONE Anypoint environment for the whole batch. Concurrency is across apps, not environments."
+    },
+    "environments": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Environments to scan when fromScan is true (defaults to [environment])."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["local", "api"],
+      "description": "Repo access mode for every app in the batch (default api)."
+    },
+    "confirm": {
+      "type": "boolean",
+      "description": "REQUIRED to write anything. Without it the batch previews every app and returns PLAN_PREVIEW — a 20-app run can never open 20 PRs by accident. Ask the user explicitly before setting true."
+    },
+    "concurrency": {
+      "type": "number",
+      "description": "Apps in flight at once (default config batch.concurrency, 3). Each app is I/O-bound on GitHub + Exchange; raising this trades rate-limit risk for wall time."
+    },
+    "stopOnFailure": {
+      "type": "boolean",
+      "description": "Do not start further apps once one fails (default false — a batch normally reports every app's outcome)."
+    },
+    "includeParentPomRouted": {
+      "type": "boolean",
+      "description": "Execute apps whose connector gaps are managed in a shared parent/BOM pom (default false). Leave false when several apps share ONE pom: they must be fixed by upgrading that pom once via a chained flow, not by N parallel edits that would contend on the same parent-pom lock."
+    },
+    "versionStrategy": {
+      "type": "string",
+      "enum": ["min", "first-compatible", "latest-in-major", "latest", "manual"],
+      "description": "Connector version strategy applied to every app (default min = the curated matrix pins)."
+    },
+    "connectorSelections": {
+      "type": "object",
+      "description": "For versionStrategy \"manual\": { \"<artifactId>\": \"<version>\" }. Applied to every app in the batch.",
+      "additionalProperties": { "type": "string" }
+    },
+    "jiraTicketId": {
+      "type": "string",
+      "description": "One Jira ticket for the whole batch (used when notifyPrefs.jira is \"comment\")."
+    },
+    "notifyPrefs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Opt-in Slack/Jira preferences applied to EVERY app in the batch. Omitted → silent: configured credentials are capability, not consent.",
+      "properties": {
+        "slack": {
+          "type": "boolean",
+          "description": "Post Slack lifecycle alerts for each app's job (default false)."
+        },
+        "jira": {
+          "type": "string",
+          "enum": ["none", "comment", "create"],
+          "description": "none (default) = never touch Jira; comment = comment on jiraTicketId; create = open a ticket per app, then comment on it."
+        }
+      }
+    }
+  }
+}

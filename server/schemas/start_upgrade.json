@@ -16,7 +16,23 @@
     },
     "jiraTicketId": {
       "type": "string",
-      "description": "Optional Jira ticket ID to link this migration to."
+      "description": "Optional Jira ticket ID to link this migration to. Linking alone is silent — set notifyPrefs.jira to \"comment\" to have lifecycle updates posted onto it."
+    },
+    "notifyPrefs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-run notification opt-in. OMITTED = SILENT: no Slack message, no Jira ticket, no Jira comment — a configured webhook/token is capability, not consent. Persisted on the job so every later lifecycle transition (merge, deploy, park, close) discovered by reconcile or a status refresh honors the same choice. Ask the operator before setting these.",
+      "properties": {
+        "slack": {
+          "type": "boolean",
+          "description": "true = post Slack alerts for this job's lifecycle transitions (PR opened, merged, deployed, failed). Default false."
+        },
+        "jira": {
+          "type": "string",
+          "enum": ["none", "comment", "create"],
+          "description": "\"none\" (default) = never touch Jira; \"comment\" = post lifecycle updates onto the supplied jiraTicketId (never creates one); \"create\" = open a new migration ticket when no jiraTicketId was supplied, then comment on it."
+        }
+      }
     },
     "approvedChangePlan": {
       "type": "object",

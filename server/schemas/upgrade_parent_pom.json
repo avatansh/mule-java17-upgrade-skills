@@ -31,7 +31,23 @@
     },
     "jiraTicketId": {
       "type": "string",
-      "description": "Optional Jira ticket ID."
+      "description": "Optional Jira ticket ID. Linking alone is silent — set notifyPrefs.jira to \"comment\" to have lifecycle updates posted onto it."
+    },
+    "notifyPrefs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-run notification opt-in. OMITTED = SILENT: no Slack message, no Jira ticket, no Jira comment — a configured webhook/token is capability, not consent. Persisted on the job so every later lifecycle transition honors the same choice. Ask the operator before setting these.",
+      "properties": {
+        "slack": {
+          "type": "boolean",
+          "description": "true = post Slack alerts for this job's lifecycle transitions. Default false."
+        },
+        "jira": {
+          "type": "string",
+          "enum": ["none", "comment", "create"],
+          "description": "\"none\" (default) = never touch Jira; \"comment\" = post lifecycle updates onto the supplied jiraTicketId; \"create\" = open a new ticket when none was supplied, then comment on it."
+        }
+      }
     },
     "mode": {
       "type": "string",

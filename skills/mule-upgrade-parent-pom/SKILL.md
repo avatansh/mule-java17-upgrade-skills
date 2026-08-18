@@ -104,6 +104,10 @@ FAILED_ASSESS (VALIDATION / STALE_PLAN / 404) | FAILED_COMMIT (else) + release l
 - **Failure taxonomy + lock release:** a commit failure drives the job to `FAILED_COMMIT` (or
   `FAILED_ASSESS` for validation/404), stamps `completedAt`, and **releases the lock** so a retry can
   proceed — the same terminal-state contract as the app orchestrator.
+- **Notifications are opt-in per run:** nothing is posted and no ticket is created unless you pass
+  `--slack` and/or `--jira-mode comment|create` (MCP: `notifyPrefs`) — a configured Slack webhook or
+  Jira token is capability, not consent. The choice is persisted on the job, so the `PR_OPEN`
+  announcement and every later transition found by `reconcile` honor the same answer.
 - The job is inspectable / manageable with the `mule-upgrade-job` tools (`get_job_status`, `delete_job`,
   `reapply_job`) and the branch is indexed for the reconcile/poll tail.
 

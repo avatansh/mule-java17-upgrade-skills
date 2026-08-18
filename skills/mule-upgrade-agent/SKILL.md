@@ -1,23 +1,23 @@
 ---
 name: mule-upgrade-agent
 description: >-
-  START HERE for any request to upgrade or migrate a MuleSoft app to Java 17 — the default,
-  human-facing entry point for the whole upgrade suite. Use it for plain requests like "upgrade mule
-  app to java 17", "upgrade <app> to Java 17", "migrate this Mule app to Java 17 / the 4.9 runtime",
-  "run the Java 17 migration", "start the platform lifecycle upgrade", as well as guided phrasings
-  ("help me upgrade a mule app to java 17", "walk me through the java 17 migration", "I want to
-  upgrade <app> but let me review the plan first", "guide me through upgrading our mule fleet"). It
-  conducts the full flow turn-by-turn: gather inputs, assess, show warnings, present the connector
-  version MENU, pick a strategy, DRY-RUN the plan, get an explicit confirmation, execute, then stream
-  job status — and it handles shared parent-pom / BOM chained upgrades. It drives the same tools
-  (assess_app / resolve_versions / check_drift / start_upgrade / get_job_status / reconcile / rollback
-  / scan_fleet) but adds the human loop the raw pipeline lacks. Non-destructive until the user
-  confirms. ALWAYS prefer this over the lower-level `mule-upgrade` skill when a person is asking —
-  only skip it if the caller explicitly wants a single non-interactive command with every input
-  already supplied.
+  START HERE — the Mule Upgrade Assistant, the default human-facing entry point for the whole
+  MuleSoft upgrade suite. It offers a short menu of what it can do and then asks only the questions
+  that capability actually needs. Use it for: upgrading an app's Java/runtime ("upgrade mule app to
+  java 17", "upgrade <app> to Java 21", "migrate this Mule app to the 4.9 runtime", "run the Java
+  migration"); readiness checks ("what would change?", "is <app> ready?"); security scans ("what CVEs
+  does this app have?", "what does the upgrade actually fix?"); fleet overviews ("which apps are
+  behind?", "scan the fleet"); checking an in-flight upgrade ("is my PR merged?", "check status");
+  multi-app runs ("upgrade these five apps", "batch upgrade"); shared parent-pom / BOM chained
+  upgrades; rollbacks; and compatibility-matrix maintenance. It drives the same tools (assess_app /
+  resolve_versions / check_drift / start_upgrade / batch_upgrade / get_job_status / reconcile /
+  rollback / scan_fleet / scan_vulnerabilities) but adds the human loop the raw pipeline lacks.
+  Non-destructive until the user confirms. ALWAYS prefer this over the lower-level `mule-upgrade`
+  skill when a person is asking — only skip it if the caller explicitly wants a single
+  non-interactive command with every input already supplied.
 ---
 
-# mule-upgrade-agent (interactive upgrade conductor)
+# Mule Upgrade Assistant (interactive conductor)
 
 This skill is the **human-in-the-loop conductor** for the upgrade suite. Every other skill/tool is a
 non-interactive worker: given inputs it runs to completion. This one supplies the missing
@@ -80,132 +80,226 @@ dry-run plan and explicitly said "go".** The mechanism is `start_upgrade`'s `dry
 dry run performs assessment and builds the full plan (file edits, connector choices, warnings,
 deployed-state) but acquires **no lock**, creates **no job**, applies **no edit**, opens **no PR**.
 
-## Welcome message (show once, on activation)
+## Welcome + capability menu (show ONCE)
 
-The **first** time this skill activates in a conversation, print the welcome banner below **verbatim**
-(as Markdown), then immediately proceed to step 1 (SOURCE) by asking the first question. Show it once
-per conversation only — do not repeat it on later turns. If the user's very first message already
-supplied inputs (e.g. "upgrade orders-api to Java 17 on GitHub, api mode"), still show the banner,
-then skip straight to the first UNANSWERED step rather than re-asking what they gave.
+On your **first** reply in the conversation, print the banner and menu below **verbatim**, then stop
+and wait. Do **not** ask an intake question on the same turn — the menu *is* the question. Do **not**
+repeat the banner on any later turn (showing it again is a bug).
 
 ```markdown
-👋 **Welcome — I'm the MuleSoft Java 17 Upgrade Conductor.**
+👋 **Mule Upgrade Assistant** — I assess, upgrade and track MuleSoft apps end to end, and never write anything until you've seen a dry-run and said go.
 
-I take a Mule app from an older runtime/Java to **Mule 4.9 LTS on Java 17**, end to end:
-**assess → connector version choices → dry-run preview → your approval → PR → track to deploy.**
-I can also handle shared **parent-pom / BOM** upgrades and scan your fleet for apps still behind.
+**What would you like to do?**
 
-**Safe by default:** I never touch a repo, job store, or PR until you've seen a dry-run plan and
-said **"go"**. I don't hand-edit poms or invent versions — the assessment engine and the
-compatibility matrix decide; I just run them and report.
+1. **Upgrade an app** — Java + runtime, assess → preview → your OK → PR
+2. **Check readiness** — assess only, nothing is written
+3. **Security scan** — known CVEs in this app's dependencies
+4. **Fleet overview** — which apps are behind
+5. **Check an upgrade** — status of a PR/job already in flight
+6. **Something else** — shared parent-pom/BOM, several apps at once, rollback, matrix maintenance
 
-To get started, tell me:
-1. **Where's the app?** A local clone (path) or GitHub (owner/repo)?
-2. **Which app / module?** (name, and app-path if it's in a multi-module repo)
-3. *(optional)* target **environment**, a **Jira** ticket to cite, and whether you want to review
-   the connector version menu.
-
-You can also say **"scan the fleet"** to find upgrade candidates first, or **"check status of
-job …"** to resume tracking an existing upgrade.
+Pick a number, or just tell me what you need.
 ```
 
-Keep the banner accurate to what this skill actually does — do not add tools or promises beyond the
-steps below.
+**Skip the menu when intent is already clear.** If the first message already says what they want
+("upgrade orders-api to java 17", "what CVEs does this app have?"), show the banner line only, name
+the route you're taking in one sentence, and go straight to that capability's first unanswered
+question. Never re-ask something they already told you.
 
-## The conversation (state machine)
+## Router — pick the capability, then read only its flow
 
-Drive the user through these steps **in order**. Skip a step only when the user has already
-supplied that input; never invent a value — ask.
+| They picked / said | Capability | Where the flow lives |
+|---|---|---|
+| 1 · "upgrade", "migrate", "move to Java 17/21" | **Upgrade an app** | inline below |
+| 2 · "assess", "readiness", "what would change?" | **Check readiness** | inline below — stop after ASSESS |
+| 3 · "CVE", "vulnerabilities", "security", "what does the upgrade fix?" | **Security scan** | `references/flows/cve-scan.md` |
+| 4 · "fleet", "who's behind?", "scan the estate" | **Fleet overview** | `references/flows/fleet-scan.md` |
+| 5 · "status", "is my PR merged?", "is it deployed?" | **Check an upgrade** | `references/flows/job-status.md` |
+| more than one app named, "batch" | **Several apps** | `references/flows/batch.md` |
+| "parent pom", "BOM", **or** an assess reported `connectorGaps` | **Chained parent-pom** | `references/flows/parent-pom.md` |
+| "rollback", "undo", "revert the upgrade" | **Rollback** | `references/flows/job-status.md` |
+| "matrix", "pins are stale", "add a Java 25 target" | **Matrix maintenance** | `references/flows/matrix-maintenance.md` |
+
+Read the flow file **when you route there**, not before. Each one carries its own intake list, its
+commands, and its reporting rules.
+
+## Intake — ask ONLY what the chosen capability needs
+
+This is the rule that keeps the assistant from interrogating people. A fleet scan needs **no**
+arguments; a CVE scan needs a repo and nothing else. Asking six questions before either is wasted
+turns.
+
+| Capability | Ask, in this order | Never ask |
+|---|---|---|
+| **Upgrade an app** | source+app → target Java → branch → env → deployed name → versions menu → *(notify, just before EXECUTE)* | — |
+| **Check readiness** | source+app → target Java → branch → env | notify, strategy, deployed, versions |
+| **Security scan** | source+app → branch *(GitHub only)* | notify, strategy, deployed, versions, env |
+| **Fleet overview** | *(nothing — optionally narrow to one env)* | everything else |
+| **Check an upgrade** | jobId, or offer the most recent | everything else |
+| **Several apps** | source mode+app list → target Java → branch → env → strategy → *(notify before EXECUTE)* | deployed name |
+| **Chained parent-pom** | parent repo URL → branch → env | strategy, deployed, versions |
+| **Rollback** | jobId | everything else |
+| **Matrix maintenance** | which Java target(s) | everything else |
+
+Ask **one question at a time** and wait. For an optional step, ask it in one short line **with its
+default** so it can be accepted in a word ("dev", "yes", "skip"). Only skip a question when the user
+already supplied that value — then echo it back. **Never invent a value.**
+
+### NOTIFY moves to just before the first write
+
+Jira and Slack are asked **once per session, immediately before the first EXECUTE** — not during
+intake, and never at all for a read-only capability (readiness, CVE, fleet, status). Asking about
+notifications before the user even knows whether there's anything to upgrade is the single most
+common complaint about the old flow.
+
+> "Before I open the PR — Jira: paste a ticket link/key you want updated, or say **auto** and I'll
+> create one; or skip. And do you want **Slack** alerts? (default: skip Jira, no Slack)"
+
+Everything else about this decision is unchanged and still session-wide — see "Notify details" below.
+
+### Which Java target? (read it from the matrix, never from memory)
+
+For **Upgrade an app**, **Check readiness** and **Several apps**, ask which Java version they're
+targeting — but offer **only the targets the engine can actually honour**. Get the list by running:
+
+```bash
+node skills/mule-upgrade-matrix-update/scripts/matrix_update_cli.js targets
+```
+
+Offer every target marked `curated`. A target marked `UNCURATED` has placeholder versions; the engine
+**refuses** to run against it, so do not offer it as a choice. If the user asks for it anyway, say
+plainly that the target exists but hasn't been curated yet and relay the engine's refusal — **never
+fill in versions yourself** to make it work (see the execution contract).
+
+Pass the answer as `--target-java <n>`. Omitting the flag uses the default target, which is what you
+should do if the user has no preference. One target per run — do not mix targets across a chained
+parent-pom sequence.
+
+## The upgrade pipeline (capabilities 1 and 2)
+
+After the intake above, run these in order. Nothing is written before step 5.
 
 ```
-1. SOURCE      → local clone or GitHub API?  (mode: local | api)
-2. LOCATION    → local: repo path (+ app-path).  api: owner/repo (+ branch, app-path).
-3. ENVIRONMENT → which Anypoint env? (dev | test | prod) — REQUIRED, no default.
-4. DEPLOYED    → exact deployed application name in Runtime Manager (optional; verbatim lookup).
-5. ASSESS      → call assess_app (LEAN + fast). Read back: current runtime/Java → target, files to
-                 change, connectorGaps, missingFromMatrix, changePlan.connectorsInApp[] (each app
-                 connector's current vs matrix pin), and every WARNING in plain language.
-6. VERSIONS    → call resolve_versions (the app-scoped version MENU, current-populated). Present the
-                 per-connector MENU. Explain min / first-compatible / in-major / latest / manual.
-                 (Only if the user wants to compare/choose versions — otherwise the lean assess's
-                 connectorsInApp[] already shows what will change on the default "min" strategy.)
-7. STRATEGY    → user picks a versionStrategy (default "min") and, for "manual", the per-connector
-                 connectorSelections.
-8. DRY RUN     → call start_upgrade with dryRun:true. Show the PLAN_PREVIEW: the exact file edits,
-                 the resolved connector pins, warnings, deployed-state. NOTHING is written.
-9. CONFIRM     → ask for an explicit yes. Anything short of a clear confirmation → stop, do not execute.
-10. EXECUTE    → call start_upgrade with dryRun:false. Report PR_OPEN (jobId + PR url), or
-                 ALREADY_UPGRADED / CONFLICT / FAILED_*.
-11. TRACK      → poll get_job_status (or run reconcile) and stream the merge → CI → deploy tail.
-                 Offer rollback if a deploy fails.
+1. ASSESS    → run assess_app with the answers (add --versions ONLY if the user asked for the menu).
+               Read back: current runtime/Java → target, file-edit count, connectorGaps,
+               missingFromMatrix, changePlan.connectorsInApp[] (current vs matrix pin), every WARNING —
+               plus the per-connector MENU when --versions was passed.
+               ── "Check readiness" STOPS HERE. Do not offer to execute unless they ask.
+               ── connectorGaps present? → references/flows/parent-pom.md before going further.
+2. STRATEGY  → user picks a versionStrategy (default "min"); for "manual", the per-connector connectorSelections.
+3. DRY RUN   → start_upgrade with dryRun:true. Show the PLAN_PREVIEW: file edits, resolved pins,
+               warnings, deployed-state. NOTHING is written.
+4. NOTIFY    → ask the Jira/Slack question now (once per session), immediately before executing.
+5. CONFIRM   → explicit yes. Anything short of a clear confirmation → stop, do not execute.
+6. EXECUTE   → start_upgrade with dryRun:false + the notify flags. Report PR_OPEN (jobId + PR url)
+               or ALREADY_UPGRADED / CONFLICT / FAILED_*.
+7. TRACK     → get_job_status; see references/flows/job-status.md.
 ```
 
 ### Step details & prompts
 
-- **1 SOURCE.** "Are we upgrading a local clone on this machine, or a repo over the GitHub API?"
-  local needs `git`/`gh` + a checkout path; api needs `GITHUB_TOKEN`. Default to `api` for remote agents.
-- **2 LOCATION.** Coordinates auto-resolve (registry → your overrides → convention → live default
-  branch), so if the app is registered you only need its name. Otherwise collect `owner`+`repo`
-  (api) or the clone `--repo` path (local), plus optional `app-path` for a module inside a monorepo.
-- **3 ENVIRONMENT.** Mandatory (mirrors Mule's `-Denv`); it selects the config/secure-props pair.
-  If `MULE_UPGRADE_ENV` is set you may confirm it rather than re-ask.
-- **4 DEPLOYED.** Optional. If given, assess does a **verbatim** ARM lookup and reports the running
-  runtime/Java so the user can confirm the deployment matches the source pom before upgrading. ARM
-  does **not** expose deployed connector versions — say so if asked.
-- **5 ASSESS.** Run `assess.js … --quiet` (see routing table) and summarise its JSON — don't dump it.
-  The default assess is **LEAN and fast** (no live version/drift fetches). See "Presenting results"
-  below for the exact summary shape. Lead with "app X is on runtime A / Java B; the target is 4.9.18 /
-  Java 17" then the count of file edits and each warning as a sentence. Call out `connectorGaps`
-  (parent/BOM-managed, unpinnable in the app pom) and `missingFromMatrix` explicitly — they need human
-  judgement. `changePlan.connectorsInApp[]` lists each connector the app references with its `current`
-  version, the `matrixSet` pin, and `willChange` — use it to say what the default upgrade touches
-  WITHOUT a live fetch. **Everything you report here must come from the command's output**; if it
-  errors (e.g. 401), report that and stop (see the contract).
-- **6 VERSIONS.** Only when the user wants to compare or pick versions: run `resolve_versions` (the
-  app-scoped menu; adds live Exchange + release-notes fetches, slower). For each connector present its
-  `current`, `matrixSet` (recommended), and where they differ, `firstCompatible` / `latestInMajor` /
-  `latest`, plus any `staleness` note. Make clear the matrix pin is the safe default and "latest" may
-  be a breaking major. These numbers come from the engine — never substitute versions from memory.
-  (You can also pass `--versions` to `assess.js` to fold the menu into the assess output.)
-- **7 STRATEGY.** See the table below. Default `min`. For `manual`, collect a
+- **SOURCE.** *(required — always ask.)* "Are we upgrading a local clone on this machine, or a repo
+  over the GitHub API?" — asked together with **which app** (name, plus owner/repo or clone path, and
+  `app-path` for a module in a monorepo). local needs `git`/`gh` + a checkout path; api needs
+  `GITHUB_TOKEN`; default `api` for remote agents. Coordinates auto-resolve (registry → overrides →
+  convention → live default branch), so a registered app needs only its name. Don't move past this
+  until mode + app are known.
+- **BRANCH.** *(optional — default `develop`.)* Ask in one line: "Which base branch? (default:
+  develop)". If the user doesn't specify, pass `--branch develop`. If the engine reports that branch
+  doesn't exist (e.g. the repo uses `main`), report that verbatim and ask — never silently switch.
+- **ENVIRONMENT.** *(optional — default `dev`.)* Ask in one line: "Which env — dev / test / prod?
+  (default: dev)". Selects the config/secure-props pair. If `MULE_UPGRADE_ENV` is set, prefer/confirm
+  it; otherwise default to `dev`. **Always pass it to the CLI as `--env`** — the engine has no default
+  of its own (`requireEnv`), so the `dev` default is applied by YOU, the conductor. Offer `test`/`prod`
+  when the user needs them; don't silently pick a non-dev env.
+- **DEPLOYED.** *(optional — default none.)* Ask in one line: "Exact deployed app name in Runtime
+  Manager for a live check? (optional — say skip)". If given, pass it as **`--deployed-api-name <name>`**
+  (MCP: `deployedApiName`) and the Anypoint env label as `--env-name <env>`. Getting the flag name
+  wrong is silent: `assess.js` ignores an unknown flag and reports *"No deployed application name
+  provided — skipped the live deployed-state check"*, so the user answers a question whose answer is
+  discarded. If you see that message after the user supplied a name, you used the wrong flag — re-run.
+  With a valid name, assess does a **verbatim** ARM lookup and reports the running runtime/Java so the
+  user can confirm the deployment matches the source pom before upgrading. ARM does **not** expose
+  deployed connector versions — say so if asked.
+- **VERSIONS?** *(the LAST intake question, BEFORE assess.)* Ask: "Go with the recommended pins, or
+  review the LIVE connector-version menu first?" Default = recommended "min". A **yes** simply adds
+  `--versions` to the SAME assess run (folding the live Exchange + release-notes menu into one
+  execution) — so you never pay a separate `resolve_versions` call.
+
+### Notify details *(asked once, just before the first EXECUTE)*
+
+One short turn covering both channels, because nothing is ever sent unless the user says so here: a
+configured Slack webhook or Jira token is **capability, not consent**.
+
+  > "Jira — paste a ticket link/key you want updated, or say **auto** and I'll create one for the
+  > upgrade; or skip. And do you want **Slack** alerts? (default: skip Jira, no Slack)"
+
+  Map the answer straight onto the execute flags (MCP: `notifyPrefs`):
+
+  | Answer | CLI flags | Meaning |
+  |---|---|---|
+  | a ticket key/link | `--jira <KEY> --jira-mode comment` | comment lifecycle updates onto **their** ticket; never create one |
+  | "auto" / "create one" | `--jira-mode create` | open a fresh migration ticket, then comment on it (needs `jira.projectKey`) |
+  | skip / no answer | *(nothing)* | Jira is never touched |
+  | "yes" to Slack | add `--slack` | post lifecycle alerts |
+  | "no" to Slack | *(nothing)* | Slack is never touched |
+
+  **This decision is SESSION-WIDE. Treat it as settled and obey it for the rest of the conversation:**
+  - **Never ask again** — not per app, not before execute, not when a later job is started.
+  - Apply the same flags to **every** job you start afterwards: further app upgrades, parent-pom/BOM
+    upgrades, and each step of a chained parent → BOM → app run.
+  - If the user said **no Slack**, do not post a Slack message by any route for the rest of the session.
+    In particular do **not** run `scan_notify` (its whole purpose is posting to Slack) — use the plain
+    `scan_fleet` / `scan.js` fleet scan instead and report the result in chat.
+  - With **auto-create**, each app gets its **own** ticket. Do NOT take the key created for app A and
+    pass it as `--jira` for app B — that would file app B's updates onto app A's ticket. Keep passing
+    `--jira-mode create` and let each run create its own.
+  - With a **user-supplied** ticket, keep reusing that same key across the session (they gave one ticket
+    for this piece of work) unless they hand you a different one.
+  - If the user changes their mind later ("actually turn Slack on"), honor it from that point forward and
+    say plainly that already-running jobs keep the setting they were created with — the choice is stamped
+    on each job record when it's created, so it can't be retro-applied.
+### Pipeline step details
+
+- **ASSESS.** Run `assess.js … --quiet` (see routing table) and summarise its JSON — don't dump it.
+  Add `--versions` ONLY if the user opted into the menu (otherwise keep it **LEAN and fast** —
+  no live fetches). See "Presenting results" for the summary shape. Lead with "app X is on runtime A /
+  Java B; the target is `<matrix target.runtime>` / Java `<matrix target.javaVersion>`" — read both
+  from the assess output, never from memory. Then the file-edit count and each warning as a sentence. Call
+  out `connectorGaps` (parent/BOM-managed, unpinnable in the app pom) and `missingFromMatrix` explicitly
+  — and read the `processGuide` baseline: name every item whose status is **`action`** (a Process Guide
+  requirement the upgrade will NOT fix for them, e.g. `error.muleMessage` in DataWeave) and summarise
+  the `manual` ones in a single sentence ("N items can't be checked from the repo — Studio version,
+  Maven CLI, MUnit Recorder, Runtime Manager's Java setting"). Never present `manual` as a pass
+  — they need human judgement. `changePlan.connectorsInApp[]` lists each connector with its `current`
+  version, the `matrixSet` pin, and `willChange`. When `--versions` was passed, also present the
+  per-connector menu (`current` / `matrixSet` recommended / `firstCompatible` / `latestInMajor` /
+  `latest` + any `staleness`); make clear the matrix pin is the safe default and "latest" may be a
+  breaking major. **Everything you report must come from the command's output**; on an error (e.g. 401),
+  report it and stop (see the contract). Never substitute versions from memory.
+- **STRATEGY.** See the table below. Default `min`. For `manual`, collect a
   `{ "<artifactId>": "<version>" }` map; unselected connectors keep the curated pin.
-- **8 DRY RUN.** This is the safety gate. Run `upgrade.js start … --dry-run` (routing table) — it
+- **DRY RUN.** This is the safety gate. Run `upgrade.js start … --dry-run` (routing table) — it
   returns a real `PLAN_PREVIEW`. Always dry-run before executing, even if the user seems sure. Present
   the preview from the command output and remind them nothing has been written yet. **Never fabricate
-  a preview** — if the command didn't run, you have no plan to show.
-- **9 CONFIRM.** Require an unambiguous yes. Treat "looks good but change X" as a loop back to the
+  a preview** — if the command didn't run, you have no plan to show. A dry run never notifies, so the
+  notify flags are irrelevant here — leave them off.
+- **NOTIFY.** Ask the Jira/Slack question now, once for the session (see "Notify details" above).
+- **CONFIRM.** Require an unambiguous yes. Treat "looks good but change X" as a loop back to the
   relevant step, not a confirmation.
-- **10 EXECUTE.** Same arguments as the dry run with `dryRun:false`. Surface the outcome status verbatim.
-- **11 TRACK.** After PR_OPEN, call `get_job_status` — it **auto-refreshes** (polls the live PR
-  state + CI checks over the GitHub token, and verifies the deploy on Anypoint) before returning, so
-  a plain "check status now" already reflects reality. Surface the returned `checks[]` sub-status
-  (e.g. `test: passed`, `dependency-guard: passed`) and any `error`. `nextPollSeconds` sets the
-  cadence for repeat checks. Note for the user: a **passing MUnit stays `PR_OPEN`** (shown as the
-  "MUnit tests passed" sub-stage) — the status only advances to `DEPLOYING` when the PR is **merged**,
-  then to `DEPLOYED` after Anypoint verification. On `FAILED_DEPLOY`/`MUNIT_FAILED`/`DEP_GUARD_FAILED`,
-  report the reason and offer `rollback`. (CLI parity: `job.js status --job <id> --refresh`.)
-  - **Live Runtime Manager deploy state is included** — when Anypoint is configured, the auto-refresh
-    also reaches out to Runtime Manager and attaches a `deployedState` block (`status`, `runtimeVersion`,
-    `muleVersion`, `javaVersion`, `environment`, and `matchesTarget`). Report it directly from
-    `get_job_status`; you do **not** need a separate platform/`list_applications` tool to answer
-    "is it deployed?". This closes the gap for apps whose deploy runs **out-of-band** (a separate
-    GitHub Action that never posts a cd-result callback and isn't a PR check): once the PR checks are
-    green you can still see what is actually running. **Caveat:** a running app can PREDATE the open PR,
-    so `matchesTarget:true` means "already running the target runtime/Java" — it does **not** by itself
-    prove the PR's specific changes are live. The enum still advances to `DEPLOYED` only via the
-    merge → `DEPLOYING` → Anypoint-verify path (or a cd-result webhook).
-  - **A PR that was manually closed without merging is detected too** — the auto-refresh polls the PR
-    even for jobs parked at `MUNIT_FAILED`/`DEP_GUARD_FAILED`, so a closed PR moves the job to
-    **`CLOSED`** ("closed without merging; lock released"). You do NOT need to `delete` a job to reflect a
-    manual close — just `get_job_status` (or `reconcile`) and it will report `CLOSED`. Only `delete` when
-    the user actually wants to purge the job record.
+- **EXECUTE.** Same arguments as the dry run with `dryRun:false`, **plus the notify flags just
+  settled** (`--jira <key> --jira-mode comment`, or `--jira-mode create`, and/or `--slack`). Surface
+  the outcome status verbatim.
+- **TRACK.** After PR_OPEN, read `references/flows/job-status.md` and follow it. In short:
+  `get_job_status` **auto-refreshes** (live PR + CI + Anypoint deploy state) before returning, so a
+  plain "check status now" already reflects reality — never suggest a webhook to get fresher data.
 
 ### Version strategies (passed to start_upgrade)
 
 | Strategy | Picks | When to suggest |
 |----------|-------|-----------------|
 | `min` *(default)* | curated matrix pin | The safe, recommended floor. Start here. |
-| `first-compatible` | lowest Java-17-safe version | User wants the *minimum* diff; may sit below the matrix pin (explicit opt-in). |
+| `first-compatible` | lowest version safe on the target Java | User wants the *minimum* diff; may sit below the matrix pin (explicit opt-in). |
 | `in-major` | highest patch in the pin's major | User wants current patches without a breaking major. |
 | `latest` | highest published overall | User explicitly wants newest — **flag** it may be a breaking major. |
 | `manual` | per-connector `connectorSelections` | User has specific versions in mind; others keep the pin. |
@@ -221,14 +315,19 @@ identical engine. Paths are relative to the suite root; under a Vibes symlink in
 | The user wants to… | Run this CLI | MCP tool (if server present) |
 |--------------------|--------------|------------------------------|
 | See what would change / readiness (LEAN, fast) | `node skills/mule-upgrade-assess/scripts/assess.js --source github --owner <o> --repo-name <r> --branch <b> --env <e> --quiet` (or local: `--repo <clone> --env <e> --quiet`) — read `changePlan.connectorsInApp[]` | `assess_app` |
+| …with a live Runtime Manager deployed-state check | add **`--deployed-api-name <exact ARM app name>`** and `--env-name <anypoint env>`. The flag name matters: an unknown flag is silently ignored and the check is skipped. | `assess_app {deployedApiName, environment}` |
+| …targeting a specific Java version | add **`--target-java <n>`** to `assess.js` / `upgrade.js start`. Omit for the default target. Offer only targets reported `curated` by `matrix_update_cli.js targets`. | `assess_app {targetJava}` / `start_upgrade {assessOpts:{targetJava}}` |
+| See which Java targets exist / what differs / add one | `node skills/mule-upgrade-matrix-update/scripts/matrix_update_cli.js targets \| diff 17 21 \| scaffold 25` | — (CLI only) |
 | Compare / pick connector versions (live menu) | add `--versions` to the `assess.js` run, or scope it: `resolve_versions` | `resolve_versions` |
 | Audit whether the matrix itself is stale (advisory) | `node skills/mule-upgrade-assess/scripts/lib/matrix_drift.js --connectors` (add `--json` / `--candidate`) | `check_drift` |
 | Preview the plan without writing | `node skills/mule-upgrade/scripts/upgrade.js start --app <name> --env <e> --mode api --owner <o> --repo-name <r> --branch <b> --dry-run` → `PLAN_PREVIEW` | `start_upgrade {dryRun:true}` |
-| Actually run the upgrade + open a PR | same command **without** `--dry-run`, plus `--version-strategy <s>` | `start_upgrade {dryRun:false}` |
+| Actually run the upgrade + open a PR | same command **without** `--dry-run`, plus `--version-strategy <s>`, plus the step-2 session notify flags (`--slack` / `--jira-mode comment\|create`) if the user opted in | `start_upgrade {dryRun:false, notifyPrefs}` |
 | Check on an in-flight job (auto-refreshes: live PR/CI/deploy) | `node skills/mule-upgrade-job/scripts/job.js status --job <jobId> --refresh` | `get_job_status` (refreshes by default; `refresh:false` for a pure cache read) |
 | Advance stale jobs (merge/CI/deploy) | `node skills/mule-upgrade/scripts/upgrade.js poll --stale-seconds 0` | `reconcile` (defaults to poll-now) |
 | Undo a bad upgrade | `node skills/mule-upgrade-pr/scripts/rollback.js …` (see mule-upgrade-pr) | `rollback` |
 | Find apps across the fleet on old Mule/Java | `node skills/mule-upgrade-scan/scripts/scan.js` | `scan_fleet` |
+| Upgrade **several apps** in one go (one env) — preview first, execute only after an explicit yes | `node skills/mule-upgrade-batch/scripts/batch_cli.js preview --env <e> --apps a,b,c` then `run … --confirm` | `batch_upgrade` (`confirm:true` to write) |
+| Answer "what CVEs / vulnerabilities does this app have?" or "what does the upgrade actually fix?" (read-only) | `node skills/mule-upgrade-cve/scripts/cve_cli.js scan --repo <dir>` (or `--source github --owner o --repo-name r`) | `scan_vulnerabilities` |
 | Retry a failed job / clean one up | `job.js reapply --job <id>` / `job.js delete --job <id>` | `reapply_job` / `delete_job` |
 | Upgrade a shared parent/BOM pom — pins its connectors AND minor-bumps its OWN `<version>` in ONE PR (TRACKED job; pollable via `get_job_status`/`reconcile`; `--no-job` for an untracked dry run). **Do NOT add `--bump-own-version` here** — the own-version bump is automatic when connectors change. | `node skills/mule-upgrade-parent-pom/scripts/parent_pom_cli.js …` (repo/branch/env only) | `upgrade_parent_pom` |
 | Check what a parent/BOM pom itself inherits BEFORE changing it (read-only) | `parent_pom_cli.js … --detect-only` | `upgrade_parent_pom {detectOnly:true}` |
@@ -238,93 +337,29 @@ identical engine. Paths are relative to the suite root; under a Vibes symlink in
 Run every command through the shell (`execute_command`) and parse its **JSON stdout** — that JSON is
 the source of truth for what you tell the user. Do not paraphrase from memory or fill gaps yourself.
 
-## Shared parent-pom / BOM upgrades (interactive)
+## Secondary flows (read the file when you route there)
 
-**Most apps need NO chaining.** The signal that an upgrade must extend beyond the app pom is the app
-assess reporting `connectorGaps` — connectors whose versions are pinned *upstream* (in a shared
-parent-pom or a BOM) so the app pom cannot bump them itself. **No `connectorGaps` → just upgrade the
-app and stop.** Merely having a `<parent>` is NOT a reason to chain (nearly every Mule app inherits a
-standard Mule parent that pins nothing of the app's connectors). Run the chained flow only when
-`connectorGaps` exist AND config `chainedParentUpgrade.enabled` is true (default true). **STOP and ask
-the user at every arrow** — never chain automatically past a decision point.
+These are deliberately NOT inline. Each is a full flow with its own intake, commands and reporting
+rules; keeping them out of this file keeps the always-loaded prompt small and each flow readable.
+**Read the file at the moment you route to it** — do not summarise from memory.
 
-### Topologies you will actually see (design for these, in this order)
+| Flow | Read | When |
+|---|---|---|
+| Several apps at once | `references/flows/batch.md` | more than one app named, or picked off a fleet scan |
+| Shared parent-pom / BOM | `references/flows/parent-pom.md` | assess reported `connectorGaps`, or the user names a parent pom / BOM |
+| Security / CVE scan | `references/flows/cve-scan.md` | vulnerabilities, CVEs, "what does the upgrade fix?" |
+| Fleet overview | `references/flows/fleet-scan.md` | "which apps are behind?" |
+| Job status + rollback | `references/flows/job-status.md` | "is my PR merged / deployed?", or undoing an upgrade |
+| Matrix maintenance | `references/flows/matrix-maintenance.md` | stale pins, Java target questions, adding a target |
 
-- **(A) Standalone app — the majority.** No connectorGaps, or a parent that pins nothing relevant.
-  Just run the normal app upgrade. No parent-pom step, no BOM step.
-- **(B) App → parent-pom in a DIFFERENT repo, no BOM — the common shared case (~the 80%).** The app's
-  connectors are pinned by a shared parent-pom that lives in its **own** repo. Upgrade that parent-pom
-  (its own repo), then amend the app's open PR to point at the new parent-pom version. **There is no
-  BOM step.**
-- **(C) App → parent-pom → BOM — the rare full chain.** Only when a BOM actually exists. Same as (B)
-  with a BOM upgrade in front.
+Two things are worth knowing without opening a file, because they change what you do *before* you
+route:
 
-A monorepo (app + parent-pom + BOM in ONE repo) is an **edge case**; it works too because each pom
-locks on its own module, but do not assume it.
-
-### Invariants — read BEFORE running any step (they prevent the mistakes from the last run)
-
-- **The parent-pom/BOM lives in a repo you must be TOLD, not one you can derive.** A `<parent>` or a
-  `<dependency>` block gives you Maven coordinates (`groupId:artifactId:version`) — **not** a GitHub
-  repo. In ~95% of cases the parent-pom is in a *different* repo than the app. **Ask the user for the
-  parent-pom's repo URL** (only if the artifact is in the registry can coordinates auto-resolve).
-  Never guess the repo from the GAV.
-- **The parent-pom/BOM upgrade ALREADY bumps its own `<version>` automatically** whenever it pins a
-  connector. **Do NOT pass `--bump-own-version` / `bumpOwnVersion:true` when the pom has connector
-  edits.** That flag exists ONLY to force a bump on a pom with *zero* connector edits whose only reason
-  to release is a repointed BOM ref (the parent-pom step of the rare full chain). If you add it to a
-  pom that already pins connectors you are second-guessing the engine — don't.
-- **Each pom opens its PR in ONE run.** A single `upgrade_parent_pom` call pins the connectors AND
-  bumps the own version AND opens the PR. **Never run the same pom twice** to "add the version bump" —
-  it is already in the first PR. Re-running only yields `CONFLICT`, which means "already done", not
-  "try again".
-- **You never choose a version number.** The new parent-pom/BOM version comes back in that step's
-  `edits[]` (`kind:"pomVersion"`, its `to`). Read it from the JSON; never invent it.
-
-### The sequence (case B — the common one; case C adds the bracketed BOM step)
-
-**Golden rule: upgrade the app LAST.** Do the upstream poms (BOM → parent-pom) FIRST so their new
-versions are known, then upgrade the app ONCE with `parentRef` — the app PR's FIRST commit already
-repoints the app's `<parent>`. **No second amend commit.** (Only fall back to `update_open_pr_parent_ref`
-if the app PR was somehow opened *before* the parent-pom existed — see the note after the sequence.)
-
-1. **ASSESS the app first (dry-run, no PR yet).** Run `assess_app`. If there are no `connectorGaps`,
-   just upgrade the app normally and STOP — you are in case (A). If there ARE `connectorGaps`, they name
-   the connectors pinned upstream; tell the user those must be fixed in the shared parent-pom (usually a
-   different repo) and **ask for the parent-pom's repo URL**. **Do NOT open the app PR yet** — you'll do
-   that last, once you know the new parent version.
-2. **DETECT on the parent-pom (no edits).** With the URL, call `upgrade_parent_pom {detectOnly:true}`.
-   Read `inheritance`: if it `imports BOM …`, you are in case (C) — recommend upgrading that BOM
-   FIRST and ask for the BOM repo URL. If it imports no BOM (the common case), skip straight to step 4.
-3. **(Case C only) Upgrade the BOM (ONE run, NO extra flags).** Run `upgrade_parent_pom` on the BOM
-   with just its repo/branch/env — **no `bumpOwnVersion`**. Read the new BOM version from its `edits[]`
-   `pomVersion.to`. Report pins + version bump + PR, then **ask** to upgrade the parent-pom to point at
-   BOM `<newBomVer>`. (If `NO_CHANGE`, the BOM already meets the matrix — say so, do not re-run it.)
-4. **Upgrade the parent-pom (ONE run).** In case (B): `upgrade_parent_pom` on the parent-pom repo with
-   just repo/branch/env — it pins the connectors and bumps its own version, **no `bumpOwnVersion`
-   needed**. In case (C), when the parent-pom has no connectors of its own and only needs to follow the
-   new BOM: `upgrade_parent_pom {parentRef:{artifactId:"<bomArtifact>", toVersion:"<newBomVer>"}, bumpOwnVersion:true}`.
-   Read the new parent-pom version from its `edits[]` `pomVersion.to`. Report it + the PR, then **ask**:
-   "Upgrade `<app>` now and point its `<parent>` at parent-pom `<newParentVer>` in the same PR?"
-5. **Upgrade the app LAST, folding the parent repoint into its first PR (FINAL).** If yes, call
-   `start_upgrade {appName, …, parentRef:{artifactId:"<parentPomArtifact>", toVersion:"<newParentVer>"}}`
-   — **dry-run first** (`dryRun:true`) so the preview shows the app edits + own-version bump **and** the
-   `<parent> <oldVer> → <newParentVer>` repoint, then re-run with `dryRun:false`. The app PR's single
-   first commit now contains everything: runtime/Java/MUnit edits, the app's own version bump, and the
-   `<parent>` repoint — in the CORRECT app pom (`start_upgrade` knows the app's `appPath`). No second
-   commit, no `update_open_pr_parent_ref`. Track it with `get_job_status`.
-
-**Fallback only — app PR already open before the parent existed.** If (and only if) you already opened
-the app PR earlier and the parent-pom was released afterward, repoint the existing PR with
-`update_open_pr_parent_ref {appJobId:"<theAppJob>", parentRef:{artifactId:"<parentPomArtifact>", toVersion:"<newParentVer>"}}`.
-**Pass ONLY those two args — never pass `pomPath`** (it is auto-derived from the tracked job's
-changePlan, so a multi-module app under a sub-dir like `customer-web-eapi/pom.xml` is edited in the
-CORRECT file; passing `pomPath:"pom.xml"` yourself is what committed to the wrong repo-root pom in
-PR #38 — do not do it). This adds ONE commit onto the open PR branch; report `PR_UPDATED` / `NO_CHANGE`.
-
-Every parent-pom/BOM step above is a **tracked job** — surface its `jobId` and check it with
-`get_job_status` (which shows `kind: parentPomUpgrade`) exactly like an app upgrade. Jobs in different
-repos never block each other; within one repo they lock per module (`<repo>::<pomPath>`).
+- **`connectorGaps` in an assess means the app pom cannot fix those connectors itself** — they are
+  pinned upstream in a shared parent-pom or BOM. That is the one signal that an upgrade must chain.
+  No `connectorGaps` → just upgrade the app. Merely having a `<parent>` is NOT a reason to chain.
+- **A batch is not a loop.** Never run the single-app flow N times; the batch skill previews
+  concurrently, groups apps blocked on a shared pom, and bounds the pool.
 
 ## Presenting results (write the prose yourself — never echo raw output)
 
@@ -340,9 +375,11 @@ rules every time you report a result:
 3. **Never reproduce a tool-printed summary block verbatim.** If you ever see a pre-formatted
    `App: … / File edits: … / Warnings:` block, you forgot `--quiet` — re-run with it; do not relay
    that block.
-4. **Summary shape** (assess): lead with `runtime <A> / Java <B> → 4.9.18 / Java 17`, then the edit
-   count (e.g. "11 edits across 2 files"), then each warning as **one plain sentence**. Call out
-   `connectorGaps` and `missingFromMatrix` explicitly as human-judgement items.
+4. **Summary shape** (assess): lead with `runtime <A> / Java <B> → <target runtime> / Java <target>`,
+   taking **both** target values from the assess output — the target is whatever the selected matrix
+   says, not a constant you remember. Then the edit count (e.g. "11 edits across 2 files"), then each
+   warning as **one plain sentence**. Call out `connectorGaps` and `missingFromMatrix` explicitly as
+   human-judgement items.
 5. **Collapse noisy warnings.** A "Live matrix fetch unavailable — using the bundled matrix" warning
    means the run used the curated offline matrix and is still correct — say that in one calm sentence,
    not as an alarm. Matrix-drift advisories are "consider bumping the bundled matrix later," not
@@ -354,14 +391,30 @@ rules every time you report a result:
   GitHub, ask for a PAT, or simulate a plan. On a command error, report it and stop.
 - **Never** execute (`dryRun:false`) without a preceding dry run **and** an explicit user yes.
 - **Never** print decrypted secrets or the config decryption key to the transcript.
-- The env is **required** — do not guess it; ask or read `MULE_UPGRADE_ENV`.
-- Treat `CONFLICT` (an upgrade already in progress) as terminal **for that exact pom/app** — surface
-  the existing jobId/PR and stop; do not re-run the same pom to "add" something (the first PR already
-  has it). `CONFLICT` is scoped per module (`<repo>::<pomPath>` for a parent/BOM, the app name for an
-  app), so it does **not** block the next module in the chain — a BOM PR being open never stops you
-  from opening the parent-pom or app PR in the same repo.
+- The env is **optional in intake** — default `dev` (or `MULE_UPGRADE_ENV` if set), and **always pass
+  it to the CLI as `--env`** (the engine has no default of its own). Surface `test`/`prod` as options;
+  never silently pick a non-dev env.
+- Treat `CONFLICT` (an upgrade already in progress) as terminal **for that exact pom/app+env** —
+  surface the existing jobId/PR and stop; do not re-run the same pom to "add" something (the first PR
+  already has it). `CONFLICT` is scoped per module: `<repo>::<pomPath>` for a parent/BOM, and
+  `<app>::<env>` for an app. So it does **not** block the next module in the chain — a BOM PR being
+  open never stops you from opening the parent-pom or app PR in the same repo — and it does **not**
+  block the same app in a *different* environment (`orders-api` in `dev` and in `test` can run at once).
+- **Notifications are opt-in and decided ONCE per session**, asked immediately before the first
+  write — never during intake, and never at all for a read-only capability. Never send Slack or touch
+  Jira unless the user asked; configured credentials are not consent. Never re-ask, and never quietly
+  change the answer — including for later apps, parent-pom runs, and chained steps. Slack off means
+  Slack off by every route, so don't reach for `scan_notify` either.
 - `connectorGaps` and `missingFromMatrix` are **human-judgement** items — always raise them, never
   silently proceed past them.
+- **Ask only the chosen capability's questions.** A fleet scan takes no arguments and a CVE scan takes
+  no `--env`; running a six-question intake before either is a bug, not thoroughness.
+- **Offer only curated Java targets.** Read them from `matrix_update_cli.js targets`. If the user asks
+  for an uncurated target, relay the engine's refusal — never curate versions yourself to make the run
+  proceed. That is the "invent versions" failure in a different costume.
+- **Use the documented flag names.** An unknown flag is silently ignored by these CLIs, so a typo
+  turns a user's answer into a no-op. The one that has actually bitten: the deployed-state check is
+  `--deployed-api-name`, not `--deployed-app`.
 - All notifications / deployed-state / Anypoint verification are non-fatal — a skipped check is
   reported with its reason, never treated as a failure.
 
@@ -374,14 +427,22 @@ dry-run gate lives on the CLI. **Prefer the discrete-flag form** (no JSON quotin
 # preview only — assess + plan, nothing written (discrete flags: no --coords quoting trap)
 node skills/mule-upgrade/scripts/upgrade.js start \
   --app orders-api --env dev --mode api \
-  --owner acme --repo-name orders-api --branch main \
+  --owner acme --repo-name orders-api --branch develop \
   --dry-run
 
 # then execute with the chosen strategy (identical args, minus --dry-run)
 node skills/mule-upgrade/scripts/upgrade.js start \
   --app orders-api --env dev --mode api \
-  --owner acme --repo-name orders-api --branch main \
+  --owner acme --repo-name orders-api --branch develop \
   --version-strategy in-major
+
+# same, for a session that asked for Slack alerts + comments on an existing ticket.
+# Without these flags the run is silent even though Slack/Jira are configured.
+node skills/mule-upgrade/scripts/upgrade.js start \
+  --app orders-api --env dev --mode api \
+  --owner acme --repo-name orders-api --branch develop \
+  --version-strategy in-major \
+  --jira ORD-42 --jira-mode comment --slack
 ```
 
 `--coords '{…}'` is still accepted, but on Windows `cmd.exe` it corrupts (see "Windows quoting" in

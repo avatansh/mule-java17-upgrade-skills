@@ -518,6 +518,7 @@ export async function runReconcile(opts = {}) {
         // in ci_ingest; the poll-driven path must do the same here, else a completed job leaks its
         // lock and blocks re-runs of the same app.
         if (rec.appName) releaseLock(rec.lockKey ?? rec.appName);
+        notify("DEPLOYING->DEPLOYED", rec);
         actions.push({ jobId: rec.jobId, from: "DEPLOYING", to: "DEPLOYED", reason: "platform healthy" });
         fixed++;
       } else if (v.status === "unhealthy") {
@@ -525,6 +526,7 @@ export async function runReconcile(opts = {}) {
           error: "Deployment reported unhealthy by platform verification (reconciled).",
         });
         if (rec.appName) releaseLock(rec.lockKey ?? rec.appName);
+        notify("DEPLOYING->FAILED_DEPLOY", rec);
         actions.push({
           jobId: rec.jobId,
           from: "DEPLOYING",
@@ -544,6 +546,7 @@ export async function runReconcile(opts = {}) {
           "advance within the stale threshold. Automatically failed by the reconciler; re-submit to retry.",
       });
       if (rec.appName) releaseLock(rec.lockKey ?? rec.appName);
+      notify(`${rec.status}->FAILED_INTERRUPTED`, rec);
       actions.push({
         jobId: rec.jobId,
         from: rec.status,

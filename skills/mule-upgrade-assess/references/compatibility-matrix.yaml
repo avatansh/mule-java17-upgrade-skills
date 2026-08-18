@@ -1,34 +1,22 @@
 # Java 17 upgrade rules - consumed by pf-assess-app. Versions are tunable without code changes.
 #
-# DELIVERY (see config.yaml -> matrix.source):
-#   - This file is the bundled CLASSPATH copy - always packaged in the app and used as the
-#     fallback if the Exchange fetch fails.
-#   - In dev/prod the orchestrator fetches the CENTRALLY-GOVERNED copy from Anypoint Exchange
-#     at runtime (cached matrix.refreshSeconds), so updating the matrix does NOT require
-#     redeploying every instance - publish a new asset/version and instances pick it up.
+# This is the DEFAULT target. Other Java targets live alongside it as
+# compatibility-matrix-java<major>.yaml and are discovered automatically.
 #
-# PUBLISH / UPDATE ON EXCHANGE (asset: <orgId>:java17-compatibility-matrix, packaging: yaml):
-#   Using anypoint-cli-v4 (needs a Connected App with Exchange Contributor):
-#     anypoint-cli-v4 exchange asset upload \
-#       --organization "<orgId>" \
-#       --name "Java 17 Compatibility Matrix" \
-#       --classifier yaml --mainFile compatibility-matrix.yaml \
-#       "<orgId>/java17-compatibility-matrix/1.0.0"
-#   Bump the version (and config.yaml matrix.exchange.version) when publishing a new revision.
-#   Keep this bundled copy in sync so the fallback stays accurate.
+# >> Read ./MATRIX.md before editing. It covers Exchange delivery and publishing, the authority
+# >> model for connector pins, which fields must stay identical across target files, and how to
+# >> add a new Java target.
 #
-# AUTHORITY MODEL (read before editing connector versions):
-#   This matrix is the AUTHORITATIVE source for the Java-17-SAFE judgment. Live enrichment
-#   (resolve_versions.js: Exchange Graph API for published versions + the curated
-#   connector-notes-map for each connector's OpenJDK/Mule-runtime compatibility table) adds a
-#   run's connector firstJava17Version + latest / latest-in-major, but "latest published" is
-#   deliberately NOT auto-adopted as the pin, because a newer version may be a breaking major or
-#   not yet Java-17-verified. Live data drives the version CHOICE offered to the user and a
-#   staleness advisory; this curated matrix remains the fallback and the compatibility floor.
+# EDITING QUICK REFERENCE
+#   Java-NEUTRAL (must match in EVERY target file - the parity test enforces this):
+#     connectors[].property / .groupId / .artifactId, gating[].property and coordinate fields,
+#     manualReview scanGlobs / scanRegex.
+#   Java-SPECIFIC (curated per target file):
+#     target.*, gating[].min / .set, connectors[].set, muleArtifact.*, prose naming a Java version.
 schemaVersion: "1.2"
 target:
   runtime: "4.9.18"          # app.runtime AND app.runtime.semver
-  javaVersion: "17"
+  javaVersion: "17"          # the single source of truth for the engine's Java target
 
 # GATING - if installed < min, upgrade is REQUIRED (rule_1..rule_4)
 # `property` is the primary (Maven property placeholder) key. Optional `groupId`/`artifactId`
@@ -40,9 +28,13 @@ target:
 gating:
   muleRuntime:        { property: "app.runtime",                       min: "4.6.0", set: "4.9.18" }
   muleRuntimeSemver:  { property: "app.runtime.semver",                min: "4.6.0", set: "4.9.18" }
-  javaVersion:        { property: "java.version",                      in: ["1.8","8","11"], set: "17" }
-  javaCompilerSource: { property: "maven.compiler.source",             in: ["1.8","8","11"], set: "17" }
-  javaCompilerTarget: { property: "maven.compiler.target",             in: ["1.8","8","11"], set: "17" }
+  # compare:"java" = bump whenever the installed JAVA MAJOR is below `set`. "1.8", "8" and "8.0.402" all
+  # read as Java 8. Do NOT go back to an explicit in:[...] list here: it has to be hand-extended the day
+  # `set` moves (17 would need adding when targeting 21) and forgetting it fails SILENTLY — the plan just
+  # omits the Java bump. Derived comparison keeps retargeting to a single edit of target.javaVersion.
+  javaVersion:        { property: "java.version",                      compare: "java", set: "17" }
+  javaCompilerSource: { property: "maven.compiler.source",             compare: "java", set: "17" }
+  javaCompilerTarget: { property: "maven.compiler.target",             compare: "java", set: "17" }
   # mule-maven-plugin 4.1.1+ is the documented floor for Java-17 DEPLOY (mvn deploy w/ -Dmule.jvm=17).
   # Releases < 4.1.1 predate Java-17 packaging support, so 4.1.0 is flagged and bumped.
   muleMavenPlugin:    { property: "mule.maven.plugin.version",         min: "4.1.1", set: "4.10.0", pluginGroupId: "org.mule.tools.maven",     pluginArtifactId: "mule-maven-plugin" }
@@ -99,6 +91,18 @@ manualReview:
   setAccessible:    { scanRegex: "setAccessible\\s*\\(",       warn: "Reflective setAccessible() found - Java 17 strong encapsulation blocks setAccessible on JDK internals; refactor or you will hit InaccessibleObjectException at runtime." }
   resourceBundle:   { scanRegex: "ResourceBundle\\.getBundle", warn: "ResourceBundle.getBundle() found - JPMS changes resource/bundle loading on Java 17; verify bundles resolve (consider ResourceBundleProvider) or move them onto the classpath." }
   powermock:        { scanRegex: "(?:org\\.powermock|powermock-)", warn: "PowerMock detected - it cannot mock JVM classes under Java 17; migrate the affected tests to a current Mockito (inline mock maker) before upgrading." }
+  # Java 17 Upgrade Process Guide - DataWeave API change. error.muleMessage was removed; the
+  # replacement is error.errorMessage. Scanned across .dwl AND src/main/mule/*.xml (inline
+  # expressions + <ee:transform> scripts), which is where this actually lives.
+  dwErrorMuleMessage: { scanRegex: "error\\s*\\.\\s*muleMessage", warn: "DataWeave uses error.muleMessage, which is REMOVED on the Java 17 / Mule 4.9 line - replace every occurrence with error.errorMessage (this is a runtime failure, not a build failure, so tests must cover the error paths)." }
+
+# JAVA 17 UPGRADE PROCESS GUIDE - baseline reporting only (never auto-edited).
+# Floors for things that are NOT in the pom (local toolchain / IDE / platform) plus extra prose for
+# the scan-driven checklist items. Consumed by scripts/lib/process_guide.js to produce the per-item
+# ok / will-fix / action / manual verdicts. Changing a floor here changes the report, nothing else.
+processGuide:
+  mavenMin: "3.9.6"    # asserted only when the repo pins a Maven WRAPPER; otherwise reported as manual
+  studioMin: "7.17"    # never determinable from a repo - always reported as manual
 
 # mule-artifact.json target
 muleArtifact: { minMuleVersion: "4.9.0", javaSpecificationVersions: ["17"] }

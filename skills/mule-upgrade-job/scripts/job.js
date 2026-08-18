@@ -34,6 +34,7 @@ import {
   makeDeployVerifier,
   fetchDeployedState,
 } from "../../mule-upgrade/scripts/lib/anypoint.js";
+import { makeJobNotifier } from "../../mule-upgrade/scripts/lib/notify.js";
 
 // Build the Anypoint deploy verifier for the poll-driven CLI paths (status --refresh / reconcile),
 // mirroring server/lib/tools.js safeDeployVerifier(). Without it, runReconcile keeps its "unknown"
@@ -124,7 +125,12 @@ async function main() {
         try {
           // Wire the Anypoint verifier so a DEPLOYING job's deploy state is actually verified here,
           // matching the MCP get_job_status path (server/lib/tools.js:195).
-          const r = await reconcileJob(args.job, { verifyDeploy: safeDeployVerifier() });
+          const r = await reconcileJob(args.job, {
+            verifyDeploy: safeDeployVerifier(),
+            // Fire Slack + Jira on any transition surfaced by this refresh (de-duped per status),
+            // matching the MCP get_job_status path.
+            notify: makeJobNotifier(),
+          });
           checks = r.checks;
         } catch {
           /* keep last-known status */
@@ -206,6 +212,8 @@ async function main() {
         nowMs: args["now-ms"] ? Number(args["now-ms"]) : undefined,
         // Verify deployments on Anypoint (matches the MCP `reconcile` tool, server/lib/tools.js:306).
         verifyDeploy: safeDeployVerifier(),
+        // Push Slack + Jira on every transition this sweep applies (de-duped per status).
+        notify: makeJobNotifier(),
       });
       out(res);
       break;

@@ -62,7 +62,38 @@ test-results/
 .a4drules/
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Agent research scratch (one-off probes, findings notes, raw evidence dumps)
+#   Kept on disk as a research trail, but not shipped. The three exceptions are
+#   the documented regeneration pipeline for the SHIPPED
+#   mule-upgrade-assess/references/connector-notes-map.yaml:
+#     build_notes_map.mjs -> connector-notes-map.raw.json -> assemble_notes_map.mjs
+#   Excluding `.agents/*` rather than `.agents/` is deliberate: git cannot
+#   re-include a file whose parent DIRECTORY is excluded, so the negations below
+#   would silently do nothing.
+# ─────────────────────────────────────────────────────────────────────────────
+.agents/*
+!.agents/artifacts/
+.agents/artifacts/*
+!.agents/artifacts/build_notes_map.mjs
+!.agents/artifacts/assemble_notes_map.mjs
+!.agents/artifacts/connector-notes-map.raw.json
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Third-party reference documents
+#   The MuleSoft upgrade guides are ~27 MB of redistributable-restricted vendor
+#   PDFs. They are the SOURCE the compatibility matrix and the processGuide
+#   checklist were derived from, but nothing reads them at runtime — keep them
+#   locally, cite them by title in the matrix instead of committing them.
+# ─────────────────────────────────────────────────────────────────────────────
+docs/*.pdf
+*.docx
+*.pptx
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Editor / IDE
+#   NOTE: .cursor/ is deliberately NOT ignored — .cursor/hooks.json and
+#   .cursor/hooks/refresh-jobs.mjs are a shipped feature (they refresh job
+#   status on session start), so they must travel with the repo.
 # ─────────────────────────────────────────────────────────────────────────────
 .idea/
 .vscode/

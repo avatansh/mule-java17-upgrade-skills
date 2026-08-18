@@ -239,8 +239,13 @@ node skills/mule-upgrade-assess/scripts/assess.js --source github `
 <pre><code>node skills/mule-upgrade-scan/scripts/scan_notify.js --dry-run   # compute digest, send nothing
 node skills/mule-upgrade-scan/scripts/scan_notify.js            # send to slack.webhookUrl (#java17-upgrades)</code></pre>
 
-<h3>5e — Jira (fires inside the orchestrator)</h3>
-<p>With <code>jira.autoCreate=true</code> and creds resolved, Step 5b already created a ticket in project <strong>J1U</strong> and posted a “PR opened” comment. Check your Jira project after 5b. Missing creds → a clean “no Jira creds” skip.</p>
+<h3>5e — Jira + Slack (opt in, once)</h3>
+<p>Both are <strong>silent by default</strong> — a configured webhook and Jira token make delivery possible, but someone still has to ask for it. So Step 5b posted nothing. Re-run it with the opt-in flags to see them fire:</p>
+<pre><code>node skills/mule-upgrade/scripts/upgrade.js start --app &lt;app&gt; --env dev --mode api \
+  --owner &lt;o&gt; --repo-name &lt;r&gt; --branch develop \
+  --jira-mode create --slack</code></pre>
+<p><code>--jira-mode create</code> files a ticket in project <strong>J1U</strong> and comments “PR opened”; <code>--jira-mode comment</code> comments on the ticket you pass with <code>--jira</code> instead of creating one; <code>--slack</code> posts to <code>slack.webhookUrl</code>. Missing creds → a clean “no Jira creds” / “no SLACK_WEBHOOK_URL” skip.</p>
+<div class="callout ok"><p><strong>In Vibes you won’t type these flags.</strong> The conductor asks you <em>once</em>, as the second intake question: paste a Jira ticket to update, say “auto” to have one created, or skip — plus a yes/no for Slack. It then obeys that for the rest of the session, including later apps and parent-pom runs, and never asks again. Because the answer is stamped on each job when it’s created, a job started with Slack off stays silent forever — even if a reconcile sweep discovers its deploy hours later from a different terminal.</p></div>
 <div class="callout ok"><p>If 5a shows <code>matrixSource: exchange:…</code>, 5b prints <code>PR_OPEN</code> with a link, and the scan returns live rows — all four integrations are wired. Now exercise <em>each skill</em> (Step 6), then wire Vibes.</p></div>
 
 <div class="step" id="s6"><span class="badge">6</span><h2>Step 6 — Prove <em>every</em> skill from the terminal (in order)</h2></div>

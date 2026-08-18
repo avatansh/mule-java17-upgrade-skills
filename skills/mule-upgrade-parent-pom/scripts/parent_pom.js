@@ -33,6 +33,7 @@ import {
 } from "../../mule-upgrade-pr/scripts/commit_pr.js";
 import { GitHubApi } from "../../mule-upgrade-pr/scripts/lib/gh_api.js";
 import * as store from "../../mule-upgrade-job/scripts/jobstore.js";
+import { makeJobNotifier, resolveNotifyPrefs } from "../../mule-upgrade/scripts/lib/notify.js";
 import { nowUtc } from "../../../lib_shared/dates.js";
 import { resolveRepoCoords, resolvePomPath } from "./lib/repo_url.js";
 import { detectInheritance } from "./lib/inheritance.js";
@@ -342,10 +343,11 @@ export async function upgradeParentPom(opts) {
  *        ▼ on error
  *   FAILED_ASSESS (VALIDATION/STALE_PLAN/404) | FAILED_COMMIT (else) + release lock
  *
- * The lock is keyed on the repo (appName = coords.repo), so a parent-pom job and an app upgrade of
- * the same repo are mutually single-flighted — you can't open two competing PRs on one repo at once.
+ * The lock is keyed per MODULE (`<repo>::<pomPath>`), so a BOM PR, a parent-pom PR, and an app PR can
+ * all be open on one monorepo at once — while two upgrades of the SAME pom still single-flight.
  *
- * @param {object} opts  same as upgradeParentPom (jobId is assigned by the store, not the caller)
+ * @param {object} opts  same as upgradeParentPom (jobId is assigned by the store, not the caller),
+ *   plus `notifyPrefs` — the per-run Slack/Jira opt-in persisted on the job. Absent → silent.
  * @returns {Promise<object>}  a result object whose shape matches upgradeParentPom's, plus `jobId`
  *   from the store on the edits path. CONFLICT → {status:"CONFLICT", code:"UPGRADE_IN_PROGRESS", ...}.
  */
@@ -358,6 +360,9 @@ export async function runParentPomJob(opts) {
     repoRoot,
     deps = {},
   } = opts;
+  // Per-run Slack/Jira opt-in, persisted on the job so the PR_OPEN announcement below and every later
+  // sweep honor the same choice. Absent → silent.
+  const notifyPrefs = resolveNotifyPrefs(opts.notifyPrefs);
   const jobStore = deps.store ?? store;
 
   // ── (1) assess FIRST (read-only, no lock) so NO_CHANGE never creates a job/lock ──────────
@@ -385,6 +390,7 @@ export async function runParentPomJob(opts) {
       lockKey,
       environment,
       jiraTicketId,
+      notifyPrefs,
       coords: { owner: assessed.coords.owner, repo: assessed.coords.repo, defaultBranch: assessed.defaultBranch },
       changePlan: {
         kind: "parentPomUpgrade",
@@ -429,6 +435,17 @@ export async function runParentPomJob(opts) {
       prNumber: pr.prNumber ?? null,
     });
     if (pr.branchName) jobStore.putBranchIndex(pr.branchName, jobId);
+
+    // Announce PR_OPEN (Slack + Jira) once — parent-pom upgrades are tracked jobs too, and reconcile
+    // only alerts on LATER transitions. De-duped via notifiedStatus so a status read won't repeat it.
+    // Non-fatal: the PR is already open and the job persisted; delivery is best-effort.
+    if (typeof jobStore.getJob === "function" && typeof jobStore.patchJob === "function") {
+      try {
+        await makeJobNotifier({ getJob: jobStore.getJob, patchJob: jobStore.patchJob })("->PR_OPEN", { jobId });
+      } catch {
+        /* best-effort */
+      }
+    }
 
     return { ...result, jobId, nextPollSeconds: 0 };
   } catch (e) {

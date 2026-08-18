@@ -2,7 +2,9 @@
 
 Run the Java-17 upgrade suite as **Claude Code skills** against a local clone or the GitHub
 API, from any IDE that runs Claude Code. No server, no hosting — you talk to Claude, it invokes
-the skills. This is the workflow for hands-on, one-app-at-a-time upgrades.
+the skills. This is the workflow for hands-on, interactive upgrades: several apps can be in flight at
+once, and the same app can even be upgraded in two environments concurrently (the single-flight lock
+is keyed per app **and** environment).
 
 > For remote/headless access (Agentforce, another agent over the network), see
 > [SETUP-AGENTFORCE.md](./SETUP-AGENTFORCE.md) instead.
@@ -134,7 +136,7 @@ the Mule Object Store partitions:
 ```
 ~/.mule-upgrade/
 ├── jobs/job-<uuid>.json          # the job record + state machine status
-├── locks/lock::<app>.json        # single-flight lock per app
+├── locks/lock::<app>::<env>.json # single-flight lock per app + environment
 ├── index/branch::<branch>.json   # branch → jobId
 └── idempotency/*.json            # webhook/callback de-dup
 ```
@@ -151,6 +153,19 @@ A skill can't host a listener, so merge/CI/deploy detection is done by **polling
 `gh pr checks`, Anypoint verify) via the `poll` subcommand / reconcile. Run it on demand, or on a
 timer via the `/loop` skill or OS cron. (If you *do* want event-driven CD callbacks, run the
 hosted server — see [SETUP-AGENTFORCE.md](./SETUP-AGENTFORCE.md).)
+
+**In Cursor you get this for free.** Opening this repo activates `.cursor/hooks.json`, which runs a
+debounced reconcile at session start and before each prompt — so the agent answers "what's the status?"
+from fresh state without you polling, and without a public webhook URL. Nothing to install; it is
+already checked in.
+
+```bash
+cat ~/.mule-upgrade/hooks.log   # what the hooks actually did
+MULE_UPGRADE_HOOKS=off          # disable for a session
+```
+
+The guardrails (only when a job is in flight, ≥45s apart, hard timeout, always fail-open) are described
+in [`skills/mule-upgrade-job/SKILL.md`](../skills/mule-upgrade-job/SKILL.md#cursor-hooks--the-automatic-trigger-for-that-sweep).
 
 ---
 

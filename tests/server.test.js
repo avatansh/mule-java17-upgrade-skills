@@ -34,10 +34,11 @@ test("validateArgs: required, type, enum, additionalProperties", () => {
 });
 
 // ── tool catalog ─────────────────────────────────────────────────────────────────────────────────
-test("tool catalog exposes exactly the 13 expected tools with schemas", () => {
+test("tool catalog exposes exactly the 15 expected tools with schemas", () => {
   const names = TOOLS.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "assess_app",
+    "batch_upgrade",
     "check_drift",
     "delete_job",
     "get_job_status",
@@ -47,6 +48,7 @@ test("tool catalog exposes exactly the 13 expected tools with schemas", () => {
     "rollback",
     "scan_fleet",
     "scan_notify",
+    "scan_vulnerabilities",
     "start_upgrade",
     "update_open_pr_parent_ref",
     "upgrade_parent_pom",
@@ -130,7 +132,7 @@ test("notifications/initialized is a notification (no response)", async () => {
 
 test("tools/list returns the catalog", async () => {
   const r = await handleRpc({ jsonrpc: "2.0", id: 2, method: "tools/list" });
-  assert.equal(r.result.tools.length, 13);
+  assert.equal(r.result.tools.length, 15);
 });
 
 test("tools/call unknown tool → -32602", async () => {

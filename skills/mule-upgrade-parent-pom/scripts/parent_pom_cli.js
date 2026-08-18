@@ -4,7 +4,10 @@
 //   node parent_pom_cli.js --repo-url <url> [--mode api|local] [--pom-path p] [--branch b]
 //                          [--owner o --repo r] [--repo-root path] [--jira T] [--jira-base-url u]
 //                          --env <dev|local|prod> [--no-fetch] [--no-job]
+//                          [--slack] [--jira-mode none|comment|create]
 //   --env is REQUIRED (or set MULE_UPGRADE_ENV) — no default, mirrors Mule's -Denv
+//   Notifications are OPT-IN: without --slack / --jira-mode nothing is posted and no ticket is
+//   created, even when a Slack webhook and Jira token are configured.
 //   Runs as a TRACKED job BY DEFAULT (single-flight lock + job record + FAILED_* taxonomy + pollable
 //   status), like the app upgrade. CONFLICT → exit 4.
 //   --no-job       opt out to the original one-shot (no lock, no job) — intended for tests/dry runs.
@@ -41,6 +44,20 @@ function parseArgs(argv) {
 function fail(code, msg) {
   process.stderr.write(msg + "\n");
   process.exit(code);
+}
+
+/**
+ * notifyPrefsFromArgs(args): translate the opt-in notification flags into a notifyPrefs object.
+ * Notifications are silent by default — configured Slack/Jira credentials are capability, not consent.
+ *   --slack             → post Slack lifecycle alerts for this job
+ *   --jira-mode <mode>  → none (default) | comment (on --jira's ticket) | create (open one first)
+ */
+function notifyPrefsFromArgs(args) {
+  const mode = args["jira-mode"];
+  if (mode != null && mode !== true && !["none", "comment", "create"].includes(mode)) {
+    fail(2, `--jira-mode must be one of none|comment|create (got "${mode}")`);
+  }
+  return { slack: Boolean(args.slack), jira: mode === true ? "none" : (mode ?? "none") };
 }
 
 async function main() {
@@ -102,6 +119,7 @@ async function main() {
       environment,
       jiraTicketId: args.jira || null,
       jiraBaseUrl: args["jira-base-url"] || process.env.JIRA_BASE_URL || "",
+      notifyPrefs: notifyPrefsFromArgs(args),
       mode: args.mode || "api",
       repoRoot: args["repo-root"] || null,
       detectOnly: Boolean(args["detect-only"]),

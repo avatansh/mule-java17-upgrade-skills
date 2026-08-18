@@ -56,6 +56,12 @@ scan:
   targetJava: "17"          # a deployed Java major below this is "old" (so 8 and 11 are flagged)
   environments: ""          # comma-separated env NAMES to restrict the scan to (empty = all environments)
 
+batch:
+  # Batch upgrade (mule-upgrade-batch / batch_upgrade): how many apps run at once. Each app is
+  # I/O-bound on GitHub + Exchange, so this mostly trades GitHub secondary-rate-limit risk for wall
+  # time. 3 is a conservative default; 5 is usually still safe on a warm cache.
+  concurrency: "3"
+
 matrix:
   path: "matrix/compatibility-matrix.yaml"   # classpath copy — packaged in the app; used as fallback
   source: "exchange-latest"                  # exchange | exchange-latest | classpath
@@ -71,9 +77,10 @@ matrix:
     excludeArtifacts: "munit-runner,munit-tools"   # never treated as "missing" (not connectors to pin)
 
 jira:
-  # Constant defaults; env files override. autoCreate defaults OFF for safety so no
-  # environment creates tickets unless it explicitly opts in (and sets projectKey).
-  autoCreate: "false"                        # when true AND no jiraTicketId supplied → create a migration ticket
+  # Constant defaults; env files override. autoCreate is AMBIENT consent and defaults OFF: normally a
+  # ticket is created only when the operator opts in for that run (notifyPrefs.jira = "create"). Set
+  # this "true" (with projectKey) only for an unattended pipeline that should always file a ticket.
+  autoCreate: "false"
   issueType:  "Task"                         # Jira issue type used for auto-created migration tickets
 
 registry:
@@ -107,6 +114,18 @@ chainedParentUpgrade:
   # stops to ask the user before each downstream change, regardless of this toggle.
   enabled: "true"
 
+cve:
+  # Vulnerability scan (mule-upgrade-cve / scan_vulnerabilities): looks the app's DECLARED Maven
+  # coordinates up in OSV.dev (api.osv.dev, public, no auth). READ-ONLY and fully non-fatal — an OSV
+  # outage degrades to a partial scan with complete:false, it never fails an upgrade.
+  maxVulnDetails: "250"       # cap on per-advisory detail fetches; one stale library can match 60+.
+                              # Counts stay COMPLETE past the cap — only per-advisory detail truncates.
+  concurrency: "8"            # detail fetches in flight
+  batchTtlSeconds: "21600"    # cached per (coordinate, version) — 6h, because new advisories land
+                              # against unchanged versions. The empty "clean" answer is cached too.
+  vulnTtlSeconds: "604800"    # cached per advisory ID — 7d, an advisory's fixed-version list is
+                              # effectively immutable
+
 cache:
   # Cross-process disk cache (lib_shared/cache.js) — makes a fresh CLI/Vibes process reuse the
   # previous run's expensive Anypoint reads instead of re-fetching. Files live under
@@ -132,6 +151,24 @@ job:
 reconcile:                                   # self-healing sweep — production defaults
   frequencyMillis: "300000"                  # run every 5 minutes  (dev overrides to 30s)
   staleSeconds:    "900"                     # job stale after 15 minutes idle (dev overrides to 2 min)
+
+hooks:
+  # Cursor hooks (.cursor/hooks.json → .cursor/hooks/refresh-jobs.mjs) as the no-endpoint alternative
+  # to an inbound GitHub webhook. Instead of GitHub pushing transitions to a public /webhook URL, a
+  # reconcile sweep is PULLED at sessionStart (catching what happened while Cursor was closed) and
+  # before each prompt, so the agent reads fresh PR/CI/deploy state with no server, secret, or repo
+  # configuration. Kill switch: env MULE_UPGRADE_HOOKS=off.
+  enabled: "true"
+  staleSeconds:       "60"                   # a job idle >1min is worth re-polling in an interactive session
+                                             # (far tighter than the 900s background sweep above — the user is watching)
+  minIntervalSeconds: "45"                   # debounce floor: beforeSubmitPrompt fires on EVERY message, so
+                                             # this is what stops a chatty session burning the GitHub rate limit
+  timeoutMs:          "8000"                 # ceiling for the sessionStart catch-up sweep (a one-off wait at
+                                             # session open, where a full catch-up is worth a few seconds)
+  promptTimeoutMs:    "3000"                 # ceiling for beforeSubmitPrompt. A cold sweep measures ~5s, and the
+                                             # user is waiting on their prompt — so cap it tighter and let a slow
+                                             # sweep lose the race. Nothing is lost: reconcile writes are
+                                             # idempotent and the next turn picks the state up.
 
 ci:
   # `gh pr checks` polling → CI/CD stage mapping. When reconcile polls a stale PR_OPEN /

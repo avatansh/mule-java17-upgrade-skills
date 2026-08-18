@@ -4,7 +4,7 @@
 //
 // Object Store → JSON-file mapping (root defaults to ~/.mule-upgrade/, override via MULE_UPGRADE_HOME):
 //   jobStore          → jobs/<jobId>.json                    (the job record; key = jobId)
-//   locksStore        → locks/lock__<app>.json               (single-flight; value = jobId)
+//   locksStore        → locks/lock__<app>__<env>.json         (single-flight; value = jobId)
 //   indexStore        → index/branch__<branch>.json          (branch → jobId correlation)
 //   idempotencyStore  → idem/<key>.json                      (poll/callback dedup markers)
 //
@@ -107,16 +107,34 @@ export function putJob(rec) {
 }
 
 /**
+ * defaultLockKey(appName, environment): the single-flight key for an APP upgrade.
+ *
+ * The environment is part of the key so one app can be upgraded in several environments at once
+ * (`orders-api::dev` and `orders-api::test` are independent runs), while two upgrades of the same app
+ * in the SAME environment still single-flight — which is the collision that actually matters, since
+ * both would edit the same pom on the same branch. Environment-less callers fall back to the bare app
+ * name so nothing that never had an environment silently changes key.
+ */
+export function defaultLockKey(appName, environment) {
+  return environment ? `${appName}::${environment}` : appName;
+}
+
+/**
  * createJob(opts): acquire the single-flight lock, then persist a PROCESSING record.
  * Mirrors post-jobs.xml: os:retrieve lock (throws if held → 409 CONFLICT) → os:store lock=jobId
  * → os:store job record.
  *
- * The lock is claimed on `lockKey` when supplied, else `appName`. This lets a MONOREPO run several
- * independent module upgrades at once: an app upgrade locks on the app name, while a parent/BOM
- * upgrade locks on `<repo>::<pomPath>` (e.g. `mule-apps::bom/pom.xml` vs `mule-apps::parent-pom/pom.xml`),
- * so a BOM PR, a parent-pom PR, and the app PR can all be open on the same repo concurrently — while
- * two upgrades of the SAME pom still single-flight. The chosen key is persisted as `record.lockKey`
- * so every release path (reconcile, ci_ingest, deleteJob) frees the exact key that was claimed.
+ * The lock is claimed on `lockKey` when supplied, else `defaultLockKey(appName, environment)`. This
+ * lets a MONOREPO run several independent module upgrades at once: an app upgrade locks on
+ * `<app>::<env>`, while a parent/BOM upgrade locks on `<repo>::<pomPath>` (e.g. `mule-apps::bom/pom.xml`
+ * vs `mule-apps::parent-pom/pom.xml`), so a BOM PR, a parent-pom PR, and the app PR can all be open on
+ * the same repo concurrently — while two upgrades of the SAME pom still single-flight. The chosen key
+ * is persisted as `record.lockKey` so every release path (reconcile, ci_ingest, deleteJob) frees the
+ * exact key that was claimed.
+ *
+ * `notifyPrefs` is the operator's per-run Slack/Jira opt-in; it is persisted so any LATER sweep that
+ * discovers a transition (reconcile, status auto-refresh, webhook) honors the same choice. Absent →
+ * silent (see notify.resolveNotifyPrefs).
  * @returns {{jobId, record}}
  * @throws {Error} code "CONFLICT" with .existingJobId when the key is already locked.
  */
@@ -129,9 +147,10 @@ export function createJob({
   changePlan = null,
   jobId = newJobId(),
   lockKey = null,
+  notifyPrefs = null,
 }) {
   if (!appName) throw new Error("createJob: appName is required");
-  const key = lockKey || appName;
+  const key = lockKey || defaultLockKey(appName, environment);
   const existing = acquireLock(key, jobId);
   if (existing !== jobId) {
     const err = new Error(
@@ -150,6 +169,7 @@ export function createJob({
     lockKey: key,
     environment,
     jiraTicketId,
+    notifyPrefs,
     approvedChangePlan,
     coords,
     changePlan,
@@ -349,6 +369,7 @@ export function reapplyJob(jobId) {
     lockKey: src.lockKey ?? null,
     environment: src.environment,
     jiraTicketId: src.jiraTicketId,
+    notifyPrefs: src.notifyPrefs ?? null,
     approvedChangePlan: src.approvedChangePlan,
     coords: src.coords,
     changePlan: src.changePlan,

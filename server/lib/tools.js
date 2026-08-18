@@ -1,7 +1,7 @@
 // server/lib/tools.js — the tool registry exposed over MCP (tools/list, tools/call) AND the REST
 // facade. Each entry = { name, description, inputSchema (JSON Schema), handler(args) -> result }.
 //
-// 12 tools:
+// 14 tools:
 //   PARITY with the Mule MCP server (6):
 //     assess_app          -> mule-upgrade-assess/assess()   (LEAN by default; includeVersions/includeDrift opt-in)
 //     start_upgrade       -> mule-upgrade/orchestrate.runUpgrade()
@@ -14,6 +14,8 @@
 //     rollback            -> mule-upgrade-pr/rollback.rollbackApi()
 //     scan_fleet          -> mule-upgrade-scan/scan.scanFleet()        (proactive fleet audit)
 //     scan_notify         -> mule-upgrade-scan/scan_notify.scanAndNotify()  (proactive push: scan + Slack on change)
+//     batch_upgrade       -> mule-upgrade-batch/batch.runBatchUpgrade()  (fan-out: N apps, one env, bounded pool)
+//     scan_vulnerabilities -> mule-upgrade-cve/cve.scanVulnerabilities()  (read-only: OSV advisories + what the upgrade fixes)
 //   THE FULL SPLIT (the lean assess broke the mega-response into three purpose-built tools):
 //     resolve_versions    -> mule-upgrade-assess/resolveVersionsForApp()  (② the app-scoped version MENU, current-populated)
 //     check_drift         -> mule-upgrade-assess/matrix_drift.runDriftCheck()  (③ advisory: matrix + connector staleness)
@@ -40,10 +42,13 @@ import {
   makeDeployVerifier,
   fetchDeployedState,
 } from "../../skills/mule-upgrade/scripts/lib/anypoint.js";
+import { makeJobNotifier } from "../../skills/mule-upgrade/scripts/lib/notify.js";
 import { runParentPomJob, updateOpenPrParentRef } from "../../skills/mule-upgrade-parent-pom/scripts/parent_pom.js";
 import { rollbackApi } from "../../skills/mule-upgrade-pr/scripts/rollback.js";
 import { scanFleet } from "../../skills/mule-upgrade-scan/scripts/scan.js";
 import { scanAndNotify } from "../../skills/mule-upgrade-scan/scripts/scan_notify.js";
+import { runBatchUpgrade } from "../../skills/mule-upgrade-batch/scripts/batch.js";
+import { scanVulnerabilities } from "../../skills/mule-upgrade-cve/scripts/cve.js";
 import { resolveCoordinates } from "../../lib_shared/coordinates.js";
 import { loadSchema } from "./schemas.js";
 
@@ -160,6 +165,8 @@ export const TOOLS = [
         appName: args.appName,
         environment: args.environment,
         jiraTicketId: args.jiraTicketId ?? null,
+        // Per-run Slack/Jira opt-in. Absent → silent (resolveNotifyPrefs default-denies).
+        notifyPrefs: args.notifyPrefs,
         approvedChangePlan: args.approvedChangePlan ?? null,
         mode: args.mode ?? "api",
         repo: args.repo,
@@ -202,7 +209,13 @@ export const TOOLS = [
       if (args.refresh !== false) {
         // Non-fatal: any polling/network error still returns the last-known status from the cache.
         try {
-          const r = await reconcileJob(args.jobId, { verifyDeploy: safeDeployVerifier() });
+          const r = await reconcileJob(args.jobId, {
+            verifyDeploy: safeDeployVerifier(),
+            // Fire Slack + Jira on any state change discovered during this auto-refresh (merge→deploy,
+            // parked/resumed, closed-unmerged, deploy failed). De-duped per status, so a status read
+            // that changes nothing stays silent.
+            notify: makeJobNotifier(),
+          });
           checks = r.checks;
         } catch {
           /* keep last-known status */
@@ -279,6 +292,8 @@ export const TOOLS = [
         branch: args.branch,
         environment: args.environment ?? null,
         jiraTicketId: args.jiraTicketId ?? null,
+        // Per-run Slack/Jira opt-in. Absent → silent (resolveNotifyPrefs default-denies).
+        notifyPrefs: args.notifyPrefs,
         mode: args.mode ?? "api",
         repoRoot: args.repoRoot,
         // Read-only detect (report inheritance + edit preview, no lock/PR) for the chained flow.
@@ -329,6 +344,8 @@ export const TOOLS = [
       return runReconcile({
         staleSeconds: args.staleSeconds ?? 0,
         verifyDeploy: safeDeployVerifier(),
+        // Push Slack + Jira on every transition this sweep applies (de-duped per status).
+        notify: makeJobNotifier(),
       });
     },
   },
@@ -375,6 +392,64 @@ export const TOOLS = [
         staleMuleBelow: args.staleMuleBelow,
         targetJava: args.targetJava,
         resolveRepos: args.resolveRepos,
+      });
+    },
+  },
+
+  {
+    name: "batch_upgrade",
+    description:
+      "Upgrade MANY apps in one run (one environment). Previews every app concurrently first, holds back apps whose " +
+      "connector versions live in a shared parent/BOM pom (they need a chained parent-pom flow, not N parallel edits), " +
+      "then — ONLY with confirm:true — runs the rest through the normal pipeline with a bounded pool. Each app takes its " +
+      "own <app>::<env> lock and gets its own tracked job + PR. Without confirm:true nothing is written. Failure is " +
+      "isolated per app, so an N-app run always returns N outcomes.",
+    inputSchema: loadSchema("batch_upgrade"),
+    async handler(args) {
+      return await runBatchUpgrade({
+        apps: args.apps,
+        fromScan: args.fromScan,
+        environment: args.environment,
+        environments: args.environments,
+        mode: args.mode ?? "api",
+        // Writes require an explicit confirm — the batch equivalent of start_upgrade's dry-run gate.
+        confirm: args.confirm === true,
+        concurrency: args.concurrency,
+        stopOnFailure: args.stopOnFailure,
+        includeParentPomRouted: args.includeParentPomRouted,
+        versionStrategy: args.versionStrategy,
+        connectorSelections: args.connectorSelections,
+        jiraTicketId: args.jiraTicketId ?? null,
+        // Applied to EVERY app. Absent → silent (resolveNotifyPrefs default-denies per job).
+        notifyPrefs: args.notifyPrefs,
+      });
+    },
+  },
+
+  {
+    name: "scan_vulnerabilities",
+    description:
+      "READ-ONLY security scan: look up an app's DECLARED Maven coordinates in the OSV.dev advisory database and " +
+      "split the findings into what the Java upgrade already fixes, what still needs action (with the exact minimum " +
+      "fix version), and what has no published fix at all. Never edits a pom, opens a PR, or deploys. IMPORTANT scope " +
+      "limit that must be repeated to the user: only declared coordinates are scanned (direct dependencies, " +
+      "dependencyManagement, plugins) — transitive dependencies are NOT resolved because that needs a real Maven " +
+      "build, so results are a LOWER BOUND and an empty result is not a clean bill of health. Non-fatal: an OSV " +
+      "outage degrades to a reported partial scan.",
+    inputSchema: loadSchema("scan_vulnerabilities"),
+    async handler(args) {
+      return await scanVulnerabilities({
+        // Left undefined when absent so resolveSource() infers the same way assess_app does.
+        source: args.source,
+        repo: args.repo,
+        repoUrl: args.repoUrl,
+        owner: args.owner,
+        repoName: args.repoName,
+        branch: args.branch,
+        appPath: args.appPath,
+        comparePlan: args.comparePlan !== false,
+        refresh: args.refresh === true,
+        maxVulnDetails: args.maxVulnDetails,
       });
     },
   },

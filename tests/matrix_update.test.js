@@ -190,3 +190,91 @@ test("formatMatrixUpdate: distinguishes dry-run, applied, and no-data", () => {
   const noData = formatMatrixUpdate({ driftChecked: false, proposals: [], applied: [], skipped: [], changed: false, wrote: false, path: "P" });
   assert.match(noData, /drift not checked/);
 });
+
+// ── multi-target: which file(s) does a change belong in? ────────────────────────────────────────
+//
+// With one matrix per Java target, "should this bump land in 17, 21, or both?" is a judgement about
+// whether the change is Java-specific or Java-neutral. Guessing it is how the layout goes wrong, so
+// the backend refuses and returns the choices instead. These tests pin that refusal, because a
+// regression here would silently write to the wrong target — the exact failure the design avoids.
+
+test("multi-target: omitting --targets ASKS and writes nothing", async () => {
+  let wrote = 0;
+  const rep = await runMatrixUpdate({
+    apply: true, // even with --apply, an unanswered target question must not write
+    driftResult: driftFixture(),
+    readText: () => FIXTURE,
+    writeText: () => { wrote++; },
+  });
+  assert.equal(rep.needsTargetChoice, true);
+  assert.equal(wrote, 0, "must not write until the operator picks a target");
+  assert.equal(rep.wrote, false);
+  assert.equal(rep.changed, false);
+  assert.ok(rep.availableTargets.length >= 2);
+  assert.ok(rep.availableTargets.some((t) => t.javaVersion === "17" && t.isDefault));
+  assert.ok(rep.availableTargets.some((t) => t.javaVersion === "21" && t.curated === false));
+});
+
+test("multi-target: formatMatrixUpdate renders the question with the neutral-vs-specific rule", async () => {
+  const rep = await runMatrixUpdate({ driftResult: driftFixture(), readText: () => FIXTURE, writeText: () => {} });
+  const out = formatMatrixUpdate(rep);
+  assert.match(out, /Which Java target\(s\)/);
+  assert.match(out, /--targets 17/);
+  assert.match(out, /--targets 21/);
+  assert.match(out, /--targets all/);
+  assert.match(out, /COORDINATE change .* belongs in ALL targets/s);
+});
+
+test("multi-target: --targets 17 writes only the Java 17 file", async () => {
+  const writes = [];
+  const rep = await runMatrixUpdate({
+    apply: true,
+    targets: ["17"],
+    driftResult: driftFixture(),
+    readText: () => FIXTURE,
+    writeText: (p, t) => writes.push({ p, t }),
+  });
+  assert.equal(rep.needsTargetChoice, false);
+  assert.equal(writes.length, 1, "exactly one target file written");
+  assert.match(writes[0].p, /compatibility-matrix\.yaml$/);
+  assert.equal(rep.targets.length, 1);
+  assert.equal(rep.targets[0].javaVersion, "17");
+});
+
+test("multi-target: --targets all fans the same bump out to every target", async () => {
+  const writes = [];
+  const rep = await runMatrixUpdate({
+    apply: true,
+    targets: "all",
+    driftResult: driftFixture(),
+    readText: () => FIXTURE, // both targets read the same fixture, so both change
+    writeText: (p, t) => writes.push({ p, t }),
+  });
+  assert.equal(rep.targets.length, writes.length);
+  assert.ok(writes.length >= 2, "expected a write per target");
+  const written = writes.map((w) => w.p);
+  assert.ok(written.some((p) => /compatibility-matrix\.yaml$/.test(p)));
+  assert.ok(written.some((p) => /compatibility-matrix-java21\.yaml$/.test(p)));
+});
+
+test("multi-target: an unknown target is rejected, naming what exists", async () => {
+  await assert.rejects(
+    () => runMatrixUpdate({ targets: ["99"], driftResult: driftFixture(), readText: () => FIXTURE, writeText: () => {} }),
+    /No compatibility matrix for Java 99.*Available/s
+  );
+});
+
+test("an explicit matrixPath keeps the pre-multi-target single-file contract", async () => {
+  const writes = [];
+  const rep = await runMatrixUpdate({
+    apply: true,
+    matrixPath: "MEM",
+    driftResult: driftFixture(),
+    readText: () => FIXTURE,
+    writeText: (p, t) => writes.push({ p, t }),
+  });
+  assert.equal(rep.needsTargetChoice, false, "an explicit path answers the question implicitly");
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].p, "MEM");
+  assert.equal(rep.path, "MEM");
+});

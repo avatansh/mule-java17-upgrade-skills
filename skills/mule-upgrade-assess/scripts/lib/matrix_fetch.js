@@ -164,22 +164,42 @@ export async function fetchReleaseNotesCached(url, opts = {}) {
 
 /**
  * Resolve the matrix for a run: Anypoint Exchange governed matrix (when configured) → bundled YAML.
- * Returns { matrix, source, warnings }. Connector-version ENRICHMENT (latest-in-major, first-Java-17)
- * is NOT done here — that lives in resolve_versions.js (Exchange Graph + connector-notes-map).
+ * Returns { matrix, source, warnings }. Connector-version ENRICHMENT (latest-in-major, first
+ * compatible) is NOT done here — that lives in resolve_versions.js (Exchange Graph + notes-map).
  *
  * @param {object} opts
- * @param {boolean} [opts.noFetch]   skip the Exchange source attempt (straight to bundled)
- * @param {any}     [opts.exchange]  injectable ExchangeClient (tests); else built from AnypointClient
+ * @param {boolean} [opts.noFetch]      skip the Exchange source attempt (straight to bundled)
+ * @param {any}     [opts.exchange]     injectable ExchangeClient (tests); else built from AnypointClient
+ * @param {string|number} [opts.targetJava]  Java target; omit for the default (today's behaviour).
+ *                                           An unknown or uncurated target THROWS — see matrix_targets.
  */
 export async function resolveMatrix(opts = {}) {
   const warnings = [];
-  const bundled = loadBundledMatrix();
+  // Throws for an unknown/uncurated target. Deliberately NOT caught: quietly assessing against the
+  // default target's floors while the user believes they asked for another Java is worse than
+  // failing, and it is the kind of wrongness nobody notices until a deploy breaks.
+  const bundled = loadBundledMatrix(opts.targetJava);
+  const isDefaultTarget = opts.targetJava == null || opts.targetJava === "";
 
   // Anypoint Exchange governed matrix (pf-load-matrix Exchange branch) — used when matrix.source is
   // exchange*. Returns the FULL authoritative matrix (gating + connectors); the connectorless
   // safety-net lives in ExchangeClient.fetchAsset. Any failure is non-fatal → fall back to bundled.
   // Verbose detail goes to debugLog (LOG_LEVEL=debug); the user-facing warning is one clean line.
-  if (!opts.noFetch && String(cfg("matrix.source", "classpath")).startsWith("exchange")) {
+  const exchangeConfigured = String(cfg("matrix.source", "classpath")).startsWith("exchange");
+
+  if (!opts.noFetch && exchangeConfigured) {
+    // The Exchange source is a SINGLE asset, and that asset is the default target. Fetching it for a
+    // non-default target would hand back the wrong Java's matrix, so the fetch is skipped entirely
+    // and the user is told which copy they actually got — governance for a second target means
+    // publishing it as its own asset (references/MATRIX.md §2).
+    if (!isDefaultTarget) {
+      warnings.push(
+        `The Exchange matrix source governs the default target only, so Java ${bundled?.target?.javaVersion} ` +
+          `resolved from the bundled file instead. Publish a per-target asset to govern it centrally.`
+      );
+      return { matrix: bundled, source: "bundled", warnings };
+    }
+
     const ex = await tryExchangeMatrix(opts.exchange);
     if (ex && ex.matrix) {
       return { matrix: ex.matrix, source: `exchange:${ex.version}`, warnings };
@@ -187,8 +207,8 @@ export async function resolveMatrix(opts = {}) {
     if (ex && ex.error) {
       debugLog(`Exchange matrix source failed (${ex.error}); falling back to the bundled matrix.`);
       warnings.push(
-        "Live matrix fetch unavailable — using the bundled compatibility matrix (curated, Java-17-safe). " +
-          "Set LOG_LEVEL=debug for details."
+        `Live matrix fetch unavailable — using the bundled compatibility matrix ` +
+          `(curated, Java-${bundled?.target?.javaVersion ?? "17"}-safe). Set LOG_LEVEL=debug for details.`
       );
     }
   }

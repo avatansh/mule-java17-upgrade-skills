@@ -3,7 +3,7 @@ name: mule-upgrade-job
 description: >-
   Track a MuleSoft Java-17 upgrade as a stateful job across its whole lifecycle. Provides a local
   JSON job store (mirroring the Mule app's Object Store partitions), the job state machine
-  (PROCESSING → PR_OPEN → DEPLOYING → DEPLOYED / failed), single-flight per-app locking, a
+  (PROCESSING → PR_OPEN → DEPLOYING → DEPLOYED / failed), single-flight locking per app+environment, a
   branch→job index, idempotency markers, a buildJobStatus response builder (message +
   nextPollSeconds + optional PR/Jira/error/dep-guard fields), and a polling-based reconcile sweep
   that advances or fails stale jobs. Use it to create/read/update a job, get a pollable status, or
@@ -32,7 +32,7 @@ Four partitions mirror the Mule app's Object Stores 1:1:
 | Object Store | JSON mirror | Key |
 |---|---|---|
 | `jobStore` | `jobs/<jobId>.json` | `jobId` (`job-<uuid>`) |
-| `locksStore` | `locks/<enc(lock::app)>.json` | per-app single-flight; value = jobId |
+| `locksStore` | `locks/<enc(lock::app::env)>.json` | single-flight per app **+ environment**; value = jobId |
 | `indexStore` | `index/<enc(branch::name)>.json` | branch → jobId correlation |
 | `idempotencyStore` | `idem/<enc(key)>.json` | poll/callback/notify dedup markers |
 
@@ -110,6 +110,50 @@ The PR poller, deploy verifier, and notifier are injectable, so the sweep is pur
 Run it on demand, or on a timer via the `/loop` skill or OS cron for continuous, server-free
 lifecycle tracking.
 
+## Cursor hooks — the automatic trigger for that sweep
+
+Reconcile solves *how* to learn about external transitions. Hooks solve *when* to ask, without anyone
+having to remember. `.cursor/hooks.json` wires `.cursor/hooks/refresh-jobs.mjs` to two events:
+
+| Event | Why this moment | Ceiling |
+| --- | --- | --- |
+| `sessionStart` | Catches every PR/CI/deploy transition that happened while Cursor was closed — the deliveries an inbound webhook would have made | `hooks.timeoutMs` (8s) |
+| `beforeSubmitPrompt` | Runs immediately before the model reasons, so the agent reads current state instead of the user having to ask "check status now" | `hooks.promptTimeoutMs` (3s) |
+
+This is the practical replacement for the inbound webhook: no public endpoint, no HMAC secret, no
+per-repo GitHub or CD configuration. `server/lib/webhook.js` still works and is still the better
+choice for always-on server deployments (it is push-based, so it is instant and costs no API calls) —
+hooks are what make status tracking work on a laptop and in a Vibes demo.
+
+**What keeps it safe.** `beforeSubmitPrompt` fires on *every* message and a sweep makes real GitHub
+calls, so `lib/hook_refresh.js` gates it. A refresh happens only when hooks are enabled, **and** at
+least one job is non-terminal, **and** the last refresh is older than `hooks.minIntervalSeconds`
+(45s). The steady state — nothing in flight — costs one `listJobs()` and no network. The last-run
+stamp is written *before* the sweep, so two prompts in quick succession can't both call GitHub, and it
+lives in its own state file rather than the shared cache so disabling the cache can't silently disable
+the debounce.
+
+**It cannot break your prompt.** The hook always exits 0 (so `hooks.json` deliberately leaves
+`failClosed` off), swallows every error into the log, and races the sweep against a hard timeout. A
+slow sweep loses that race rather than stalling the session; nothing is lost, because reconcile's
+writes are idempotent and the next turn picks the state up.
+
+Written in Node, not `bash`+`jq`: this repo already requires Node, while `jq` and `bash` are absent on
+a default Windows machine, and a hook that silently no-ops on half the team's laptops is worse than no
+hook.
+
+```bash
+# Watch it work (only interesting outcomes are logged):
+cat ~/.mule-upgrade/hooks.log
+
+# Turn it off for one session, without editing config:
+MULE_UPGRADE_HOOKS=off        # or set hooks.enabled: "false"
+```
+
+Tuning lives in `config.yaml` under `hooks:` (`enabled`, `staleSeconds`, `minIntervalSeconds`,
+`timeoutMs`, `promptTimeoutMs`). Note `hooks.staleSeconds` (60s) is far tighter than
+`reconcile.staleSeconds` (900s) on purpose — in an interactive session someone is watching.
+
 ## Improvements over the Mule app
 
 - **Zero infrastructure** — no Object Store, no webhook endpoint, no HMAC secret; just JSON files.
@@ -123,4 +167,11 @@ lifecycle tracking.
 `tests/job.test.js` ports all 8 `pf-get-job-status-suite.xml` cases for `buildJobStatus`, plus
 store behaviour (create + single-flight CONFLICT, setStatus terminal `completedAt`, branch index,
 idempotency first-wins, delete clears index + releases only its own lock, reapply reseed) and every
-reconcile transition. Run `npm test` from the repo root (51 tests across all skills).
+reconcile transition.
+
+`tests/hook_refresh.test.js` covers the hook gating policy: terminal jobs never trigger a GitHub call,
+the debounce floor holds and releases, the stamp is written before the sweep, a hanging reconcile loses
+the timeout race instead of stalling a prompt, and a throwing reconcile is reported rather than
+propagated.
+
+Run `npm test` from the repo root.

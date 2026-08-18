@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "scan_vulnerabilities",
+  "title": "scan_vulnerabilities",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "source": {
+      "type": "string",
+      "enum": ["github", "local"],
+      "description": "Where to read the app from. Omit to infer: github when owner/repoUrl is given, otherwise local."
+    },
+    "repo": { "type": "string", "description": "Path to a local clone directory (source=local)." },
+    "repoUrl": { "type": "string", "description": "GitHub URL, optionally /tree/<branch>/<sub-path> (source=github)." },
+    "owner": { "type": "string", "description": "GitHub owner (source=github)." },
+    "repoName": { "type": "string", "description": "GitHub repository name (source=github)." },
+    "branch": { "type": "string", "description": "Branch (source=github). Defaults to the repo default branch." },
+    "appPath": {
+      "type": "string",
+      "description": "Path to the app module inside the repo (monorepo). Default \".\"."
+    },
+    "comparePlan": {
+      "type": "boolean",
+      "description": "Also build the upgrade plan so findings the upgrade already fixes are separated from findings that still need action. Default true. Set false for a faster, plain vulnerability list."
+    },
+    "refresh": {
+      "type": "boolean",
+      "description": "Bypass the cached OSV answers for this run."
+    },
+    "maxVulnDetails": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000,
+      "description": "Cap on advisory detail fetches (default 250). Counts stay complete; per-advisory detail beyond the cap is truncated and reported as such."
+    }
+  }
+}

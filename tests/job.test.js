@@ -172,8 +172,10 @@ test("jobstore-create-persists-PROCESSING-record", () => {
   const persisted = store.getJob(jobId);
   assert.equal(persisted.jobId, jobId);
   assert.equal(persisted.status, "PROCESSING");
-  // lock is held by this job
-  assert.equal(store.lockHolder("app-a"), jobId);
+  // The lock is claimed on app+environment, and the key used is recorded so every release path frees
+  // exactly what was claimed.
+  assert.equal(record.lockKey, "app-a::dev");
+  assert.equal(store.lockHolder("app-a::dev"), jobId);
 });
 
 test("jobstore-second-create-same-app-conflicts", () => {
@@ -182,6 +184,60 @@ test("jobstore-second-create-same-app-conflicts", () => {
     () => store.createJob({ appName: "app-b" }),
     (e) => e.code === "CONFLICT" && e.existingJobId === first
   );
+});
+
+// ── single-flight is scoped per app + ENVIRONMENT ────────────────────────────────────────
+// Two upgrades of one app in the SAME env would edit the same pom on the same branch, so they must
+// still collide. Different envs are independent work and must be allowed to run concurrently.
+test("jobstore-same-app-different-env-does-not-conflict", () => {
+  const { jobId: devJob, record: devRec } = store.createJob({ appName: "app-multi", environment: "dev" });
+  const { jobId: testJob, record: testRec } = store.createJob({ appName: "app-multi", environment: "test" });
+
+  assert.notEqual(devJob, testJob);
+  assert.equal(devRec.lockKey, "app-multi::dev");
+  assert.equal(testRec.lockKey, "app-multi::test");
+  assert.equal(store.lockHolder("app-multi::dev"), devJob);
+  assert.equal(store.lockHolder("app-multi::test"), testJob);
+});
+
+test("jobstore-same-app-same-env-still-conflicts", () => {
+  const { jobId: first } = store.createJob({ appName: "app-same", environment: "dev" });
+  assert.throws(
+    () => store.createJob({ appName: "app-same", environment: "dev" }),
+    (e) => e.code === "CONFLICT" && e.existingJobId === first
+  );
+  // …and the sibling env is unaffected by that failed attempt.
+  const { jobId: other } = store.createJob({ appName: "app-same", environment: "prod" });
+  assert.notEqual(other, first);
+});
+
+test("jobstore-delete-releases-the-env-scoped-key-it-claimed", () => {
+  const { jobId } = store.createJob({ appName: "app-envdel", environment: "test" });
+  const res = store.deleteJob(jobId);
+  assert.equal(res.lockReleased, true);
+  assert.equal(store.lockHolder("app-envdel::test"), null);
+});
+
+test("defaultLockKey-falls-back-to-the-bare-app-name-without-an-environment", () => {
+  assert.equal(store.defaultLockKey("orders-api", "dev"), "orders-api::dev");
+  assert.equal(store.defaultLockKey("orders-api", null), "orders-api");
+  assert.equal(store.defaultLockKey("orders-api", undefined), "orders-api");
+});
+
+// ── notification opt-in is persisted on the record ───────────────────────────────────────
+test("jobstore-persists-notifyPrefs-and-carries-them-through-reapply", () => {
+  const prefs = { slack: true, jira: "comment" };
+  const { jobId } = store.createJob({ appName: "app-prefs", environment: "dev", notifyPrefs: prefs });
+  assert.deepEqual(store.getJob(jobId).notifyPrefs, prefs);
+
+  // Absent → null, which resolveNotifyPrefs reads as "stay silent".
+  const { jobId: silent } = store.createJob({ appName: "app-silent" });
+  assert.equal(store.getJob(silent).notifyPrefs, null);
+
+  store.setStatus(jobId, "CLOSED");
+  store.releaseLock("app-prefs::dev");
+  const { record: fresh } = store.reapplyJob(jobId);
+  assert.deepEqual(fresh.notifyPrefs, prefs, "a retry keeps the operator's original choice");
 });
 
 test("jobstore-setStatus-merges-and-stamps-terminal-completedAt", () => {

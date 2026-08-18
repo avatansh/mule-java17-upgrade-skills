@@ -9,7 +9,7 @@ connects Agentforce.
 > (end-to-end)](#9-quick-start-expose-these-tools-to-an-agentforce-agent-end-to-end): validate
 > with MCP Inspector → expose over HTTPS → register in the Agentforce Registry → build + test one agent.
 
-> For hands-on, one-app-at-a-time upgrades inside an IDE (no server), see
+> For hands-on, interactive upgrades inside an IDE (no server), see
 > [SETUP-IDE.md](./SETUP-IDE.md). The server reuses the exact same skill scripts underneath.
 
 ---

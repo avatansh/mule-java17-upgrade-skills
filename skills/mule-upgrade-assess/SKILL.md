@@ -55,11 +55,58 @@ An `AssessmentResult`:
   "versionSelections": [ /* only when a versionStrategy rewrote a pin: {artifactId, from, to, strategy} */ ],
   "matrixDrift": { /* gating-drift advisory — ONLY when --drift/includeDrift is set; otherwise null */ },
   "deployedStateCheck": { /* verbatim deployed-state lookup — see "Deployed-state check" below */ },
+  "processGuide": { /* Process Guide checklist verdicts — see "Process Guide baseline" below */ },
   "warnings": [ /* actionable prose */ ]
 }
 ```
 
 The `changePlan` is exactly what `mule-upgrade-apply` consumes — assess → apply → PR is the pipeline.
+
+## Process Guide baseline
+
+`processGuide` answers a question warnings cannot: **for each item on the official "Java 17 Upgrade
+Process Guide" checklist, did we actually verify it, and what's the verdict?** Warnings only appear when
+something is wrong, so they can't distinguish "checked and fine" from "never checked" — useless for
+sign-off. Every item carries one of four verdicts:
+
+| Verdict | Meaning |
+|---|---|
+| `ok` | verified compliant — nothing to do |
+| `will-fix` | non-compliant, and this upgrade's `fileEdits` already handle it |
+| `action` | non-compliant and **not** auto-fixable — a human must change code/config |
+| `manual` | **not determinable from a repository** — a human must confirm out-of-band |
+
+The `manual` bucket is deliberate honesty, not a gap: the Maven CLI on the build machine, the Anypoint
+Studio version, whether MUnit Recorder was used, and Runtime Manager's Java setting genuinely aren't in
+the repo. Reporting them as `ok` would imply coverage the assessment doesn't have.
+
+```jsonc
+"processGuide": {
+  "items": [ { "id": "dwErrorMessage", "item": "DataWeave: error.muleMessage replaced by …",
+               "status": "action", "detail": "…" } ],
+  "summary": { "ok": 14, "willFix": 3, "action": 1, "manual": 6 },
+  "verified": 17, "total": 24
+}
+```
+
+It is **pure reporting** — computed from the finished edit list, so it can never influence what gets
+edited. Floors come from `gating` in the matrix; the two non-pom floors (`mavenMin`, `studioMin`) come
+from the matrix's `processGuide` block.
+
+### What the content scan now covers
+
+The manual-review scans read the pom **plus `.java` (repo-wide) plus `.dwl` and `src/main/mule/*.xml`
+scoped to the app module**. DataWeave and Mule XML matter because the changes that bite hardest at
+*runtime* — `error.muleMessage`, POJO reflection — live in transformations and inline expressions, not
+in Java. Scanning only `.java` left the app's actual integration logic unexamined.
+
+Two safeguards come with that reach:
+
+- **Comments are stripped** (`<!-- -->`, `/* */`) before matching. Prose *about* a hazard is not the
+  hazard: a pom commenting "Do NOT pass add-opens / add-exports flags here" was previously reported as
+  *having* JPMS argLines — the opposite of the truth, and skewed toward the best-maintained apps.
+- **The corpus is bounded** (250 files, `maxScanFiles`) and app-scoped, because the GitHub source costs
+  one API call per primed file. A capped scan says so in `warnings` rather than reporting a false clean.
 
 > **Lean by default (the Full Split).** assess emits the network-free ChangePlan (including
 > `connectorsInApp[]`) + deployed-state + warnings, and returns in ~1–3s. The rich connector version
@@ -67,6 +114,32 @@ The `changePlan` is exactly what `mule-upgrade-apply` consumes — assess → ap
 > `versionStrategy`, which `start_upgrade` uses) — otherwise prefer the **`resolve_versions`** tool.
 > The gating **matrix-drift** advisory (`matrixDrift`) is opt-in via `--drift` / `includeDrift` —
 > otherwise prefer the **`check_drift`** tool. `--no-fetch` forces lean (matrix-only, no live fetch).
+
+## Retargeting to another Java (17 → 21 → …)
+
+The engine has **no hardcoded Java version**. It reads `target.javaVersion` from the matrix and
+parameterises everything off it: gating comparisons, the release-notes "first compatible version"
+lookup, the connector menu labels, the `@JavaVersionSupport` checklist and the Process-Guide report.
+Retargeting is a matrix edit — the full key list is documented in the matrix header.
+
+Two details make this hold up rather than just sound good:
+
+- **Staleness is derived, not enumerated.** The Java gating rules use `compare: "java"`, so "which
+  versions need bumping?" is computed as `installed < target` with Java-major normalisation (`1.8`, `8`
+  and `8.0.402` are all Java 8). The previous form — `in: ["1.8","8","11"]` — needed `"17"` appended by
+  hand the day the target became 21, and forgetting it failed **silently**: the plan just omitted the
+  Java bump.
+- **A half-finished retarget is caught.** `assess` cross-checks `target.javaVersion` against
+  `muleArtifact.javaSpecificationVersions` and the Java gating rules' `set`, and warns on a mismatch.
+  Without that check, the app would declare a descriptor the target runtime rejects — discovered at
+  deploy time, which is the most expensive place to find it.
+
+`tests/retarget_java.test.js` proves the claim end-to-end: it flips a matrix to Java 21 and asserts the
+same app pom now yields `17 → 21` edits across the pom properties, `mule-artifact.json` and CI, with no
+code path patched.
+
+One thing lives outside the matrix: `scan.targetJava` in `config.yaml` decides what the **fleet scan**
+calls stale. Move it too, or the scan keeps reporting Java 17 apps as current.
 
 ## How to run
 

@@ -16,6 +16,7 @@
 // (so a matrix that already moved is skipped, never clobbered).
 
 import fs from "node:fs";
+import yaml from "js-yaml";
 
 import { runDriftCheck } from "../../mule-upgrade-assess/scripts/lib/matrix_drift.js";
 import {
@@ -23,6 +24,8 @@ import {
   loadBundledMatrix,
   _resetMatrixCache,
 } from "../../mule-upgrade-assess/scripts/lib/matrix.js";
+import { listTargets, versionDelta } from "../../mule-upgrade-assess/scripts/lib/matrix_targets.js";
+import { javaMajor } from "../../../lib_shared/java_version.js";
 
 /** Escape a string for embedding as a literal in a RegExp. */
 function escapeRe(s) {
@@ -138,27 +141,95 @@ function proposalMeta(p) {
 }
 
 /**
+ * Which target files should this update touch?
+ *
+ * With one matrix there is nothing to decide. With several (one per Java target) the answer is a
+ * JUDGEMENT the operator has to make, and guessing it is exactly how the per-target layout goes
+ * wrong: a version bump is usually target-specific (the safe version differs per Java) while a
+ * coordinate change is Java-neutral and belongs everywhere. So when the caller has not said, we
+ * REFUSE and hand back the choices for the skill layer to ask about — the same refuse-with-options
+ * shape the rest of the suite uses for confirmation gates.
+ *
+ * @param {Array<string|number>|"all"|undefined} requested
+ * @returns {{resolved:{javaVersion:string, file:string, curated:boolean}[]}|{needsChoice:true, available:any[]}}
+ */
+function chooseTargets(requested) {
+  const available = listTargets();
+  if (available.length <= 1) return { resolved: available };
+
+  if (requested === "all") return { resolved: available };
+
+  if (Array.isArray(requested) && requested.length > 0) {
+    const want = requested.map((r) => javaMajor(r));
+    const resolved = available.filter((t) => want.includes(t.major));
+    const missing = want.filter((w) => !available.some((t) => t.major === w));
+    if (missing.length) {
+      throw new Error(
+        `No compatibility matrix for Java ${missing.join(", ")}. Available: ${available.map((t) => t.major).join(", ")}.`
+      );
+    }
+    return { resolved };
+  }
+
+  return { needsChoice: true, available };
+}
+
+/**
  * runMatrixUpdate(opts): the skill's backend. Gathers drift, proposes bumps, and (only when
  * opts.apply) writes them back to the bundled matrix YAML — text-preservingly. Default is a
  * DRY-RUN review: it computes and returns the proposal + the would-be edits, writing nothing.
+ *
+ * MULTI-TARGET: with more than one matrix file present, `targets` says which to touch. Omitting it
+ * returns `needsTargetChoice` and writes nothing, so the operator is always the one deciding whether
+ * a bump is Java-specific or Java-neutral. `matrixPath` still forces a single explicit file.
  *
  * @param {object} [opts]
  * @param {boolean} [opts.apply]              write the bumps to disk (default false → dry-run review)
  * @param {boolean} [opts.noFetch]            skip network → nothing to propose (drift unchecked)
  * @param {boolean} [opts.includeConnectors]  also propose connector bumps (default true)
- * @param {string}  [opts.matrixPath]         override the matrix file path (tests)
+ * @param {Array<string|number>|"all"} [opts.targets]  Java targets to update; omit to be asked
+ * @param {string}  [opts.matrixPath]         override the matrix file path (single file; tests)
  * @param {object}  [opts.driftResult]        inject a runDriftCheck() result (tests; skips network)
  * @param {any}     [opts.exchange]           injectable ExchangeClient (tests)
  * @param {(url:string)=>Promise<string>} [opts.fetchHtml] injectable release-notes fetcher (tests)
  * @param {(p:string)=>string}  [opts.readText]  injectable reader (tests)
  * @param {(p:string,t:string)=>void} [opts.writeText] injectable writer (tests)
- * @returns {Promise<{path, proposals, applied, skipped, wrote, changed, driftChecked, warnings}>}
+ * @returns {Promise<any>}
  */
 export async function runMatrixUpdate(opts = {}) {
   const includeConnectors = opts.includeConnectors !== false;
-  const matrixPath = opts.matrixPath ?? bundledMatrixPath();
   const readText = opts.readText ?? ((p) => fs.readFileSync(p, "utf8"));
   const writeText = opts.writeText ?? ((p, t) => fs.writeFileSync(p, t));
+
+  // An explicit matrixPath means "this exact file" — the pre-multi-target contract, kept intact.
+  /** @type {{javaVersion:string, file:string, curated:boolean}[]} */
+  let files;
+  if (opts.matrixPath) {
+    files = [{ javaVersion: "", file: opts.matrixPath, curated: true }];
+  } else {
+    const choice = chooseTargets(opts.targets);
+    if ("needsChoice" in choice) {
+      return {
+        needsTargetChoice: true,
+        availableTargets: choice.available.map((t) => ({
+          javaVersion: t.javaVersion,
+          file: t.file,
+          curated: t.curated,
+          isDefault: t.isDefault,
+        })),
+        proposals: [],
+        applied: [],
+        skipped: [],
+        changed: false,
+        wrote: false,
+        driftChecked: false,
+        warnings: [],
+        path: null,
+        targets: [],
+      };
+    }
+    files = choice.resolved;
+  }
 
   // Gather drift (gating + connectors + candidate) unless the caller injected a result.
   const drift =
@@ -172,27 +243,38 @@ export async function runMatrixUpdate(opts = {}) {
     }));
 
   const proposals = proposeBumps(drift);
-  const before = readText(matrixPath);
-  const { text: after, applied, skipped } = applyMatrixEdits(before, proposals);
-  const changed = after !== before;
 
-  let wrote = false;
-  if (opts.apply && changed) {
-    writeText(matrixPath, after);
-    wrote = true;
-    // Invalidate the in-process matrix memo so any subsequent loadBundledMatrix() in this process
-    // re-reads the freshly-written YAML instead of serving the pre-bump cached copy.
-    _resetMatrixCache();
+  const perTarget = [];
+  let anyWrote = false;
+  for (const f of files) {
+    const before = readText(f.file);
+    const { text: after, applied, skipped } = applyMatrixEdits(before, proposals);
+    const changed = after !== before;
+    let wrote = false;
+    if (opts.apply && changed) {
+      writeText(f.file, after);
+      wrote = true;
+      anyWrote = true;
+    }
+    perTarget.push({ javaVersion: f.javaVersion, path: f.file, curated: f.curated, applied, skipped, changed, wrote });
   }
 
+  // Invalidate the in-process memo once, after all writes, so a subsequent loadBundledMatrix() in
+  // this process re-reads the freshly-written YAML instead of serving the pre-bump cached copy.
+  if (anyWrote) _resetMatrixCache();
+
+  // Top-level fields mirror the FIRST target so every pre-multi-target caller keeps working.
+  const primary = perTarget[0] ?? { path: null, applied: [], skipped: [], changed: false, wrote: false };
   return {
-    path: matrixPath,
+    path: primary.path,
     driftChecked: drift.gating?.checked === true || drift.connectors?.checked === true,
     proposals: proposals.map(proposalMeta),
-    applied,
-    skipped,
-    changed,
-    wrote,
+    applied: primary.applied,
+    skipped: primary.skipped,
+    changed: perTarget.some((t) => t.changed),
+    wrote: anyWrote,
+    targets: perTarget,
+    needsTargetChoice: false,
     warnings: drift.warnings ?? [],
   };
 }
@@ -200,6 +282,22 @@ export async function runMatrixUpdate(opts = {}) {
 /** Human-readable one-line-per-bump summary for the CLI. */
 export function formatMatrixUpdate(report) {
   const lines = [];
+
+  // Multi-target and nobody said which — ask, do not guess.
+  if (report.needsTargetChoice) {
+    lines.push("Which Java target(s) should this update touch?\n");
+    for (const t of report.availableTargets) {
+      const tags = [t.isDefault ? "default" : null, t.curated ? null : "uncurated"].filter(Boolean).join(", ");
+      lines.push(`  --targets ${t.javaVersion}${tags ? `   (${tags})` : ""}`);
+    }
+    lines.push("  --targets all   apply to every target");
+    lines.push(
+      "\nRule of thumb: a VERSION bump is usually target-specific (the safe version differs per Java);" +
+        "\na COORDINATE change (connector added/renamed) is Java-neutral and belongs in ALL targets."
+    );
+    return lines.join("\n");
+  }
+
   const n = report.proposals.length;
   if (!report.driftChecked) {
     lines.push("Matrix update: drift not checked (no live data / --no-fetch) — nothing to propose.");
@@ -209,20 +307,68 @@ export function formatMatrixUpdate(report) {
     lines.push("Matrix update: no bumps proposed — the bundled matrix is current.");
     return lines.join("\n");
   }
+
   lines.push(
     report.wrote
-      ? `Matrix update — APPLIED ${report.applied.length} bump(s) to ${report.path}:`
+      ? `Matrix update — APPLIED bumps:`
       : `Matrix update — ${n} proposed bump(s) (DRY-RUN, nothing written; pass --apply to adopt):`
   );
-  for (const a of report.applied) {
-    const where = a.lines.map((l) => `L${l.line}`).join(", ");
-    lines.push(`  ${a.kind === "gating" ? "⚙" : "→"} ${a.label}: ${a.from} → ${a.to}  (${where})`);
+
+  const targets = report.targets?.length ? report.targets : [report];
+  const multi = targets.length > 1;
+  for (const t of targets) {
+    if (multi) lines.push(`\n  ${t.javaVersion ? `Java ${t.javaVersion}` : t.path} — ${t.path}`);
+    const indent = multi ? "    " : "  ";
+    for (const a of t.applied) {
+      const where = a.lines.map((l) => `L${l.line}`).join(", ");
+      lines.push(`${indent}${a.kind === "gating" ? "⚙" : "→"} ${a.label}: ${a.from} → ${a.to}  (${where})`);
+    }
+    for (const s of t.skipped) {
+      lines.push(`${indent}⚠ ${s.label}: ${s.from} → ${s.to} SKIPPED — ${s.reason}`);
+    }
+    // An uncurated target's placeholders never match a bump's `from` guard, so everything skips.
+    // Say so plainly rather than leaving a wall of identical skip lines to interpret.
+    if (t.curated === false && !t.changed) {
+      lines.push(`${indent}(nothing applied — this target is still uncurated, so there are no versions to bump)`);
+    }
   }
-  for (const s of report.skipped) {
-    lines.push(`  ⚠ ${s.label}: ${s.from} → ${s.to} SKIPPED — ${s.reason}`);
-  }
+
   if (!report.wrote && report.changed) lines.push("\nRe-run with --apply to write these bumps to the matrix.");
   return lines.join("\n");
+}
+
+/**
+ * Format the version-level delta between two targets. This is the one affordance a single-file
+ * overlay layout would have given for free — recovered on demand so the per-target layout does not
+ * have to carry merge semantics permanently just to answer "what differs between 17 and 21?".
+ */
+export function formatTargetDiff(aMajor, bMajor) {
+  const targets = listTargets();
+  const find = (m) => targets.find((t) => t.major === javaMajor(m));
+  const a = find(aMajor);
+  const b = find(bMajor);
+  if (!a || !b) {
+    const have = targets.map((t) => t.major).join(", ");
+    return `Unknown target. Available: ${have}.`;
+  }
+
+  const delta = versionDelta(loadBundledMatrixRaw(a.file), loadBundledMatrixRaw(b.file));
+  if (delta.length === 0) return `Java ${a.major} and Java ${b.major} are version-identical.`;
+
+  const width = Math.max(...delta.map((d) => d.key.length));
+  const lines = [
+    `Java ${a.major} → Java ${b.major}: ${delta.length} field(s) differ`,
+    `  ${"".padEnd(width)}  ${String(a.major).padEnd(12)}${b.major}`,
+  ];
+  for (const d of delta) {
+    lines.push(`  ${d.key.padEnd(width)}  ${String(d.a ?? "-").padEnd(12)}${d.b ?? "-"}`);
+  }
+  return lines.join("\n");
+}
+
+/** Read+parse a matrix file directly (bypasses the target-curation gate, which diff must ignore). */
+function loadBundledMatrixRaw(file) {
+  return yaml.load(fs.readFileSync(file, "utf8"));
 }
 
 // re-export for callers/tests that want the loader without a second import

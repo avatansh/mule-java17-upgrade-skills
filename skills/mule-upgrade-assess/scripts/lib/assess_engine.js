@@ -10,6 +10,8 @@
 import { parsePom, asArray } from "./pom_parse.js";
 import { propOf, dependenciesOf, managedDependenciesOf, pluginsOf, managedPluginsOf } from "./pom_chain.js";
 import { lt, bumpMinor, isRef, refName } from "../../../../lib_shared/semver.js";
+import { javaLt, javaMajor, supportedJavaMajors } from "../../../../lib_shared/java_version.js";
+import { processGuideBaseline } from "./process_guide.js";
 
 // rehydrate(chain): rebuild each entry's parsed pom FROM ITS RAW TEXT.
 export function rehydrate(chain) {
@@ -141,8 +143,21 @@ export function computePropEdits(chain, matrix) {
 // ── appOverride strategy (default) ────────────────────────────────────────────────────
 
 // needsBump(installed, r): unknown/external ⇒ pin; else honour in[]/semver.
+/**
+ * Does the installed value need bumping to satisfy rule `r`?
+ *
+ * Three comparison modes, in precedence order:
+ *   compare:"java" → JAVA-MAJOR comparison against `set` ("1.8", "8" and "8.0.402" are all Java 8, and
+ *                    all older than 17). This is what makes retargeting possible: staleness is DERIVED
+ *                    from `installed < target`, so moving the target to 21 automatically starts
+ *                    flagging 17 with no rule edit. The alternative — extending the `in` list by hand —
+ *                    fails silently, producing a plan that simply skips the Java bump.
+ *   in:[…]         → legacy explicit enumeration, still honoured for any rule that wants exact matching.
+ *   (default)      → semver comparison against `set`.
+ */
 export function needsBump(installed, r) {
   if (installed == null) return true;
+  if (r.compare === "java") return javaLt(String(installed), String(r.set));
   if (r.in) return r.in.includes(String(installed));
   return lt(String(installed), r.set);
 }
@@ -456,6 +471,8 @@ export function connectorGapWarning(chain, matrix, appName) {
  * @param {object} [opts]
  * @param {(relPath:string)=>(string|null)} [opts.readFile] read a repo-relative file (sync)
  * @param {object} [opts.manualReview] matrix.manualReview block (only scanRegex entries are used)
+ * @param {string} [opts.appPath] scope the .dwl / Mule-XML corpus to this module (monorepos)
+ * @param {number} [opts.maxScanFiles] cap on files read into the corpus (default 250)
  */
 export function scanFlags(tree, appPomText, opts = {}) {
   const items = tree?.tree ?? [];
@@ -463,6 +480,7 @@ export function scanFlags(tree, appPomText, opts = {}) {
   const customJava = javaFiles.length > 0;
   const lookupInPom = (appPomText ?? "").includes("lookup(");
   const warnings = [];
+  const matchedReviews = [];
   if (tree?.truncated) {
     warnings.push(
       "Repository tree was truncated by GitHub (>100k objects); some file paths may have been missed."
@@ -479,25 +497,41 @@ export function scanFlags(tree, appPomText, opts = {}) {
     );
   }
 
-  // Content-based manualReview scans (setAccessible / ResourceBundle / powermock / DW POJO / etc.).
-  // Concatenate the pom text with every readable .java source and test each scanRegex once.
+  // Content-based manualReview scans (setAccessible / ResourceBundle / powermock / DW POJO / DataWeave
+  // deprecations / etc.). The corpus is the pom text plus every readable source file the scans care
+  // about: .java, .dwl, and Mule config XML under src/main/mule. DataWeave and Mule XML matter because
+  // the Java-17 / Mule-4.9 breaking changes that bite hardest at RUNTIME (e.g. error.muleMessage, POJO
+  // reflection) live in transformations and inline expressions, not in Java — scanning only .java left
+  // the app's actual integration logic unexamined.
+  //
+  // The extra file kinds are APP-SCOPED (a monorepo shouldn't pull every sibling module's DataWeave)
+  // and the total is BOUNDED, because the github source costs one API call per primed file.
   const mr = opts.manualReview ?? {};
   const readFile = typeof opts.readFile === "function" ? opts.readFile : null;
-  const regexEntries = Object.values(mr).filter((e) => e && typeof e.scanRegex === "string" && e.warn);
+  const regexEntries = Object.entries(mr).filter(
+    ([, e]) => e && typeof e.scanRegex === "string" && e.warn
+  );
   if (regexEntries.length) {
-    let corpus = String(appPomText ?? "");
+    let corpus = stripComments(String(appPomText ?? ""));
     if (readFile) {
-      for (const jf of javaFiles) {
+      const targets = scanTargets(items, opts);
+      if (targets.truncated) {
+        warnings.push(
+          `Content scan was capped at ${targets.limit} source files (repo has ${targets.total}); ` +
+            `some DataWeave/Java/Mule-XML files were not examined for manual-review flags.`
+        );
+      }
+      for (const rel of targets.paths) {
         try {
-          const txt = readFile(jf.path);
-          if (txt) corpus += "\n" + txt;
+          const txt = readFile(rel);
+          if (txt) corpus += "\n" + stripComments(txt);
         } catch {
           /* unreadable file → skip, non-fatal */
         }
       }
     }
     const seen = new Set();
-    for (const e of regexEntries) {
+    for (const [key, e] of regexEntries) {
       if (seen.has(e.warn)) continue;
       let re;
       try {
@@ -508,6 +542,7 @@ export function scanFlags(tree, appPomText, opts = {}) {
       if (re.test(corpus)) {
         seen.add(e.warn);
         warnings.push(e.warn);
+        matchedReviews.push(key);
       }
     }
   }
@@ -516,8 +551,111 @@ export function scanFlags(tree, appPomText, opts = {}) {
     customJavaFound: customJava,
     lookupFound: lookupInPom,
     hasApiPolicies: false,
+    // The manualReview KEYS that matched (not the prose) so downstream consumers — notably the
+    // Process-Guide baseline — can key off a stable id instead of string-matching a warning.
+    matchedReviews,
     warnings,
   };
+}
+
+/**
+ * Remove XML (`<!-- -->`) and block (`/* *\/`) comments before a content scan.
+ *
+ * Without this, prose ABOUT a hazard reads as the hazard itself. A real example: an app pom carrying
+ * the comment "Do NOT pass add-opens / add-exports JVM flags via argLines here" was flagged as having
+ * JPMS argLines — the opposite of the truth. Documentation that names a pitfall is common in exactly
+ * the poms and Mule XMLs most carefully prepared for Java 17, so the false-positive rate skews toward
+ * the best-maintained apps.
+ *
+ * `//` line comments are deliberately NOT stripped: it is indistinguishable from the `//` in a URL
+ * (namespace declarations, distributionUrl) without a real parser, and dropping the rest of those
+ * lines would lose genuine content.
+ */
+export function stripComments(text) {
+  return String(text ?? "")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/\/\*[\s\S]*?\*\//g, " ");
+}
+
+/** True when a repo-relative path sits inside the app module (whole repo when no appPath). */
+function underAppPath(p, appPath) {
+  if (!appPath || appPath === "." || appPath === "") return true;
+  const pre = appPath.endsWith("/") ? appPath : `${appPath}/`;
+  return p === appPath || p.startsWith(pre);
+}
+
+/**
+ * The files a content scan should read: every .java in the repo (unchanged, repo-wide — custom Java
+ * anywhere is relevant to a JDK bump), plus .dwl and src/main/mule/*.xml scoped to the app module.
+ * Bounded by opts.maxScanFiles (default 250) because each primed file is one GitHub API call.
+ */
+export function scanTargets(items, opts = {}) {
+  const appPath = opts.appPath ?? null;
+  const limit = Number(opts.maxScanFiles ?? 250);
+  const paths = [];
+  const seen = new Set();
+  const add = (p) => {
+    if (!seen.has(p)) {
+      seen.add(p);
+      paths.push(p);
+    }
+  };
+  for (const i of items) {
+    if (i.type && i.type !== "blob") continue;
+    if (/\.java$/i.test(i.path)) add(i.path);
+  }
+  for (const i of items) {
+    if (i.type && i.type !== "blob") continue;
+    if (!underAppPath(i.path, appPath)) continue;
+    if (/\.dwl$/i.test(i.path)) add(i.path);
+    else if (/(^|\/)src\/main\/mule\/.*\.xml$/i.test(i.path)) add(i.path);
+  }
+  const total = paths.length;
+  return { paths: paths.slice(0, limit), total, limit, truncated: total > limit };
+}
+
+// ── retarget coherence (Java 17 → 21 → …) ─────────────────────────────────────────────
+
+/**
+ * Warn when the matrix's Java target is internally inconsistent.
+ *
+ * The engine reads its target Java from exactly one place (`target.javaVersion`), but a few other keys
+ * MUST agree with it or the plan comes out half-migrated: `mule-artifact.json`'s
+ * `javaSpecificationVersions` decides what the runtime will accept, and the `compare:"java"` gating
+ * rules decide what the pom properties get set to. A retarget that updates `target.javaVersion` and
+ * forgets one of those produces edits that look successful and deploy-fail later — the most expensive
+ * possible place to find out. Cheap to check here, so we check.
+ * @param {any} matrix
+ * @returns {string[]}
+ */
+export function retargetWarnings(matrix) {
+  const target = matrix?.target?.javaVersion;
+  const t = javaMajor(target);
+  if (t == null) {
+    return [
+      `WARNING: the compatibility matrix has no usable target.javaVersion (${JSON.stringify(target ?? null)}). ` +
+        `The whole engine derives its Java target from that key — set it before relying on this plan.`,
+    ];
+  }
+  const out = [];
+  const specs = matrix?.muleArtifact?.javaSpecificationVersions ?? [];
+  if (specs.length && !specs.some((s) => javaMajor(s) === t)) {
+    out.push(
+      `WARNING: matrix target.javaVersion is ${target} but muleArtifact.javaSpecificationVersions is ` +
+        `[${specs.join(", ")}], which does not include it. The app would declare a descriptor the target ` +
+        `runtime rejects at deploy time — add "${t}" to javaSpecificationVersions.`
+    );
+  }
+  for (const [name, r] of Object.entries(matrix?.gating ?? {})) {
+    if (r?.compare !== "java") continue;
+    if (javaMajor(r.set) !== t) {
+      out.push(
+        `WARNING: matrix target.javaVersion is ${target} but gating.${name} sets "${r.set}". Java gating rules ` +
+          `must set the target major, or the pom keeps a stale Java version while everything else moves.`
+      );
+    }
+  }
+  return out;
 }
 
 // ── CUSTOM_CONNECTOR detection + upgrade checklist ────────────────────────────────────
@@ -539,19 +677,28 @@ export function isCustomConnector(chain) {
 
 /**
  * The connector-upgrade checklist emitted as warnings when a CUSTOM_CONNECTOR is detected.
- * These are advisory (never auto-edited) because a connector's Java-17 readiness is a code +
- * metadata change (setters, @JavaVersionSupport, parent-POM/mule-sdk-api bumps), not a pom pin.
+ * These are advisory (never auto-edited) because a connector's Java readiness is a code + metadata
+ * change (setters, @JavaVersionSupport, parent-POM/mule-sdk-api bumps), not a pom pin.
+ *
+ * The target major is a parameter: the @JavaVersionSupport list a connector must declare grows with the
+ * target, and telling someone targeting Java 21 to annotate JAVA_17 would produce a module the runtime
+ * rejects at deploy time — the single most expensive way to discover a stale checklist.
+ * @param {string} [appName]
+ * @param {string|number} [targetJava]
  */
-export function customConnectorWarnings(appName) {
+export function customConnectorWarnings(appName, targetJava = 17) {
   const who = appName ?? "this project";
+  const majors = supportedJavaMajors(targetJava);
+  const annotation = majors.map((m) => `JAVA_${m}`).join(", ");
+  const target = majors[majors.length - 1];
   return [
     `NOTE: ${who} is a Mule extension/connector project (packaging mule-extension). It follows the connector-upgrade path, NOT the app rewrite path — these edits are advisory, not auto-applied:`,
-    "  · Add @JavaVersionSupport({JAVA_8, JAVA_11, JAVA_17}) on the @Extension class (Java SDK); XML SDK inherits Java 17 automatically.",
+    `  · Add @JavaVersionSupport({${annotation}}) on the @Extension class (Java SDK); XML SDK inherits Java ${target} automatically.`,
     "  · Add/upgrade org.mule.sdk:mule-sdk-api to 0.10.1 so Java-compatibility metadata is generated.",
     "  · Parent POM: mule-java-extension-parent (recommended, declare minMuleVersion yourself), or legacy mule-modules-parent >= 1.9.0 (auto-sets minMuleVersion 4.9.0).",
-    "  · Bump libraries for Java 17: ByteBuddy 1.14.0 (replace CGLib), Jacoco 0.8.10, SLF4J 2.x; JDBC/Groovy/JRuby to Java-17 builds.",
+    `  · Bump libraries for Java ${target}: ByteBuddy 1.14.0 (replace CGLib), Jacoco 0.8.10, SLF4J 2.x; JDBC/Groovy/JRuby to Java-${target} builds.`,
     "  · API objects need setters (not just getters/constructors) so DataWeave can write without reflection; migrate PowerMock tests to current Mockito.",
-    "  · Deploy-time is the final gate: Mule rejects modules lacking Java-17 support ('Extension ... does not support Java 17. Supported versions are: [1.8, 11]').",
+    `  · Deploy-time is the final gate: Mule rejects modules lacking Java-${target} support ('Extension ... does not support Java ${target}. Supported versions are: [1.8, 11]').`,
   ];
 }
 
@@ -579,6 +726,8 @@ export function buildAssessmentResult({
   customJavaFound,
   lookupFound,
   warnings,
+  matchedReviews = [],
+  readFile = null,
   pomEditStrategy = "appOverride",
   excludeArtifacts = [],
   parentRef = null,
@@ -704,17 +853,40 @@ export function buildAssessmentResult({
   // for any gating/property it does declare, but the real work is code + @JavaVersionSupport).
   const connectorProject = isCustomConnector(chain);
   const effectiveTopology = connectorProject ? "CUSTOM_CONNECTOR" : topology;
-  const connectorChecklist = connectorProject ? customConnectorWarnings(appName) : [];
+  const connectorChecklist = connectorProject
+    ? customConnectorWarnings(appName, m?.target?.javaVersion ?? 17)
+    : [];
+
+  const gaps = connectorGaps(chain, m);
+  const resolvedRuntime =
+    resolveProp(chain, "app.runtime") ?? resolveProp(chain, "app.runtime.semver") ?? "unknown";
+  const resolvedJava =
+    resolveProp(chain, "java.version") ??
+    resolveProp(chain, "maven.compiler.source") ??
+    resolveProp(chain, "maven.compiler.target") ??
+    "unknown";
+
+  // The official Process Guide checklist, evaluated against what we just established. Pure reporting —
+  // it reads the finished edit list and cannot influence it.
+  const processGuide = processGuideBaseline({
+    matrix: m,
+    fileEdits: all,
+    currentRuntime: resolvedRuntime,
+    currentJavaVersion: resolvedJava,
+    matchedReviews,
+    connectorGaps: gaps,
+    missingFromMatrix: missingConns,
+    connectorProject,
+    hasApiPolicies: hasApiPolicies ?? false,
+    readFile,
+  });
 
   return {
     appName,
-    currentRuntime:
-      resolveProp(chain, "app.runtime") ?? resolveProp(chain, "app.runtime.semver") ?? "unknown",
-    currentJavaVersion:
-      resolveProp(chain, "java.version") ??
-      resolveProp(chain, "maven.compiler.source") ??
-      resolveProp(chain, "maven.compiler.target") ??
-      "unknown",
+    currentRuntime: resolvedRuntime,
+    currentJavaVersion: resolvedJava,
+    // Process-Guide checklist verdicts (ok / will-fix / action / manual) — see lib/process_guide.js.
+    processGuide,
     changePlan: {
       targetRuntime: m.target.runtime,
       targetJavaVersion: m.target.javaVersion,
@@ -726,13 +898,14 @@ export function buildAssessmentResult({
       hasCustomJavaCode: customJavaFound ?? false,
       hasLookupFunction: lookupFound ?? false,
       missingFromMatrix: missingConns,
-      connectorGaps: connectorGaps(chain, m),
+      connectorGaps: gaps,
       // LEAN per-app connector view (pure, network-free) — always present. The rich version MENU
       // (options[], firstCompatible/latest) is opt-in via resolve_versions / includeVersions.
       connectorsInApp: connectorsInApp(chain, m),
     },
     warnings: [
       ...(warnings ?? []),
+      ...retargetWarnings(m),
       ...connectorChecklist,
       ...sharedFileWarnings,
       ...missingWarnings,

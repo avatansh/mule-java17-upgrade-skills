@@ -36,15 +36,18 @@ pre-flight assess ──► topology routing (app-pom | parent-pom | none)
      │                     │                    │              └─► ALREADY_UPGRADED (no lock, no job)
      │                     │                    └─► dispatch mule-upgrade-parent-pom job (see below)
      ▼ app-pom (fileEdits exist)
-acquire lock ──► CONFLICT (UPGRADE_IN_PROGRESS) if another job holds the app
+acquire lock on <app>::<env> ──► CONFLICT (UPGRADE_IN_PROGRESS) if this app+env is already upgrading
      │
      ▼ job PROCESSING
-[optional] auto-create Jira ticket ──► COMMITTING
+[opt-in] create Jira ticket ──► COMMITTING
      ▼
 apply transforms (SKILL 2) ──► commit + open PR (SKILL 3) ──► COMMITTED ──► PR_OPEN
      ▼
-notify (Slack + Jira, non-fatal) ──► record branchName/commitSha/prNumber/prUrl + branch index
+[opt-in] notify (Slack + Jira, non-fatal) ──► record branchName/commitSha/prNumber/prUrl + branch index
 ```
+
+The lock is keyed per app **and environment**, so `orders-api` in `dev` and `orders-api` in `test` are
+independent runs; only a second upgrade of the same app in the *same* environment CONFLICTs.
 
 ### Topology routing (Tier 2c)
 
@@ -99,6 +102,23 @@ local mode; defaults to `--repo`), `--head-sha` (stale-plan anchor), `--jira <ti
 `--jira-base-url <url>`, `--app-path`, `--no-fetch` (skip the live matrix fetch + connector
 enrichment, use bundled YAML).
 
+**Notifications are opt-in** and silent by default, even when a Slack webhook and Jira token are
+configured — credentials are capability, not consent:
+
+| Flag | Effect |
+|------|--------|
+| *(neither)* | Nothing is posted; no ticket is created. **Default.** |
+| `--slack` | Post Slack alerts for this job's lifecycle transitions (PR opened → merged → deployed / failed). |
+| `--jira-mode comment` | Post lifecycle updates onto the ticket given by `--jira`. Never creates one. |
+| `--jira-mode create` | Create a migration ticket when `--jira` wasn't supplied, then comment on it. |
+
+The choice is stored on the job record, so transitions discovered *later* by `poll`/`reconcile` or a
+status refresh honor the same answer rather than re-asking or going silent. It is stamped at creation
+and is therefore **not** retro-applicable — flipping the flag later affects new jobs only.
+
+The interactive `mule-upgrade-agent` conductor asks for this **once at the start of a session** and
+passes the same flags on every subsequent run; these flags are the non-interactive equivalent for CI.
+
 **Exit codes:** `0` ok (incl. `ALREADY_UPGRADED` / `PR_OPEN`), `4` CONFLICT, `5` FAILED_*,
 `2` usage, `1` other.
 
@@ -122,15 +142,19 @@ node skills/mule-upgrade/scripts/upgrade.js poll --watch --interval 30
 
 - `ALREADY_UPGRADED` — assessment found no edits; no job, no lock.
 - `PR_OPEN` — `{jobId, branchName, commitSha, prNumber, prUrl, jiraTicketId, warnings, nextPollSeconds:0}`.
-- `CONFLICT` — `{code:"UPGRADE_IN_PROGRESS", existingJobId, prUrl}`.
+- `CONFLICT` — `{code:"UPGRADE_IN_PROGRESS", existingJobId, prUrl, environment}`; another job already
+  holds `<app>::<env>`. Upgrading the same app in a *different* environment is not a conflict.
 - `FAILED_ASSESS` / `FAILED_COMMIT` — `{jobId, error}`; lock already released.
 
 ## Configuration (env, all optional)
 
 - **GitHub:** `GITHUB_TOKEN` (API mode); `gh` auth (local mode).
-- **Slack:** `SLACK_WEBHOOK_URL`, `SLACK_CHANNEL` — PR-ready / failure notices. Absent → skipped.
-- **Jira:** `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`; auto-create gated by
-  `JIRA_AUTO_CREATE=true` + `JIRA_PROJECT_KEY` (+ optional `JIRA_ISSUE_TYPE`, default `Task`).
+- **Slack:** `SLACK_WEBHOOK_URL`, `SLACK_CHANNEL` — deliver PR-ready / failure notices *when the run
+  opted in with `--slack`*. Absent → skipped.
+- **Jira:** `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` (+ `JIRA_PROJECT_KEY` and optional
+  `JIRA_ISSUE_TYPE`, default `Task`, for creation). Ticket creation needs `--jira-mode create` for the
+  run; `JIRA_AUTO_CREATE=true` / `jira.autoCreate` is the *ambient* alternative for unattended
+  pipelines that should always file one, and defaults off.
 - **Anypoint (deploy verify):** `ANYPOINT_CLIENT_ID`, `ANYPOINT_CLIENT_SECRET`, `ANYPOINT_ORG_ID`,
   optional `ANYPOINT_BASE_URL`, `ANYPOINT_TOKEN_PATH`, `ANYPOINT_HEALTHY_STATUSES`.
 - **Job store:** `MULE_UPGRADE_HOME` (default `~/.mule-upgrade`).

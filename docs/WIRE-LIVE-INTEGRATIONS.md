@@ -19,7 +19,7 @@ Code Builder).
 |-------------|------------------------------|-------|
 | Anypoint | `anypoint.defaultOrgId`, `anypoint.verify.enabled`, `assess.armCrossCheck`, `assess.apiPolicyCheck` | your org UUID; verify + cross-checks **on** |
 | GitHub | `github.defaultOwner` | `avatansh` |
-| Jira | `jira.baseUrl`, `jira.host`, `jira.projectKey`, `jira.autoCreate` | `avatansh-sharma.atlassian.net`, `J1U`, autoCreate **on** |
+| Jira | `jira.baseUrl`, `jira.host`, `jira.projectKey`, `jira.autoCreate` | `avatansh-sharma.atlassian.net`, `J1U`, autoCreate **off** (tickets are a per-run opt-in) |
 | Slack | `slack.channel` | `#java17-upgrades` |
 
 `config/config-secure-dev.yaml` (committed) holds the **matching secrets, already encrypted** as
@@ -183,12 +183,26 @@ node skills/mule-upgrade-scan/scripts/scan_notify.js
 
 Check `#java17-upgrades` for the message. No webhook resolved → cleanly skipped.
 
-### 2.5 Jira — auto-create / comment (autoCreate is ON in dev)
+### 2.5 Jira + Slack — opt in, once
 
-Jira fires as part of the orchestrator: on a real `upgrade … start`, with `jira.autoCreate=true`
-and creds resolved, a ticket is created in project **J1U** and a PR-opened comment is posted. Watch
-`https://avatansh-sharma.atlassian.net` project **J1U** after step 2.2. Missing creds → "no Jira
-creds" skip.
+Both are **silent by default**. Having a webhook and a Jira token wired up only makes delivery
+*possible*; someone still has to ask for it, so a plain `upgrade … start` posts nothing. (In Vibes the
+conductor asks once, as the second intake question, and reuses your answer for the whole session.)
+
+```bash
+# comment on an existing ticket, and alert Slack
+node skills/mule-upgrade/scripts/upgrade.js start --app orders-api --env dev --mode api \
+  --owner acme --repo-name orders-api --jira J1U-12 --jira-mode comment --slack
+
+# let the suite file the ticket first (needs jira.projectKey), then comment on it
+node skills/mule-upgrade/scripts/upgrade.js start --app orders-api --env dev --mode api \
+  --owner acme --repo-name orders-api --jira-mode create
+```
+
+With `--jira-mode create` a ticket appears in project **J1U** at
+`https://avatansh-sharma.atlassian.net` and a PR-opened comment follows. Missing creds → a clean "no
+Jira creds" skip. The choice is stored on the job, so later transitions (merge → deploy) alert too.
+Set `jira.autoCreate: "true"` only for an unattended pipeline that should always file a ticket.
 
 > **State lives** under `~/.mule-upgrade/` (override with `MULE_UPGRADE_HOME`). Inspect any run with
 > `cat ~/.mule-upgrade/jobs/*.json`. For throwaway testing, set
@@ -395,7 +409,8 @@ hits Anypoint+Slack; rollback hits GitHub+Slack) and leaves a clean job store.
 | GitHub `401/403` | `github.token` rotated or lacks `repo` scope. Set a fresh plaintext `GITHUB_TOKEN` (overrides YAML), or `gh auth login` for local mode. |
 | Anypoint rows all `unverified` | `anypoint.clientId/secret`/org not resolving, or the Connected App lacks Runtime/API Manager scope. |
 | Slack "no SLACK_WEBHOOK_URL" | Webhook not resolving — check the key decrypts, or set `SLACK_WEBHOOK_URL` plaintext. |
-| Jira "no Jira creds" / no ticket | `jira.email`/`jira.apiToken` not resolving, or `jira.autoCreate` off. |
+| Jira "no Jira creds" / no ticket | `jira.email`/`jira.apiToken` not resolving, or the run didn't opt in (`--jira-mode create`). |
+| No Slack message despite a working webhook | The run didn't pass `--slack`. Notifications are opt-in per run by design. |
 | Skills don't appear in Vibes | Confirm `.a4drules/skills/<skill>/SKILL.md` and reload ACB; symlink (don't copy) so `../../lib_shared` resolves. |
 | MCP server 401 | Service URL must end in `/mcp` and the `Authorization: Bearer` header must equal `MCP_BEARER_TOKEN`. |
 

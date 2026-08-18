@@ -21,7 +21,7 @@ import { analyzeTree, classifyTopology } from "./lib/topology.js";
 import { initChain, appendParent } from "./lib/pom_chain.js";
 import { resolveMatrix, fetchReleaseNotesCached } from "./lib/matrix_fetch.js";
 import { checkMatrixDrift, checkConnectorDrift } from "./lib/matrix_drift.js";
-import { buildAssessmentResult, scanFlags, appConnectorScope } from "./lib/assess_engine.js";
+import { buildAssessmentResult, scanFlags, scanTargets, appConnectorScope } from "./lib/assess_engine.js";
 import { localSource, githubSource } from "./lib/repo_source.js";
 import { resolveVersions, applyVersionStrategy } from "./lib/resolve_versions.js";
 import { enrichConnectorGaps } from "./lib/connector_deps.js";
@@ -99,16 +99,27 @@ export function resolveSource(opts) {
   throw new Error(`unknown repo source: ${kind}`);
 }
 
-/** Files the assess engine will read: every pom.xml + .java, plus located mule-artifact/CI paths. */
-function filesToPrime(tree, located) {
+/**
+ * Files the assess engine will read: every pom.xml, the content-scan corpus (.java repo-wide, plus
+ * .dwl and src/main/mule/*.xml scoped to the app module), the located mule-artifact/CI paths, and the
+ * Maven wrapper (Process-Guide toolchain floor).
+ *
+ * Priming matters because the github source costs ONE API call per file and serves readSync from that
+ * cache — a file that isn't primed reads as null, which would silently turn a content scan into a
+ * false "clean" result. scanTargets() is the same function the scan itself uses, so the primed set and
+ * the scanned set cannot drift apart.
+ */
+function filesToPrime(tree, located, appPath) {
   const paths = new Set();
   for (const t of tree.tree ?? []) {
     if (t.type !== "blob") continue;
-    if (t.path.endsWith("pom.xml") || t.path.endsWith(".java")) paths.add(t.path);
+    if (t.path.endsWith("pom.xml")) paths.add(t.path);
   }
+  for (const rel of scanTargets(tree.tree ?? [], { appPath }).paths) paths.add(rel);
   if (located?.appPomPath) paths.add(located.appPomPath);
   if (located?.muleArtifactPath) paths.add(located.muleArtifactPath);
   if (located?.ciWorkflowPath) paths.add(located.ciWorkflowPath);
+  paths.add(".mvn/wrapper/maven-wrapper.properties");
   return [...paths];
 }
 
@@ -305,8 +316,8 @@ export async function checkDeployedState({ deployedApiName, environment, orgId, 
  * Resolves the source, loads the matrix (for connector/gating coordinates used by tree analysis),
  * locates the app pom, and walks the inheritance chain. Returns everything a caller needs to reason
  * about the app's connectors WITHOUT running the full ChangePlan build.
- * @param {object} opts  same source/appPath opts as assess()
- * @returns {Promise<{source:any, matrix:any, matrixSource:any, matrixWarnings:string[], tree:any, located:any, chain:any[], readFile:(relPath:string)=>string}>}
+ * @param {object} opts  same source/appPath opts as assess() (incl. optional targetJava)
+ * @returns {Promise<{source:any, matrix:any, matrixSource:any, matrixWarnings:string[], tree:any, located:any, chain:any[], readFile:(relPath:string)=>string, appPath:string}>}
  */
 export async function buildAppChain(opts) {
   const { source, appPathHint } = opts.repoSource
@@ -314,20 +325,23 @@ export async function buildAppChain(opts) {
     : resolveSource(opts);
   const appPath = opts.appPath ?? appPathHint ?? ".";
 
+  // targetJava selects WHICH compatibility matrix this run is judged against. Omitted (the default
+  // for every caller that predates multi-target support) means the default target file, so behaviour
+  // is unchanged. An unknown or uncurated target throws out of here rather than degrading.
   const {
     matrix,
     source: matrixSource,
     warnings: matrixWarnings,
-  } = await resolveMatrix({ noFetch: opts.noFetch, exchange: opts.exchange });
+  } = await resolveMatrix({ noFetch: opts.noFetch, exchange: opts.exchange, targetJava: opts.targetJava });
 
   const tree = opts.tree ?? (await source.listTree());
   const treePaths = tree.tree.map((t) => t.path);
   const located = analyzeTree(tree, appPath, matrix.gating, matrix.connectors);
   if (!located.appPomPath) throw new Error("app pom not found in repository tree");
-  await source.prime(filesToPrime(tree, located));
+  await source.prime(filesToPrime(tree, located, appPath));
   const readFile = (rel) => source.readSync(rel);
   const chain = buildChain(readFile, located.appPomPath, treePaths);
-  return { source, matrix, matrixSource, matrixWarnings, tree, located, chain, readFile };
+  return { source, matrix, matrixSource, matrixWarnings, tree, located, chain, readFile, appPath };
 }
 
 /**
@@ -399,6 +413,8 @@ export async function resolveVersionsForApp(opts = {}) {
  * @param {boolean} [opts.includeDrift] compute the gating matrix-drift advisory (matrixDrift)
  * @param {string} [opts.jiraTicketId] optional Jira ticket reference, echoed back on the result
  * @param {boolean} [opts.noFetch] force lean/offline (matrix-only, no live Exchange/release-notes fetch)
+ * @param {string|number} [opts.targetJava] Java target to assess against; omit for the default target.
+ *   Selects the per-target compatibility matrix. Unknown/uncurated targets throw (never silently fall back).
  * @param {(url:string)=>Promise<string>} [opts.fetchDriftXml] injected Maven-metadata fetcher for the drift advisory (tests)
  * @param {string} [opts.appName] override the derived app name
  * @param {"min"|"first-compatible"|"in-major"|"latest"|"manual"} [opts.versionStrategy] pin strategy
@@ -423,7 +439,7 @@ export async function assess(opts) {
   // (honouring an injected opts.repoSource / opts.tree for tests), loads the matrix, locates the app
   // pom + mule-artifact + CI workflow, primes the source cache, and walks the inheritance chain — the
   // exact prefix resolveVersionsForApp() also uses, so the two paths can never drift apart.
-  const { source, matrix, matrixSource, matrixWarnings, tree, located, chain, readFile } =
+  const { source, matrix, matrixSource, matrixWarnings, tree, located, chain, readFile, appPath } =
     await buildAppChain(opts);
 
   // The Full Split: the default assess is LEAN. The gating drift advisory (runtime patch,
@@ -448,6 +464,9 @@ export async function assess(opts) {
   const flags = scanFlags(tree, appPomText, {
     manualReview: matrix.manualReview,
     readFile,
+    // Scope the DataWeave / Mule-XML corpus to the app module so a monorepo doesn't drag in every
+    // sibling's transformations (and their API-call cost) on a single-app assessment.
+    appPath,
   });
   const muleArtifactCurrent = readMuleArtifact(readFile, located.muleArtifactPath);
   const ciWorkflowText = readFile(located.ciWorkflowPath);
@@ -545,6 +564,10 @@ export async function assess(opts) {
     customJavaFound: flags.customJavaFound,
     lookupFound: flags.lookupFound,
     warnings: [...flags.warnings, ...matrixWarnings, ...versionWarnings],
+    // Process-Guide baseline inputs: the manualReview keys the content scan actually matched (stable
+    // ids, not prose) and a reader for the Maven-wrapper toolchain floor.
+    matchedReviews: flags.matchedReviews,
+    readFile,
     pomEditStrategy: opts.strategy ?? "appOverride",
     excludeArtifacts: opts.excludeArtifacts ?? [],
     // Chained flow: repoint the app's own <parent> at a freshly-released parent-pom/BOM version in the
@@ -711,6 +734,8 @@ if (isMain) {
         "Usage (github): node assess.js --source github --repo-url <github url> --env <...>\n" +
         "                node assess.js --source github --owner <o> --repo-name <r> [--branch b] [--app-path sub/dir] --env <...>\n" +
         "  common: [--head-sha sha] [--no-fetch] [--strategy appOverride|inPlace] [--out plan.json]\n" +
+        "  java target: [--target-java 17|21]  which compatibility matrix to judge against (default: the\n" +
+        "                     default target). An uncurated target is refused, never silently downgraded.\n" +
         "  versions (opt-in): [--versions] adds the connector version MENU (connectorChoices[]); default is LEAN\n" +
         "                     (changePlan.connectorsInApp[] only). --no-fetch implies lean. Prefer resolve_versions.\n" +
         "  drift (opt-in):    [--drift] adds the matrix-drift advisory (matrixDrift). Prefer check_drift.\n" +
@@ -738,6 +763,7 @@ if (isMain) {
     appName: str("app-name"),
     headSha: str("head-sha"),
     noFetch: !!args["no-fetch"],
+    targetJava: str("target-java"),
     strategy: str("strategy"),
     includeVersions: !!args.versions,
     includeDrift: !!args.drift,
