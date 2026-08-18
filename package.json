@@ -1,7 +1,7 @@
 {
   "name": "mule-java17-upgrade-skills",
   "version": "1.0.0",
-  "description": "Claude skills that automate MuleSoft Java-17 platform upgrades (assess, apply, PR, job-tracking) — a skill-native reimplementation of the platform-lifecycle-orchestrator Mule app.",
+  "description": "Agent-driven toolkit that automates the Java 17/21 upgrade of MuleSoft applications: assess a repo, rewrite the POM chain, open a PR, and track it through CI, merge and deploy - for one app or a whole fleet. Includes CVE scanning, batch upgrades and shared parent-POM chains.",
   "type": "module",
   "private": true,
   "engines": {

@@ -6,7 +6,7 @@
 # =============================================================================
 
 app:
-  name: "platform-lifecycle-orchestrator"
+  name: "mule-java17-upgrade-skills"
   version: "1.0.0"
 
 api:
@@ -16,7 +16,9 @@ http:
   host: "0.0.0.0"                        # bind address is the same everywhere (port is per-env)
 
 mcp:
-  serverName: "platform-lifecycle-orchestrator"
+  # Reported as serverInfo.name in the MCP initialize handshake and as `service` on /health.
+  # Informational only - Agentforce and other clients register by URL + OAuth, never by this name.
+  serverName: "mule-java17-upgrade-skills"
   serverVersion: "1.0.0"
   endpointPath: "/mcp"                   # MCP path on the shared listener (REST is /api/v1/*); isolate at ingress/Omni Gateway
 
